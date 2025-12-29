@@ -23,18 +23,26 @@
             <!-- 简单笔形 SVG 图标 -->
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 21l3-1 11-11-2-2L5 18 4 21z" fill="#333"/><path d="M20.7 7.3c.4-.4.4-1 0-1.4l-2.6-2.6c-.4-.4-1-.4-1.4 0l-1.8 1.8 4 4 1.8-1.8z" fill="#333"/></svg>
           </button>
-          <div class="submenu colors" id="colorMenu" aria-hidden="true">
-            <button class="color" data-color="#000000" style="background:#000" title="黑"></button>
-            <button class="color" data-color="#ff3b30" style="background:#ff3b30" title="红"></button>
-            <button class="color" data-color="#ff9500" style="background:#ff9500" title="橙"></button>
-            <button class="color" data-color="#ffcc00" style="background:#ffcc00" title="黄"></button>
-            <button class="color" data-color="#34c759" style="background:#34c759" title="绿"></button>
-            <button class="color" data-color="#007aff" style="background:#007aff" title="蓝"></button>
-            <button class="color" data-color="#5856d6" style="background:#5856d6" title="紫"></button>
-            <div class="sizeControl">
-              <label>大小 <input id="size" type="range" min="1" max="50" value="4"></label>
+          <div class="submenu colors" id="colorMenu" aria-hidden="true" data-pinned="false">
+            <div class="submenu-body">
+              <div class="colorRow">
+              <button class="color" data-color="#000000" style="background:#000" title="黑"></button>
+              <button class="color" data-color="#ff3b30" style="background:#ff3b30" title="红"></button>
+              <button class="color" data-color="#ff9500" style="background:#ff9500" title="橙"></button>
+              <button class="color" data-color="#ffcc00" style="background:#ffcc00" title="黄"></button>
+              <button class="color" data-color="#34c759" style="background:#34c759" title="绿"></button>
+              <button class="color" data-color="#007aff" style="background:#007aff" title="蓝"></button>
+              <button class="color" data-color="#5856d6" style="background:#5856d6" title="紫"></button>
+              </div>
+              <div class="sizeControl">
+                <label>大小 <input id="size" type="range" min="1" max="50" value="4"></label>
+              </div>
+              <div class="modeLabel" id="penModeLabel">笔: 黑 / 4</div>
             </div>
-            <div class="modeLabel" id="penModeLabel">笔: 黑 / 4</div>
+            <div class="submenu-footer">
+              <button class="submenu-drag-handle" title="拖动子菜单">⋮</button>
+              <button class="submenu-pin" title="固定/取消固定">📌</button>
+            </div>
           </div>
         </div>
 
@@ -43,18 +51,24 @@
             <!-- 简单橡皮图标 -->
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 17.25L11.03 9.22 14.78 13l-8.03 8.03H3v-3.78z" fill="#333"/><path d="M20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 4 4 1.58-1.08z" fill="#333"/></svg>
           </button>
-          <div class="submenu actions" id="eraserMenu" aria-hidden="true">
-            <div class="sizeControl">
-              <label>橡皮大小 <input id="eraserSize" type="range" min="1" max="100" value="20"></label>
+          <div class="submenu actions" id="eraserMenu" aria-hidden="true" data-pinned="false">
+            <div class="submenu-body">
+              <div class="sizeControl">
+                <label>橡皮大小 <input id="eraserSize" type="range" min="1" max="100" value="20"></label>
+              </div>
+              <div class="eraseModes" style="padding-top:6px;display:flex;gap:6px;justify-content:center">
+                <button id="erasePixel" class="mode-btn" data-mode="pixel">像素擦除</button>
+                <button id="eraseRect" class="mode-btn" data-mode="rect">矩形擦除</button>
+                <button id="eraseStroke" class="mode-btn" data-mode="stroke">整笔删除</button>
+              </div>
+              <div class="modeLabel" id="eraserModeLabel">橡皮模式: 像素擦除</div>
+              <div style="padding-top:6px">
+                <button id="clear" title="清空画布">清除页面</button>
+              </div>
             </div>
-            <div class="eraseModes" style="padding-top:6px;display:flex;gap:6px;justify-content:center">
-              <button id="erasePixel" class="mode-btn" data-mode="pixel">像素擦除</button>
-              <button id="eraseRect" class="mode-btn" data-mode="rect">矩形擦除</button>
-              <button id="eraseStroke" class="mode-btn" data-mode="stroke">整笔删除</button>
-            </div>
-            <div class="modeLabel" id="eraserModeLabel">橡皮模式: 像素擦除</div>
-            <div style="padding-top:6px">
-              <button id="clear" title="清空画布">清除页面</button>
+            <div class="submenu-footer">
+              <button class="submenu-drag-handle" title="拖动子菜单">⋮</button>
+              <button class="submenu-pin" title="固定/取消固定">📌</button>
             </div>
           </div>
         </div>
@@ -70,18 +84,25 @@
       html,body{height:100%;margin:0;font-family:Arial,Helvetica,sans-serif}
       .canvas-wrap{height:100%;background:white;display:flex}
       #board{flex:1;display:block;width:100%;height:100%;touch-action:none}
-      .floating-panel{position:fixed;right:20px;top:80px;width:220px;border-radius:18px;padding:12px;background:rgba(255,255,255,0.96);box-shadow:0 8px 24px rgba(0,0,0,0.15);z-index:1200;display:flex;flex-direction:column;gap:10px;align-items:center}
+      .floating-panel{position:fixed;right:20px;top:80px;width:220px;border-radius:18px;padding:12px;background:rgba(255,255,255,0.96);box-shadow:0 8px 24px rgba(0,0,0,0.15);z-index:3000;display:flex;flex-direction:column;gap:10px;align-items:center}
       .floating-panel .panel-section{width:100%;display:flex;gap:8px;align-items:center;justify-content:center}
       .floating-panel .tools{justify-content:space-around}
       .tool{position:relative}
       .tool-btn{width:44px;height:44px;border-radius:10px;border:1px solid #ccc;background:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer}
       .tool-btn.active{box-shadow:inset 0 -2px 0 rgba(0,0,0,0.06);background:#f6f6f6}
-      .submenu{position:absolute;right:0;top:48px;background:rgba(255,255,255,0.97);padding:8px;border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,0.12);display:none;gap:6px;flex-direction:column}
-      .submenu.open{display:flex;flex-wrap:nowrap}
-      .submenu.colors{width:200px}
-      .submenu.colors .color{width:28px;height:28px;border-radius:6px;border:1px solid #ddd;margin:4px;cursor:pointer}
-      .submenu .sizeControl{display:flex;align-items:center;justify-content:space-between;padding-top:6px}
-      .submenu .sizeControl input{width:110px}
+      /* 子菜单为固定排版：固定宽度，自适应高度包含所有控件 */
+      .submenu{position:absolute;right:0;top:48px;background:rgba(255,255,255,0.97);padding:0;border-radius:14px;box-shadow:0 8px 22px rgba(0,0,0,0.12);display:none;z-index:2500;width:240px;box-sizing:border-box;transition:top 0.3s cubic-bezier(0.25,0.46,0.45,0.94),opacity 0.3s ease;flex-direction:column;overflow:hidden}
+      .submenu.open{display:flex}
+      .submenu .submenu-body{padding:12px;display:flex;flex-direction:column;gap:8px}
+      .submenu .submenu-pin{border:1px solid #ccc;background:#fff;padding:6px 8px;border-radius:8px;cursor:pointer}
+      .submenu .submenu-footer{display:flex;justify-content:flex-end;gap:8px;padding:8px 12px;border-top:1px solid #e5e5e5;background:rgba(255,255,255,0.5)}
+      .submenu .submenu-drag-handle{border:1px solid #ccc;background:#fff;padding:6px 8px;border-radius:8px;cursor:grab}
+      .submenu.colors{width:240px;box-sizing:border-box}
+      /* 颜色区固定网格（两行） */
+      .colorRow{display:grid;grid-template-columns:repeat(7,28px);grid-auto-rows:28px;gap:8px;justify-content:start}
+      .submenu.colors .color{width:28px;height:28px;border-radius:6px;border:1px solid #ddd;cursor:pointer}
+      .submenu .sizeControl{width:100%;display:flex;align-items:center;justify-content:center;padding-top:8px}
+      .submenu .sizeControl input{width:120px}
       .submenu.actions button{padding:6px 10px;border-radius:8px;border:1px solid #ccc;background:#fff;cursor:pointer}
       .mode-btn{padding:6px 8px;border-radius:6px;border:1px solid #ccc;background:#fff;cursor:pointer}
       .mode-btn.active{background:#e6f0ff;border-color:#6ca0ff}
