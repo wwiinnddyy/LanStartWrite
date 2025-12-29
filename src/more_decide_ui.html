@@ -1,0 +1,55 @@
+<!-- more_decide_ui.html: submenu UI fragments; these are intended to be appended inside .floating-panel so parent relationships remain intact -->
+<div class="submenu colors" id="colorMenu" aria-hidden="true" data-pinned="false">
+  <div class="submenu-body">
+    <div class="colorRow">
+      <button class="color" data-color="#000000" style="background:#000" title="黑"></button>
+      <button class="color" data-color="#ff3b30" style="background:#ff3b30" title="红"></button>
+      <button class="color" data-color="#ff9500" style="background:#ff9500" title="橙"></button>
+      <button class="color" data-color="#ffcc00" style="background:#ffcc00" title="黄"></button>
+      <button class="color" data-color="#34c759" style="background:#34c759" title="绿"></button>
+      <button class="color" data-color="#007aff" style="background:#007aff" title="蓝"></button>
+      <button class="color" data-color="#5856d6" style="background:#5856d6" title="紫"></button>
+    </div>
+    <div class="sizeControl">
+      <label>大小 <input id="size" type="range" min="1" max="50" value="4"></label>
+    </div>
+    <div class="modeLabel" id="penModeLabel">笔: 黑 / 4</div>
+  </div>
+  <div class="submenu-footer">
+    <button class="submenu-drag-handle" title="拖动子菜单">⋮</button>
+    <button class="submenu-pin" title="固定/取消固定">📌</button>
+  </div>
+</div>
+
+<div class="submenu actions" id="eraserMenu" aria-hidden="true" data-pinned="false">
+  <div class="submenu-body">
+    <div class="sizeControl">
+      <label>橡皮大小 <input id="eraserSize" type="range" min="1" max="100" value="20"></label>
+    </div>
+    <div class="eraseModes" style="padding-top:6px;display:flex;gap:6px;justify-content:center">
+      <button id="erasePixel" class="mode-btn" data-mode="pixel">像素擦除</button>
+      <button id="eraseRect" class="mode-btn" data-mode="rect">矩形擦除</button>
+      <button id="eraseStroke" class="mode-btn" data-mode="stroke">整笔删除</button>
+    </div>
+    <div class="modeLabel" id="eraserModeLabel">橡皮模式: 像素擦除</div>
+    <div style="padding-top:6px">
+      <button id="clear" title="清空画布">清除页面</button>
+    </div>
+  </div>
+  <div class="submenu-footer">
+    <button class="submenu-drag-handle" title="拖动子菜单">⋮</button>
+    <button class="submenu-pin" title="固定/取消固定">📌</button>
+  </div>
+</div>
+
+<div class="submenu actions" id="moreMenu" aria-hidden="true" data-pinned="false">
+  <div class="submenu-body">
+    <button id="exportBtn" class="mode-btn">导出图片</button>
+    <button id="settingsBtn" class="mode-btn">设置</button>
+    <button id="aboutBtn" class="mode-btn">关于</button>
+  </div>
+  <div class="submenu-footer">
+    <button class="submenu-drag-handle" title="拖动子菜单">⋮</button>
+    <button class="submenu-pin" title="固定/取消固定">📌</button>
+  </div>
+</div>

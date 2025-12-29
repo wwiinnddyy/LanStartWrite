@@ -10,101 +10,16 @@
       <canvas id="board"></canvas>
     </div>
 
-    <div class="floating-panel" role="toolbar" aria-label="绘图控制">
-      <div id="dragHandle" class="drag-handle" title="拖动工具栏">≡</div>
-      <div class="panel-section tools">
-        <div style="display:flex;gap:8px;align-items:center">
-          <button id="undoBtn" class="tool-btn" title="撤销">⤺</button>
-          <button id="redoBtn" class="tool-btn" title="重做">⤻</button>
-        </div>
-
-        <div class="tool">
-          <button id="colorTool" class="tool-btn" title="画笔">
-            <!-- edit-2.svg 图标 -->
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
-          </button>
-          <div class="submenu colors" id="colorMenu" aria-hidden="true" data-pinned="false">
-            <div class="submenu-body">
-              <div class="colorRow">
-              <button class="color" data-color="#000000" style="background:#000" title="黑"></button>
-              <button class="color" data-color="#ff3b30" style="background:#ff3b30" title="红"></button>
-              <button class="color" data-color="#ff9500" style="background:#ff9500" title="橙"></button>
-              <button class="color" data-color="#ffcc00" style="background:#ffcc00" title="黄"></button>
-              <button class="color" data-color="#34c759" style="background:#34c759" title="绿"></button>
-              <button class="color" data-color="#007aff" style="background:#007aff" title="蓝"></button>
-              <button class="color" data-color="#5856d6" style="background:#5856d6" title="紫"></button>
-              </div>
-              <div class="sizeControl">
-                <label>大小 <input id="size" type="range" min="1" max="50" value="4"></label>
-              </div>
-              <div class="modeLabel" id="penModeLabel">笔: 黑 / 4</div>
-            </div>
-            <div class="submenu-footer">
-              <button class="submenu-drag-handle" title="拖动子菜单">⋮</button>
-              <button class="submenu-pin" title="固定/取消固定">📌</button>
-            </div>
-          </div>
-        </div>
-
-        <div class="tool">
-          <button id="eraserTool" class="tool-btn" title="橡皮/更多">
-            <!-- 简单橡皮图标 -->
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 17.25L11.03 9.22 14.78 13l-8.03 8.03H3v-3.78z" fill="#333"/><path d="M20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 4 4 1.58-1.08z" fill="#333"/></svg>
-          </button>
-          <div class="submenu actions" id="eraserMenu" aria-hidden="true" data-pinned="false">
-            <div class="submenu-body">
-              <div class="sizeControl">
-                <label>橡皮大小 <input id="eraserSize" type="range" min="1" max="100" value="20"></label>
-              </div>
-              <div class="eraseModes" style="padding-top:6px;display:flex;gap:6px;justify-content:center">
-                <button id="erasePixel" class="mode-btn" data-mode="pixel">像素擦除</button>
-                <button id="eraseRect" class="mode-btn" data-mode="rect">矩形擦除</button>
-                <button id="eraseStroke" class="mode-btn" data-mode="stroke">整笔删除</button>
-              </div>
-              <div class="modeLabel" id="eraserModeLabel">橡皮模式: 像素擦除</div>
-              <div style="padding-top:6px">
-                <button id="clear" title="清空画布">清除页面</button>
-              </div>
-            </div>
-            <div class="submenu-footer">
-              <button class="submenu-drag-handle" title="拖动子菜单">⋮</button>
-              <button class="submenu-pin" title="固定/取消固定">📌</button>
-            </div>
-          </div>
-        </div>
-
-        <div class="tool">
-          <button id="moreTool" class="tool-btn" title="更多">
-            <!-- 更多 图标 -->
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="5" cy="12" r="2" fill="#333"/><circle cx="12" cy="12" r="2" fill="#333"/><circle cx="19" cy="12" r="2" fill="#333"/></svg>
-          </button>
-          <div class="submenu actions" id="moreMenu" aria-hidden="true" data-pinned="false">
-            <div class="submenu-body">
-              <button id="exportBtn" class="mode-btn">导出图片</button>
-              <button id="settingsBtn" class="mode-btn">设置</button>
-              <button id="aboutBtn" class="mode-btn">关于</button>
-            </div>
-            <div class="submenu-footer">
-              <button class="submenu-drag-handle" title="拖动子菜单">⋮</button>
-              <button class="submenu-pin" title="固定/取消固定">📌</button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- size moved into color submenu -->
-    </div>
-
-    <script type="module" src="renderer.js"></script>
-    <script type="module" src="ui-tools.js"></script>
-    <script type="module" src="page.js"></script>
+    <script type="module" src="ui-bootstrap.js"></script>
     <style>
       html,body{height:100%;margin:0;font-family:Arial,Helvetica,sans-serif}
       .canvas-wrap{height:100%;background:white;display:flex}
       #board{flex:1;display:block;width:100%;height:100%;touch-action:none}
-      .floating-panel{position:fixed;right:20px;top:80px;width:220px;border-radius:18px;padding:12px;background:rgba(255,255,255,0.96);box-shadow:0 8px 24px rgba(0,0,0,0.15);z-index:3000;display:flex;flex-direction:column;gap:10px;align-items:center}
-      .floating-panel .panel-section{width:100%;display:flex;gap:8px;align-items:center;justify-content:center}
-      .floating-panel .tools{justify-content:space-around}
+      .floating-panel{position:fixed;right:20px;top:80px;width:auto;min-width:64px;max-width:calc(100vw - 40px);border-radius:18px;padding:12px;background:rgba(255,255,255,0.96);box-shadow:0 8px 24px rgba(0,0,0,0.15);z-index:3000;display:flex;flex-direction:column;gap:10px;align-items:flex-start;transition:width 240ms cubic-bezier(0.22,0.9,0.33,1),border-radius 200ms ease}
+      /* blur + translucent style for floating panel */
+      .floating-panel{position:fixed;right:20px;top:80px;width:auto;min-width:64px;max-width:calc(100vw - 40px);border-radius:18px;padding:12px;background:rgba(255,255,255,0.7);backdrop-filter: blur(8px);-webkit-backdrop-filter: blur(8px);box-shadow:0 8px 24px rgba(0,0,0,0.15);z-index:3000;display:flex;flex-direction:column;gap:10px;align-items:flex-start;transition:width 240ms cubic-bezier(0.22,0.9,0.33,1),border-radius 200ms ease}
+      .floating-panel .panel-section{width:auto;display:flex;gap:8px;align-items:center;justify-content:flex-start;flex-wrap:nowrap}
+      .floating-panel .tools{justify-content:flex-start}
       .tool{position:relative}
       .tool-btn{width:44px;height:44px;border-radius:10px;border:1px solid #ccc;background:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer}
       .tool-btn.active{box-shadow:inset 0 -2px 0 rgba(0,0,0,0.06);background:#f6f6f6}
@@ -116,6 +31,9 @@
       .submenu .submenu-footer{display:flex;justify-content:flex-end;gap:8px;padding:8px 12px;border-top:1px solid #e5e5e5;background:rgba(255,255,255,0.5)}
       .submenu .submenu-drag-handle{border:1px solid #ccc;background:#fff;padding:6px 8px;border-radius:8px;cursor:grab}
       .submenu.colors{width:240px;box-sizing:border-box}
+      /* 折叠支持：将带有 .foldable 的项在折叠时隐藏 */
+      .floating-panel .foldable{display:flex;transition:opacity 180ms ease}
+      .floating-panel.collapsed .foldable{display:none}
       /* 颜色区固定网格（两行） */
       .colorRow{display:grid;grid-template-columns:repeat(7,28px);grid-auto-rows:28px;gap:8px;justify-content:start}
       .submenu.colors .color{width:28px;height:28px;border-radius:6px;border:1px solid #ddd;cursor:pointer}
@@ -130,6 +48,30 @@
       .drag-handle{position:absolute;right:-14px;top:50%;transform:translateY(-50%);width:28px;height:48px;border-radius:8px;background:linear-gradient(180deg,#f5f5f5,#eee);border:1px solid #ccc;display:flex;align-items:center;justify-content:center;cursor:grab;box-shadow:0 4px 12px rgba(0,0,0,0.08)}
       .drag-handle:active{cursor:grabbing}
       .floating-panel label{font-size:13px}
+
+      /* settings modal */
+      .settings-modal{position:fixed;left:0;top:0;right:0;bottom:0;display:none;align-items:center;justify-content:center;z-index:4000}
+      .settings-modal.open{display:flex}
+      .settings-backdrop{position:absolute;inset:0;background:rgba(0,0,0,0.4)}
+      .settings-panel{position:relative;background:#fff;border-radius:12px;padding:16px;box-shadow:0 12px 40px rgba(0,0,0,0.25);width:320px;max-width:92%}
+      .settings-header{display:flex;justify-content:space-between;align-items:center}
+      .settings-body{padding:12px;display:flex;flex-direction:column;gap:8px}
+      .settings-footer{display:flex;justify-content:flex-end;gap:8px;padding-top:8px}
+
+      /* Dark theme styles */
+      .theme-dark body, .theme-dark html { background: #121212; color: #e6e6e6; }
+      .theme-dark .floating-panel{background: rgba(28,28,30,0.55); box-shadow: 0 8px 30px rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.04);}
+      .theme-dark .tool-btn{background: rgba(255,255,255,0.03); border-color: rgba(255,255,255,0.06); color: #e6e6e6}
+      .theme-dark .tool-btn.active{background: rgba(255,255,255,0.04)}
+      .theme-dark .submenu{background: rgba(20,20,20,0.85); border: 1px solid rgba(255,255,255,0.04)}
+      .theme-dark .settings-panel{background:#1c1c1e;color:#e6e6e6;box-shadow:0 12px 40px rgba(0,0,0,0.6)}
+      .theme-dark .mode-btn, .theme-dark .submenu .submenu-pin, .theme-dark .submenu .submenu-drag-handle{background:rgba(255,255,255,0.03);border-color:rgba(255,255,255,0.04);color:#e6e6e6}
+
+      /* Toast notifications */
+      .app-toast{position:fixed;left:50%;transform:translateX(-50%);bottom:28px;z-index:6000;min-width:220px;max-width:80%;padding:10px 14px;border-radius:10px;background:rgba(0,0,0,0.8);color:#fff;box-shadow:0 8px 24px rgba(0,0,0,0.4);opacity:0;transition:opacity 220ms ease,bottom 220ms ease}
+      .app-toast.show{opacity:1;bottom:40px}
+      .app-toast.success{background:linear-gradient(90deg,#2ecc71,#27ae60)}
+      .app-toast.error{background:linear-gradient(90deg,#ff6b6b,#e74c3c)}
     </style>
   </body>
 </html>

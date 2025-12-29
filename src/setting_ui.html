@@ -1,0 +1,35 @@
+<!-- setting_ui.html: settings modal fragment -->
+<div id="settingsModal" class="settings-modal" role="dialog" aria-hidden="true">
+  <div class="settings-backdrop"></div>
+  <div class="settings-panel">
+    <div class="settings-header">
+      <h3>设置</h3>
+      <button id="closeSettings" class="tool-btn">✕</button>
+    </div>
+    <div class="settings-body">
+        <label><input type="checkbox" id="optAutoResize"> 自动调整工具栏宽度</label>
+        <label><input type="checkbox" id="optCollapsed"> 启动时折叠工具栏</label>
+        <label>主题
+          <select id="optTheme">
+            <option value="light">浅色</option>
+            <option value="dark">深色</option>
+          </select>
+        </label>
+        <label><input type="checkbox" id="optTooltips"> 显示工具提示</label>
+        <fieldset style="border:1px solid #eee;padding:8px;border-radius:8px">
+          <legend>快捷键</legend>
+          <label>撤销: <input id="keyUndo" type="text" placeholder="Ctrl+Z" maxlength="20"></label>
+          <label>重做: <input id="keyRedo" type="text" placeholder="Ctrl+Y" maxlength="20"></label>
+        </fieldset>
+        <div style="padding-top:8px;display:flex;gap:8px;align-items:center">
+          <button id="previewSettings">预览设置</button>
+          <button id="revertPreview">撤销预览</button>
+          <div id="historyStateDisplay" style="margin-left:auto;font-size:13px;color:#444">撤销: — 重做: —</div>
+        </div>
+      </div>
+    <div class="settings-footer">
+      <button id="resetSettings">重置为默认</button>
+      <button id="saveSettings">保存</button>
+    </div>
+  </div>
+</div>

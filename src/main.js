@@ -1,5 +1,6 @@
 const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
+const fs = require('fs');
 
 let mainWindow;
 
@@ -62,6 +63,20 @@ ipcMain.handle('message', async (event, channel, data) => {
     case 'open-file':
       // 处理文件打开请求等
       return { success: true, message: '处理完成' };
+
+    case 'io:request-file-write':
+      // data: { path, content }
+      try{
+        // 限制写入到 app.getPath('userData') 下，或接受绝对路径
+        const targetPath = data && data.path ? (path.isAbsolute(data.path) ? data.path : path.join(app.getPath('userData'), data.path)) : null;
+        if (!targetPath) return { success: false, message: '缺少 path' };
+        await fs.promises.mkdir(path.dirname(targetPath), { recursive: true });
+        await fs.promises.writeFile(targetPath, data.content || '', 'utf8');
+        return { success: true, path: targetPath };
+      }catch(err){
+        console.error('file write failed', err);
+        return { success: false, error: String(err) };
+      }
       
     default:
       return { success: true, data };

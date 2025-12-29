@@ -1,7 +1,7 @@
 // page.js — 分页管理与底部左侧翻页工具栏
 import { getSnapshot, loadSnapshot } from './renderer.js';
 
-window.addEventListener('DOMContentLoaded', () => {
+function initPageToolbar(){
   const pages = [];
   let current = 0;
 
@@ -102,4 +102,13 @@ window.addEventListener('DOMContentLoaded', () => {
   });
 
   updateUI();
-});
+}
+
+// initialize immediately if DOM is ready, otherwise wait for DOMContentLoaded
+if (document.readyState === 'loading') {
+  window.addEventListener('DOMContentLoaded', initPageToolbar);
+} else {
+  initPageToolbar();
+}
+
+export { initPageToolbar };

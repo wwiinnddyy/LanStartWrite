@@ -16,6 +16,16 @@ export const EVENTS = {
   
   // 工具栏相关事件
   TOOLBAR_MOVE: 'toolbar:move',
+  // UI actions
+  OPEN_SETTINGS: 'ui:open-settings',
+  REQUEST_EXPORT: 'ui:request-export',
+  OPEN_ABOUT: 'ui:open-about',
+  // file write request for main process handlers
+  REQUEST_FILE_WRITE: 'io:request-file-write',
+  // settings changed
+  SETTINGS_CHANGED: 'settings:changed',
+  // history/undo state changed (renderer -> UI)
+  HISTORY_CHANGED: 'history:changed',
   
   // 主进程与渲染进程通信
   MAIN_PROCESS_MSG: 'main:message',

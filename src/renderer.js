@@ -26,6 +26,8 @@ let historyIndex = -1;
 // 减少历史快照数量以节省内存
 const HISTORY_LIMIT = 30;
 
+import Message, { EVENTS } from './message.js';
+
 // 深拷贝并对超长笔画点数组进行下采样，防止单个操作占用过多内存
 function snapshotOps() {
   const cloned = JSON.parse(JSON.stringify(ops));
@@ -44,6 +46,7 @@ function pushHistory() {
   history.push(snapshotOps());
   historyIndex = history.length - 1;
   if (history.length > HISTORY_LIMIT) { history.shift(); historyIndex--; }
+  try{ Message.emit(EVENTS.HISTORY_CHANGED, { canUndo: canUndo(), canRedo: canRedo() }); }catch(e){}
 }
 
 function updateCanvasSize(){
@@ -218,8 +221,8 @@ export function setErasing(b){ erasing = !!b; }
 export function setEraserMode(m){ eraserMode = m; }
 export function getToolState(){ return { brushColor, brushSize, eraserSize, eraserMode, erasing }; }
 export function clearAll(){ ops.push({type:'clearRect', x:0, y:0, w:canvas.width, h:canvas.height}); redrawAll(); pushHistory(); }
-export function undo(){ if (historyIndex <= 0) return; historyIndex -= 1; const snap = JSON.parse(JSON.stringify(history[historyIndex])); ops.length = 0; Array.prototype.push.apply(ops, snap); redrawAll(); }
-export function redo(){ if (historyIndex >= history.length - 1) return; historyIndex += 1; const snap = JSON.parse(JSON.stringify(history[historyIndex])); ops.length = 0; Array.prototype.push.apply(ops, snap); redrawAll(); }
+export function undo(){ if (historyIndex <= 0) return; historyIndex -= 1; const snap = JSON.parse(JSON.stringify(history[historyIndex])); ops.length = 0; Array.prototype.push.apply(ops, snap); redrawAll(); try{ Message.emit(EVENTS.HISTORY_CHANGED, { canUndo: canUndo(), canRedo: canRedo() }); }catch(e){} }
+export function redo(){ if (historyIndex >= history.length - 1) return; historyIndex += 1; const snap = JSON.parse(JSON.stringify(history[historyIndex])); ops.length = 0; Array.prototype.push.apply(ops, snap); redrawAll(); try{ Message.emit(EVENTS.HISTORY_CHANGED, { canUndo: canUndo(), canRedo: canRedo() }); }catch(e){} }
 
 export function canUndo(){ return historyIndex > 0; }
 export function canRedo(){ return historyIndex < history.length - 1; }
