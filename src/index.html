@@ -1,0 +1,96 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' data:;" />
+    <title>Electron Starter</title>
+  </head>
+  <body>
+    <div class="canvas-wrap">
+      <canvas id="board"></canvas>
+    </div>
+
+    <div class="floating-panel" role="toolbar" aria-label="绘图控制">
+      <div id="dragHandle" class="drag-handle" title="拖动工具栏">≡</div>
+      <div class="panel-section tools">
+        <div style="display:flex;gap:8px;align-items:center">
+          <button id="undoBtn" class="tool-btn" title="撤销">⤺</button>
+          <button id="redoBtn" class="tool-btn" title="重做">⤻</button>
+        </div>
+
+        <div class="tool">
+          <button id="colorTool" class="tool-btn" title="画笔">
+            <!-- 简单笔形 SVG 图标 -->
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 21l3-1 11-11-2-2L5 18 4 21z" fill="#333"/><path d="M20.7 7.3c.4-.4.4-1 0-1.4l-2.6-2.6c-.4-.4-1-.4-1.4 0l-1.8 1.8 4 4 1.8-1.8z" fill="#333"/></svg>
+          </button>
+          <div class="submenu colors" id="colorMenu" aria-hidden="true">
+            <button class="color" data-color="#000000" style="background:#000" title="黑"></button>
+            <button class="color" data-color="#ff3b30" style="background:#ff3b30" title="红"></button>
+            <button class="color" data-color="#ff9500" style="background:#ff9500" title="橙"></button>
+            <button class="color" data-color="#ffcc00" style="background:#ffcc00" title="黄"></button>
+            <button class="color" data-color="#34c759" style="background:#34c759" title="绿"></button>
+            <button class="color" data-color="#007aff" style="background:#007aff" title="蓝"></button>
+            <button class="color" data-color="#5856d6" style="background:#5856d6" title="紫"></button>
+            <div class="sizeControl">
+              <label>大小 <input id="size" type="range" min="1" max="50" value="4"></label>
+            </div>
+            <div class="modeLabel" id="penModeLabel">笔: 黑 / 4</div>
+          </div>
+        </div>
+
+        <div class="tool">
+          <button id="eraserTool" class="tool-btn" title="橡皮/更多">
+            <!-- 简单橡皮图标 -->
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 17.25L11.03 9.22 14.78 13l-8.03 8.03H3v-3.78z" fill="#333"/><path d="M20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 4 4 1.58-1.08z" fill="#333"/></svg>
+          </button>
+          <div class="submenu actions" id="eraserMenu" aria-hidden="true">
+            <div class="sizeControl">
+              <label>橡皮大小 <input id="eraserSize" type="range" min="1" max="100" value="20"></label>
+            </div>
+            <div class="eraseModes" style="padding-top:6px;display:flex;gap:6px;justify-content:center">
+              <button id="erasePixel" class="mode-btn" data-mode="pixel">像素擦除</button>
+              <button id="eraseRect" class="mode-btn" data-mode="rect">矩形擦除</button>
+              <button id="eraseStroke" class="mode-btn" data-mode="stroke">整笔删除</button>
+            </div>
+            <div class="modeLabel" id="eraserModeLabel">橡皮模式: 像素擦除</div>
+            <div style="padding-top:6px">
+              <button id="clear" title="清空画布">清除页面</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- size moved into color submenu -->
+    </div>
+
+    <script type="module" src="renderer.js"></script>
+    <script type="module" src="ui-tools.js"></script>
+    <script type="module" src="page.js"></script>
+    <style>
+      html,body{height:100%;margin:0;font-family:Arial,Helvetica,sans-serif}
+      .canvas-wrap{height:100%;background:white;display:flex}
+      #board{flex:1;display:block;width:100%;height:100%;touch-action:none}
+      .floating-panel{position:fixed;right:20px;top:80px;width:220px;border-radius:18px;padding:12px;background:rgba(255,255,255,0.96);box-shadow:0 8px 24px rgba(0,0,0,0.15);z-index:1200;display:flex;flex-direction:column;gap:10px;align-items:center}
+      .floating-panel .panel-section{width:100%;display:flex;gap:8px;align-items:center;justify-content:center}
+      .floating-panel .tools{justify-content:space-around}
+      .tool{position:relative}
+      .tool-btn{width:44px;height:44px;border-radius:10px;border:1px solid #ccc;background:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer}
+      .tool-btn.active{box-shadow:inset 0 -2px 0 rgba(0,0,0,0.06);background:#f6f6f6}
+      .submenu{position:absolute;right:0;top:48px;background:rgba(255,255,255,0.97);padding:8px;border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,0.12);display:none;gap:6px;flex-direction:column}
+      .submenu.open{display:flex;flex-wrap:nowrap}
+      .submenu.colors{width:200px}
+      .submenu.colors .color{width:28px;height:28px;border-radius:6px;border:1px solid #ddd;margin:4px;cursor:pointer}
+      .submenu .sizeControl{display:flex;align-items:center;justify-content:space-between;padding-top:6px}
+      .submenu .sizeControl input{width:110px}
+      .submenu.actions button{padding:6px 10px;border-radius:8px;border:1px solid #ccc;background:#fff;cursor:pointer}
+      .mode-btn{padding:6px 8px;border-radius:6px;border:1px solid #ccc;background:#fff;cursor:pointer}
+      .mode-btn.active{background:#e6f0ff;border-color:#6ca0ff}
+      .modeLabel{font-size:12px;color:#444;padding-top:6px;text-align:center}
+      #undoBtn,#redoBtn{width:36px;height:36px;border-radius:8px;border:1px solid #ccc;background:#fff;cursor:pointer}
+      #undoBtn:hover,#redoBtn:hover{background:#f3f6ff}
+      .drag-handle{position:absolute;right:-14px;top:50%;transform:translateY(-50%);width:28px;height:48px;border-radius:8px;background:linear-gradient(180deg,#f5f5f5,#eee);border:1px solid #ccc;display:flex;align-items:center;justify-content:center;cursor:grab;box-shadow:0 4px 12px rgba(0,0,0,0.08)}
+      .drag-handle:active{cursor:grabbing}
+      .floating-panel label{font-size:13px}
+    </style>
+  </body>
+</html>

@@ -1,0 +1,13 @@
+{
+  "name": "electron-app",
+  "version": "0.1.0",
+  "description": "Simple Electron starter",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^26.0.0"
+  }
+}
