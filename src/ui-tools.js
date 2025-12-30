@@ -1,5 +1,5 @@
 // ui-tools.js (ESM)
-import { clearAll, undo, redo, setBrushColor, setErasing, canUndo, canRedo } from './renderer.js';
+import { clearAll, undo, redo, setBrushColor, setErasing, canUndo, canRedo, remapHistoryForCanvas, setBrushAppearance } from './renderer.js';
 import Settings from './setting.js';
 import { showSubmenu, cleanupMenuStyles, initPinHandlers, closeAllSubmenus } from './more_decide_windows.js';
 import Message, { EVENTS } from './message.js';
@@ -127,6 +127,8 @@ const optAutoResize = document.getElementById('optAutoResize');
 const optCollapsed = document.getElementById('optCollapsed');
 const optTheme = document.getElementById('optTheme');
 const optTooltips = document.getElementById('optTooltips');
+const optVisualStyle = document.getElementById('optVisualStyle');
+const optCanvasColor = document.getElementById('optCanvasColor');
 const keyUndo = document.getElementById('keyUndo');
 const keyRedo = document.getElementById('keyRedo');
 const previewSettingsBtn = document.getElementById('previewSettings');
@@ -142,6 +144,8 @@ function openSettings(){
   if (optAutoResize) optAutoResize.checked = !!s.enableAutoResize;
   if (optCollapsed) optCollapsed.checked = !!s.toolbarCollapsed;
   if (optTheme) optTheme.value = s.theme || 'light';
+  if (optVisualStyle) optVisualStyle.value = s.visualStyle || 'blur';
+  if (optCanvasColor) optCanvasColor.value = s.canvasColor || 'white';
   if (optTooltips) optTooltips.checked = !!s.showTooltips;
   if (keyUndo) keyUndo.value = (s.shortcuts && s.shortcuts.undo) || '';
   if (keyRedo) keyRedo.value = (s.shortcuts && s.shortcuts.redo) || '';
@@ -162,6 +166,8 @@ if (saveSettings) saveSettings.addEventListener('click', ()=>{
     enableAutoResize: !!(optAutoResize && optAutoResize.checked),
     toolbarCollapsed: !!(optCollapsed && optCollapsed.checked),
     theme: (optTheme && optTheme.value) || 'light',
+    visualStyle: (optVisualStyle && optVisualStyle.value) || 'blur',
+    canvasColor: (optCanvasColor && optCanvasColor.value) || 'white',
     showTooltips: !!(optTooltips && optTooltips.checked),
     shortcuts: { undo: (keyUndo && keyUndo.value) || '', redo: (keyRedo && keyRedo.value) || '' }
   };
@@ -174,11 +180,13 @@ if (saveSettings) saveSettings.addEventListener('click', ()=>{
   applyCollapsed(newS.toolbarCollapsed);
   // apply theme and tooltips immediately
   applyTheme(newS.theme);
+  try{ applyVisualStyle(newS.visualStyle); }catch(e){}
+  try{ applyCanvasColor(newS.canvasColor); }catch(e){}
   applyTooltips(newS.showTooltips);
   closeSettingsModal();
 });
 
-if (resetSettingsBtn) resetSettingsBtn.addEventListener('click', ()=>{ Settings.resetSettings(); const s = Settings.loadSettings(); if (optAutoResize) optAutoResize.checked = !!s.enableAutoResize; if (optCollapsed) optCollapsed.checked = !!s.toolbarCollapsed; if (optTheme) optTheme.value = s.theme || 'light'; if (optTooltips) optTooltips.checked = !!s.showTooltips; if (keyUndo) keyUndo.value = (s.shortcuts && s.shortcuts.undo) || ''; if (keyRedo) keyRedo.value = (s.shortcuts && s.shortcuts.redo) || ''; });
+if (resetSettingsBtn) resetSettingsBtn.addEventListener('click', ()=>{ Settings.resetSettings(); const s = Settings.loadSettings(); if (optAutoResize) optAutoResize.checked = !!s.enableAutoResize; if (optCollapsed) optCollapsed.checked = !!s.toolbarCollapsed; if (optTheme) optTheme.value = s.theme || 'light'; if (optVisualStyle) optVisualStyle.value = s.visualStyle || 'blur'; if (optCanvasColor) optCanvasColor.value = s.canvasColor || 'white'; if (optTooltips) optTooltips.checked = !!s.showTooltips; if (keyUndo) keyUndo.value = (s.shortcuts && s.shortcuts.undo) || ''; if (keyRedo) keyRedo.value = (s.shortcuts && s.shortcuts.redo) || ''; });
 
 // apply theme to document body
 function applyTheme(name){ try{ document.body.dataset.theme = name; if (name==='dark') document.documentElement.classList.add('theme-dark'); else document.documentElement.classList.remove('theme-dark'); }catch(e){} }
@@ -191,6 +199,37 @@ function applyTooltips(show){ try{
   });
 }catch(e){} }
 
+// apply visual style variants: 'solid' | 'blur' | 'transparent'
+function applyVisualStyle(style){
+  try{
+    const root = document.documentElement;
+    ['visual-solid','visual-blur','visual-transparent'].forEach(c=>root.classList.remove(c));
+    if (!style || style === 'blur') root.classList.add('visual-blur');
+    else if (style === 'solid') root.classList.add('visual-solid');
+    else if (style === 'transparent') root.classList.add('visual-transparent');
+  }catch(e){}
+}
+
+// apply canvas color: 'white'|'black'|'chalkboard'
+function applyCanvasColor(name){
+  try{
+    const map = { white: '#ffffff', black: '#000000', chalkboard: '#0B3D0B' };
+    const col = map[name] || (name || '#ffffff');
+    const wrap = document.querySelector('.canvas-wrap');
+    const board = document.getElementById('board');
+    if (wrap) wrap.style.background = col;
+    if (board) board.style.background = col;
+    // adjust brush color and appearance, and remap simple historical colors
+    try{
+      if (name === 'white') { setBrushColor('#000000'); setBrushAppearance('normal'); }
+      else if (name === 'black') { setBrushColor('#ffffff'); setBrushAppearance('normal'); }
+      else if (name === 'chalkboard') { setBrushColor('#ffffff'); setBrushAppearance('chalk'); }
+      // remap historical strokes (only black/white swaps currently)
+      try{ remapHistoryForCanvas(name); }catch(e){}
+    }catch(e){}
+  }catch(e){}
+}
+
 // preview settings (temporary)
 if (previewSettingsBtn) previewSettingsBtn.addEventListener('click', ()=>{
   if (!settingsModal) return;
@@ -199,14 +238,26 @@ if (previewSettingsBtn) previewSettingsBtn.addEventListener('click', ()=>{
   if (!_previewBackup) _previewBackup = Object.assign({}, s);
   const preview = {
     theme: (optTheme && optTheme.value) || s.theme,
-    showTooltips: !!(optTooltips && optTooltips.checked)
+    showTooltips: !!(optTooltips && optTooltips.checked),
+    visualStyle: (optVisualStyle && optVisualStyle.value) || s.visualStyle,
+    canvasColor: (optCanvasColor && optCanvasColor.value) || s.canvasColor
   };
   applyTheme(preview.theme);
   applyTooltips(preview.showTooltips);
+  // preview visual style
+  try{ if (preview.visualStyle) applyVisualStyle(preview.visualStyle); }catch(e){}
+  // preview canvas color
+  try{ if (preview.canvasColor) applyCanvasColor(preview.canvasColor); }catch(e){}
 });
 
 if (revertPreviewBtn) revertPreviewBtn.addEventListener('click', ()=>{
-  if (_previewBackup) { applyTheme(_previewBackup.theme); applyTooltips(_previewBackup.showTooltips); _previewBackup = null; }
+  if (_previewBackup) {
+    applyTheme(_previewBackup.theme);
+    applyTooltips(_previewBackup.showTooltips);
+    try{ applyVisualStyle(_previewBackup.visualStyle || 'blur'); }catch(e){}
+    try{ applyCanvasColor(_previewBackup.canvasColor || 'white'); }catch(e){}
+    _previewBackup = null;
+  }
 });
 
 // listen for history changes to update UI
@@ -316,8 +367,8 @@ function bindShortcutsFromSettings(){
 
 // initial bind
 bindShortcutsFromSettings();
-// rebind on settings change
-Message.on(EVENTS.SETTINGS_CHANGED, ()=>{ bindShortcutsFromSettings(); });
+// rebind on settings change and apply visual style
+Message.on(EVENTS.SETTINGS_CHANGED, (s)=>{ try{ bindShortcutsFromSettings(); if (s && s.visualStyle) applyVisualStyle(s.visualStyle); }catch(e){} });
 
 // initialize undo/redo button states now (renderer may have emitted before listener attached)
 try{ if (undoBtn) undoBtn.disabled = !canUndo(); if (redoBtn) redoBtn.disabled = !canRedo(); if (historyStateDisplay) historyStateDisplay.textContent = `撤销: ${canUndo()? '可' : '—'}  重做: ${canRedo()? '可' : '—'}`; }catch(e){}
@@ -326,6 +377,8 @@ try{ if (undoBtn) undoBtn.disabled = !canUndo(); if (redoBtn) redoBtn.disabled =
 try{
   if (settings) { if (settings.theme) applyTheme(settings.theme); if (typeof settings.showTooltips !== 'undefined') applyTooltips(!!settings.showTooltips); }
 }catch(e){}
+try{ if (settings) { if (settings.visualStyle) applyVisualStyle(settings.visualStyle); else applyVisualStyle('blur'); } }catch(e){}
+try{ if (settings) { if (settings.canvasColor) applyCanvasColor(settings.canvasColor); else applyCanvasColor('white'); } }catch(e){}
 
 // Auto-adjust floating panel width based on tools content
 (() => {

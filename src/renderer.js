@@ -11,6 +11,8 @@ let eraserSize = 20;
 let brushColor = '#000000';
 let erasing = false;
 let eraserMode = 'pixel'; // 'pixel' | 'rect' | 'stroke'
+// brush appearance: normal vs chalk
+let chalkMode = false;
 
 // operation log for redraw: supports strokes, erase paths, clear rects
 const ops = [];
@@ -146,9 +148,42 @@ function drawBufferedStrokeSegment(op, flush = false) {
   const pts = _strokePoints.slice();
   ctx.save();
   ctx.globalCompositeOperation = 'source-over';
-  ctx.strokeStyle = op.color || '#000';
   ctx.lineWidth = op.size || 1;
   ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+
+  // chalk effect: draw multiple slightly jittered semi-transparent passes
+  const drawPass = (strokeStyle, alpha, jitter) => {
+    ctx.strokeStyle = strokeStyle;
+    ctx.globalAlpha = alpha;
+    if (!jitter) {
+      // non-jittered pass
+      for (let i = startIndex; i < pts.length - 1; i++) {
+        const p0 = pts[i - 1] || pts[i];
+        const p1 = pts[i];
+        const p2 = pts[i + 1];
+        const mid1 = { x: (p0.x + p1.x) / 2, y: (p0.y + p1.y) / 2 };
+        const mid2 = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
+        ctx.beginPath();
+        ctx.moveTo(mid1.x, mid1.y);
+        ctx.quadraticCurveTo(p1.x, p1.y, mid2.x, mid2.y);
+        ctx.stroke();
+        _lastMid = mid2;
+      }
+      return;
+    }
+    for (let i = startIndex; i < pts.length - 1; i++) {
+      const p0 = pts[i - 1] || pts[i];
+      const p1 = pts[i];
+      const p2 = pts[i + 1];
+      const mid1 = { x: (p0.x + p1.x) / 2 + (Math.random() - 0.5) * jitter, y: (p0.y + p1.y) / 2 + (Math.random() - 0.5) * jitter };
+      const mid2 = { x: (p1.x + p2.x) / 2 + (Math.random() - 0.5) * jitter, y: (p1.y + p2.y) / 2 + (Math.random() - 0.5) * jitter };
+      ctx.beginPath();
+      ctx.moveTo(mid1.x, mid1.y);
+      ctx.quadraticCurveTo(p1.x + (Math.random() - 0.5) * jitter, p1.y + (Math.random() - 0.5) * jitter, mid2.x, mid2.y);
+      ctx.stroke();
+      _lastMid = mid2;
+    }
+  };
 
   if (pts.length === 1) {
     const p = pts[0];
@@ -162,17 +197,25 @@ function drawBufferedStrokeSegment(op, flush = false) {
   }
 
   let startIndex = 1;
-  for (let i = startIndex; i < pts.length - 1; i++) {
-    const p0 = pts[i - 1] || pts[i];
-    const p1 = pts[i];
-    const p2 = pts[i + 1];
-    const mid1 = { x: (p0.x + p1.x) / 2, y: (p0.y + p1.y) / 2 };
-    const mid2 = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
-    ctx.beginPath();
-    ctx.moveTo(mid1.x, mid1.y);
-    ctx.quadraticCurveTo(p1.x, p1.y, mid2.x, mid2.y);
-    ctx.stroke();
-    _lastMid = mid2;
+  ctx.strokeStyle = op.color || '#000';
+  if (chalkMode) {
+    // multiple passes for chalky appearance
+    drawPass(op.color || '#000', 0.85, 0); // base pass
+    drawPass(op.color || '#000', 0.25, Math.max(1, (op.size || 1) * 0.8));
+    drawPass(op.color || '#000', 0.12, Math.max(1, (op.size || 1) * 1.6));
+  } else {
+    for (let i = startIndex; i < pts.length - 1; i++) {
+      const p0 = pts[i - 1] || pts[i];
+      const p1 = pts[i];
+      const p2 = pts[i + 1];
+      const mid1 = { x: (p0.x + p1.x) / 2, y: (p0.y + p1.y) / 2 };
+      const mid2 = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
+      ctx.beginPath();
+      ctx.moveTo(mid1.x, mid1.y);
+      ctx.quadraticCurveTo(p1.x, p1.y, mid2.x, mid2.y);
+      ctx.stroke();
+      _lastMid = mid2;
+    }
   }
 
   if (flush && pts.length >= 2) {
@@ -193,11 +236,94 @@ function drawBufferedStrokeSegment(op, flush = false) {
   }
 }
 
+// normalize common color formats to 6-char lowercase hex
+function normalizeColorToHex(c){
+  if (!c || typeof c !== 'string') return c;
+  c = c.trim().toLowerCase();
+  if (c[0] === '#'){
+    if (c.length === 4) { // #abc -> #aabbcc
+      return '#' + c[1]+c[1]+c[2]+c[2]+c[3]+c[3];
+    }
+    if (c.length === 7) return c;
+    return c; // unknown lengths
+  }
+  const rgb = c.match(/rgba?\(([^)]+)\)/);
+  if (rgb) {
+    const parts = rgb[1].split(',').map(p=>parseInt(p,10) || 0);
+    const r = (parts[0] & 0xFF).toString(16).padStart(2,'0');
+    const g = (parts[1] & 0xFF).toString(16).padStart(2,'0');
+    const b = (parts[2] & 0xFF).toString(16).padStart(2,'0');
+    return ('#'+r+g+b).toLowerCase();
+  }
+  return c;
+}
+
+// remap historical stroke colors according to simple rules (black<->white conversions)
+export function remapHistoryForCanvas(canvasName){
+  try{
+    const mapping = {};
+    if (canvasName === 'white') mapping['#ffffff'] = '#000000';
+    else if (canvasName === 'black') mapping['#000000'] = '#ffffff';
+    else if (canvasName === 'chalkboard') mapping['#000000'] = '#ffffff';
+    const normMap = {};
+    Object.keys(mapping).forEach(k=>{ normMap[normalizeColorToHex(k)] = mapping[k]; });
+    let changed = false;
+    for (const op of ops){
+      if (op && op.type === 'stroke' && op.color){
+        const n = normalizeColorToHex(op.color);
+        if (normMap[n]){ op.color = normMap[n]; changed = true; }
+      }
+    }
+    if (changed){ redrawAll(); pushHistory(); try{ Message.emit(EVENTS.HISTORY_CHANGED, { canUndo: canUndo(), canRedo: canRedo() }); }catch(e){} }
+  }catch(e){ console.warn('remapHistoryForCanvas failed', e); }
+}
+
+export function setBrushAppearance(mode){
+  try{ chalkMode = (mode === 'chalk'); }catch(e){}
+}
+
 function finalizeCurrentOp() { if (!currentOp) return; if (currentOp.type === 'stroke' || currentOp.type === 'erase' || currentOp.type === 'clearRect') { ops.push(currentOp); pushHistory(); } currentOp = null; }
 
 function redrawAll() { ctx.clearRect(0, 0, canvas.width, canvas.height); for (const op of ops) { if (op.type === 'stroke') drawOp(op, 'source-over'); else if (op.type === 'erase') drawOp(op, 'destination-out'); else if (op.type === 'clearRect') { ctx.save(); ctx.globalCompositeOperation = 'destination-out'; ctx.fillStyle = 'rgba(0,0,0,1)'; ctx.fillRect(op.x, op.y, op.w, op.h); ctx.restore(); } } }
 
-function drawOp(op, composite) { ctx.save(); ctx.globalCompositeOperation = composite || 'source-over'; if (op.type === 'stroke') ctx.strokeStyle = op.color || '#000'; else ctx.strokeStyle = 'rgba(0,0,0,1)'; ctx.lineWidth = op.size || 1; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.beginPath(); const pts = op.points; if (!pts || pts.length === 0) { ctx.restore(); return; } ctx.moveTo(pts[0].x, pts[0].y); for (let i=1;i<pts.length;i++) ctx.lineTo(pts[i].x, pts[i].y); ctx.stroke(); ctx.restore(); }
+function drawOp(op, composite) {
+  ctx.save();
+  ctx.globalCompositeOperation = composite || 'source-over';
+  ctx.lineWidth = op.size || 1;
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  const pts = op.points;
+  if (!pts || pts.length === 0) { ctx.restore(); return; }
+  if (op.type === 'stroke') {
+    if (chalkMode) {
+      // base pass
+      ctx.globalAlpha = 0.9; ctx.strokeStyle = op.color || '#000';
+      ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y);
+      for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+      ctx.stroke();
+      // jittered light passes
+      for (let pass = 0; pass < 2; pass++) {
+        ctx.globalAlpha = pass === 0 ? 0.22 : 0.12;
+        ctx.beginPath(); ctx.moveTo(pts[0].x + (Math.random() - 0.5) * (op.size || 1), pts[0].y + (Math.random() - 0.5) * (op.size || 1));
+        for (let i = 1; i < pts.length; i++) {
+          ctx.lineTo(pts[i].x + (Math.random() - 0.5) * (op.size || 1.5), pts[i].y + (Math.random() - 0.5) * (op.size || 1.5));
+        }
+        ctx.stroke();
+      }
+    } else {
+      ctx.globalAlpha = 1.0;
+      ctx.strokeStyle = op.color || '#000';
+      ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y);
+      for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+      ctx.stroke();
+    }
+  } else {
+    // erase or other path-based operations
+    ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
 
 function drawOpSegment(op, x0, y0, x1, y1) { ctx.save(); ctx.globalCompositeOperation = (op.type === 'erase') ? 'destination-out' : 'source-over'; ctx.lineWidth = op.size || 1; ctx.lineCap='round'; ctx.lineJoin='round'; if (op.type === 'stroke') ctx.strokeStyle = op.color || '#000'; else ctx.strokeStyle='rgba(0,0,0,1)'; ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke(); ctx.restore(); }
 
