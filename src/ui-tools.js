@@ -1,5 +1,6 @@
 // ui-tools.js (ESM)
-import { clearAll, undo, redo, setBrushColor, setErasing, canUndo, canRedo, remapHistoryForCanvas, setBrushAppearance } from './renderer.js';
+import { clearAll, undo, redo, setBrushColor, setErasing, canUndo, canRedo, replaceStrokeColors, getToolState, setInputEnabled } from './renderer.js';
+import Curous from './curous.js';
 import Settings from './setting.js';
 import { showSubmenu, cleanupMenuStyles, initPinHandlers, closeAllSubmenus } from './more_decide_windows.js';
 import Message, { EVENTS } from './message.js';
@@ -8,6 +9,7 @@ import { initPenUI, updatePenModeLabel } from './pen.js';
 import { initEraserUI, updateEraserModeLabel } from './erese.js';
 
 const colorTool = document.getElementById('colorTool');
+const pointerTool = document.getElementById('pointerTool');
 const colorMenu = document.getElementById('colorMenu');
 const eraserTool = document.getElementById('eraserTool');
 const eraserMenu = document.getElementById('eraserMenu');
@@ -27,6 +29,8 @@ if (colorTool) {
   colorTool.addEventListener('click', ()=>{
     if (!colorMenu) return;
     setBrushColor('#000000'); setErasing(false);
+    // when using pen, disable selection mode and enable canvas input
+    try{ Curous.enableSelectionMode(false); setInputEnabled(true); }catch(e){}
     if (eraserTool) eraserTool.classList.remove('active');
     showSubmenu(colorMenu, colorTool);
     updatePenModeLabel();
@@ -37,9 +41,28 @@ if (eraserTool) {
   eraserTool.addEventListener('click', ()=>{
     if (!eraserMenu) return;
     setErasing(true);
+    try{ Curous.enableSelectionMode(false); setInputEnabled(true); }catch(e){}
     if (colorTool) colorTool.classList.remove('active');
     showSubmenu(eraserMenu, eraserTool);
     updateEraserModeLabel();
+  });
+}
+
+if (pointerTool) {
+  pointerTool.addEventListener('click', ()=>{
+    const next = !pointerTool.classList.contains('active');
+    if (next) {
+      // enable selection mode
+      pointerTool.classList.add('active');
+      // disable drawing/erasing
+      setErasing(false);
+      try{ setInputEnabled(false); }catch(e){}
+      Curous.enableSelectionMode(true);
+    } else {
+      pointerTool.classList.remove('active');
+      Curous.enableSelectionMode(false);
+      try{ setInputEnabled(true); }catch(e){}
+    }
   });
 }
 
@@ -210,23 +233,40 @@ function applyVisualStyle(style){
   }catch(e){}
 }
 
-// apply canvas color: 'white'|'black'|'chalkboard'
+// apply canvas color: 'white'|'black'|'chalkboard' with auto pen color switching
 function applyCanvasColor(name){
   try{
-    const map = { white: '#ffffff', black: '#000000', chalkboard: '#0B3D0B' };
-    const col = map[name] || (name || '#ffffff');
+    // Map canvas colors to background color and optimal pen color for contrast
+    const map = {
+      white: { bg: '#ffffff', pen: '#000000' },        // white bg -> black pen
+      black: { bg: '#000000', pen: '#ffffff' },        // black bg -> white pen
+      chalkboard: { bg: '#041604ff', pen: '#ffffff' }  // chalkboard green -> white pen
+    };
+    const cfg = map[name] || { bg: '#ffffff', pen: '#000000' };
+    
+    // Apply background color to canvas area
     const wrap = document.querySelector('.canvas-wrap');
     const board = document.getElementById('board');
-    if (wrap) wrap.style.background = col;
-    if (board) board.style.background = col;
-    // adjust brush color and appearance, and remap simple historical colors
-    try{
-      if (name === 'white') { setBrushColor('#000000'); setBrushAppearance('normal'); }
-      else if (name === 'black') { setBrushColor('#ffffff'); setBrushAppearance('normal'); }
-      else if (name === 'chalkboard') { setBrushColor('#ffffff'); setBrushAppearance('chalk'); }
-      // remap historical strokes (only black/white swaps currently)
-      try{ remapHistoryForCanvas(name); }catch(e){}
-    }catch(e){}
+    if (wrap) wrap.style.background = cfg.bg;
+    if (board) board.style.background = cfg.bg;
+    
+    // Auto-switch pen color based on canvas background
+    const newPen = cfg.pen;
+    
+    // Replace historical strokes: change old pen color to new pen color for contrast
+    try {
+      const toolState = getToolState();
+      const oldPen = toolState.brushColor;
+      if (oldPen !== newPen && (oldPen === '#000000' || oldPen === '#ffffff')) {
+        replaceStrokeColors(oldPen, newPen);
+      }
+    } catch(e){}
+    
+    // Update brush to new pen color
+    setBrushColor(newPen);
+    
+    // Update UI to reflect new pen color
+    try{ updatePenModeLabel(); }catch(e){}
   }catch(e){}
 }
 
