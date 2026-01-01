@@ -12,8 +12,14 @@ let brushColor = '#000000';
 let erasing = false;
 let eraserMode = 'pixel'; // 'pixel' | 'rect' | 'stroke'
 
+const _documents = {
+  whiteboard: { ops: [], history: [], historyIndex: -1, brushSize: 4, eraserSize: 20, brushColor: '#000000', erasing: false, eraserMode: 'pixel', view: { scale: 1, offsetX: 0, offsetY: 0 } },
+  annotation: { ops: [], history: [], historyIndex: -1, brushSize: 4, eraserSize: 20, brushColor: '#ff0000', erasing: false, eraserMode: 'pixel', view: { scale: 1, offsetX: 0, offsetY: 0 } }
+};
+let _activeDocKey = 'whiteboard';
+
 // operation log for redraw: supports strokes, erase paths, clear rects
-const ops = [];
+let ops = _documents[_activeDocKey].ops;
 let currentOp = null;
 // points buffer & RAF for low-latency smoothed drawing
 let _strokePoints = [];
@@ -21,16 +27,16 @@ let _drawPending = false;
 let _lastMid = null;
 let _rafId = null;
 // history snapshots for undo/redo
-const history = [];
-let historyIndex = -1;
+let history = _documents[_activeDocKey].history;
+let historyIndex = _documents[_activeDocKey].historyIndex;
 // 减少历史快照数量以节省内存
 const HISTORY_LIMIT = 30;
 
 import Message, { EVENTS } from './message.js';
 
 // 深拷贝并对超长笔画点数组进行下采样，防止单个操作占用过多内存
-function snapshotOps() {
-  const cloned = JSON.parse(JSON.stringify(ops));
+function snapshotOps(srcOps) {
+  const cloned = JSON.parse(JSON.stringify(Array.isArray(srcOps) ? srcOps : []));
   for (const op of cloned) {
     if (op && op.type === 'stroke' && Array.isArray(op.points) && op.points.length > 600) {
       const maxPoints = 600;
@@ -43,9 +49,10 @@ function snapshotOps() {
 
 function pushHistory() {
   if (historyIndex < history.length - 1) history.splice(historyIndex + 1);
-  history.push(snapshotOps());
+  history.push(snapshotOps(ops));
   historyIndex = history.length - 1;
   if (history.length > HISTORY_LIMIT) { history.shift(); historyIndex--; }
+  try{ _documents[_activeDocKey].historyIndex = historyIndex; }catch(e){}
   try{ Message.emit(EVENTS.HISTORY_CHANGED, { canUndo: canUndo(), canRedo: canRedo() }); }catch(e){}
 }
 
@@ -87,6 +94,7 @@ export function setViewTransform(scale, offsetX, offsetY){
   viewScale = Math.max(0.1, Math.min(3.0, scale));
   viewOffsetX = Number(offsetX) || 0;
   viewOffsetY = Number(offsetY) || 0;
+  try{ _documents[_activeDocKey].view = { scale: viewScale, offsetX: viewOffsetX, offsetY: viewOffsetY }; }catch(e){}
   applyViewTransform();
 }
 
@@ -405,11 +413,11 @@ canvas.addEventListener('pointerleave', (e)=>{
 });
 
 // Exported API for UI module
-export function setBrushSize(v){ brushSize = Number(v); }
-export function setEraserSize(v){ eraserSize = Number(v); }
-export function setBrushColor(c){ brushColor = c; }
-export function setErasing(b){ erasing = !!b; }
-export function setEraserMode(m){ eraserMode = m; }
+export function setBrushSize(v){ brushSize = Number(v); try{ _documents[_activeDocKey].brushSize = brushSize; }catch(e){} }
+export function setEraserSize(v){ eraserSize = Number(v); try{ _documents[_activeDocKey].eraserSize = eraserSize; }catch(e){} }
+export function setBrushColor(c){ brushColor = c; try{ _documents[_activeDocKey].brushColor = brushColor; }catch(e){} }
+export function setErasing(b){ erasing = !!b; try{ _documents[_activeDocKey].erasing = erasing; }catch(e){} }
+export function setEraserMode(m){ eraserMode = m; try{ _documents[_activeDocKey].eraserMode = eraserMode; }catch(e){} }
 export function getToolState(){ return { brushColor, brushSize, eraserSize, eraserMode, erasing }; }
 export function clearAll(){ ops.push({type:'clearRect', x:0, y:0, w:canvas.width, h:canvas.height}); redrawAll(); pushHistory(); }
 export function undo(){ if (historyIndex <= 0) return; historyIndex -= 1; const snap = JSON.parse(JSON.stringify(history[historyIndex])); ops.length = 0; Array.prototype.push.apply(ops, snap); redrawAll(); try{ Message.emit(EVENTS.HISTORY_CHANGED, { canUndo: canUndo(), canRedo: canRedo() }); }catch(e){} }
@@ -422,9 +430,7 @@ export function canRedo(){ return historyIndex < history.length - 1; }
 pushHistory();
 
 // Snapshot API for page handling
-export function getSnapshot(){
-  return JSON.parse(JSON.stringify(ops));
-}
+export function getSnapshot(){ return JSON.parse(JSON.stringify(ops)); }
 
 export function loadSnapshot(snap){
   ops.length = 0;
@@ -461,3 +467,55 @@ export function replaceStrokeColors(oldColor, newColor){
   
   redrawAll();
 }
+
+function _loadDocState(key){
+  const doc = _documents[key];
+  if (!doc) return;
+  ops = doc.ops;
+  history = doc.history;
+  historyIndex = doc.historyIndex;
+  brushSize = doc.brushSize;
+  eraserSize = doc.eraserSize;
+  brushColor = doc.brushColor;
+  erasing = doc.erasing;
+  eraserMode = doc.eraserMode;
+  viewScale = (doc.view && doc.view.scale) || 1;
+  viewOffsetX = (doc.view && doc.view.offsetX) || 0;
+  viewOffsetY = (doc.view && doc.view.offsetY) || 0;
+  applyViewTransform();
+}
+
+function _ensureDocInitialized(key){
+  const doc = _documents[key];
+  if (!doc) return;
+  if (Array.isArray(doc.history) && doc.history.length > 0 && doc.historyIndex >= 0) return;
+  doc.history.length = 0;
+  doc.history.push(snapshotOps(doc.ops));
+  doc.historyIndex = 0;
+}
+
+export function setCanvasMode(mode){
+  const next = mode === 'annotation' ? 'annotation' : 'whiteboard';
+  if (next === _activeDocKey) return;
+  try{ finalizeCurrentOp(); }catch(e){}
+  try{ drawing = false; currentOp = null; _strokePoints.length = 0; }catch(e){}
+  try{ touchStrokeMap.clear(); }catch(e){}
+  try{
+    _documents[_activeDocKey].historyIndex = historyIndex;
+    _documents[_activeDocKey].brushSize = brushSize;
+    _documents[_activeDocKey].eraserSize = eraserSize;
+    _documents[_activeDocKey].brushColor = brushColor;
+    _documents[_activeDocKey].erasing = erasing;
+    _documents[_activeDocKey].eraserMode = eraserMode;
+    _documents[_activeDocKey].view = { scale: viewScale, offsetX: viewOffsetX, offsetY: viewOffsetY };
+  }catch(e){}
+  _activeDocKey = next;
+  _ensureDocInitialized(_activeDocKey);
+  _loadDocState(_activeDocKey);
+  redrawAll();
+  try{ Message.emit(EVENTS.HISTORY_CHANGED, { canUndo: canUndo(), canRedo: canRedo() }); }catch(e){}
+}
+
+_ensureDocInitialized('whiteboard');
+_ensureDocInitialized('annotation');
+_loadDocState('whiteboard');

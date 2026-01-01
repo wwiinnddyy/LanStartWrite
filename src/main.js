@@ -1,13 +1,73 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, screen } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
 let mainWindow;
+let _overlayInteractiveRects = [];
+let _overlayIgnoreConfig = { ignore: false, forward: false };
+let _overlayLastApplied = null;
+let _overlayPollTimer = null;
+
+function _applyIgnoreMouse(ignore, forward) {
+  if (!mainWindow) return;
+  const key = `${ignore ? 1 : 0}:${forward ? 1 : 0}`;
+  if (_overlayLastApplied === key) return;
+  _overlayLastApplied = key;
+  if (ignore) mainWindow.setIgnoreMouseEvents(true, { forward: !!forward });
+  else mainWindow.setIgnoreMouseEvents(false);
+}
+
+function _shouldAllowOverlayInteraction() {
+  if (!mainWindow) return false;
+  const rects = Array.isArray(_overlayInteractiveRects) ? _overlayInteractiveRects : [];
+  if (rects.length === 0) return false;
+  const winBounds = mainWindow.getBounds();
+  const p = screen.getCursorScreenPoint();
+  const px = p.x;
+  const py = p.y;
+  for (const r of rects) {
+    const left = winBounds.x + (Number(r.left) || 0);
+    const top = winBounds.y + (Number(r.top) || 0);
+    const width = Number(r.width) || 0;
+    const height = Number(r.height) || 0;
+    if (width <= 0 || height <= 0) continue;
+    const right = left + width;
+    const bottom = top + height;
+    if (px >= left && px <= right && py >= top && py <= bottom) return true;
+  }
+  return false;
+}
+
+function _ensureOverlayPoll() {
+  if (_overlayPollTimer) return;
+  _overlayPollTimer = setInterval(() => {
+    try {
+      if (!_overlayIgnoreConfig.ignore) return;
+      if (!_overlayIgnoreConfig.forward) return;
+      if (!mainWindow) return;
+      const allow = _shouldAllowOverlayInteraction();
+      if (allow) _applyIgnoreMouse(false, false);
+      else _applyIgnoreMouse(true, true);
+    } catch (e) {}
+  }, 30);
+}
+
+function _stopOverlayPoll() {
+  if (!_overlayPollTimer) return;
+  try { clearInterval(_overlayPollTimer); } catch (e) {}
+  _overlayPollTimer = null;
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 900,
     height: 700,
+    transparent: true,
+    backgroundColor: '#00000000',
+    frame: false,
+    hasShadow: false,
+    skipTaskbar: true,
+    alwaysOnTop: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -16,6 +76,8 @@ function createWindow() {
   });
 
   mainWindow.loadFile(path.join(__dirname, 'index.html'));
+  try{ mainWindow.setAlwaysOnTop(true, 'screen-saver'); }catch(e){}
+  try{ mainWindow.maximize(); }catch(e){}
   
   // 开发时打开开发者工具
   // mainWindow.webContents.openDevTools();
@@ -42,6 +104,44 @@ app.on('window-all-closed', () => {
 ipcMain.on('fromRenderer', (event, arg) => {
   console.log('[IPC] 来自渲染进程:', arg);
   event.reply('fromMain', 'Pong: ' + arg);
+});
+
+ipcMain.on('overlay:set-ignore-mouse', (event, payload) => {
+  try{
+    if (!mainWindow) return;
+    const ignore = !!(payload && payload.ignore);
+    const forward = !!(payload && payload.forward);
+    _overlayIgnoreConfig = { ignore, forward };
+    _applyIgnoreMouse(ignore, forward);
+    if (ignore && forward) _ensureOverlayPoll();
+    else _stopOverlayPoll();
+  }catch(err){
+    console.warn('overlay:set-ignore-mouse failed', err);
+  }
+});
+
+ipcMain.on('overlay:set-interactive-rects', (event, payload) => {
+  try {
+    const rects = payload && Array.isArray(payload.rects) ? payload.rects : [];
+    _overlayInteractiveRects = rects
+      .map((r) => ({
+        left: Number(r && r.left) || 0,
+        top: Number(r && r.top) || 0,
+        width: Number(r && r.width) || 0,
+        height: Number(r && r.height) || 0
+      }))
+      .filter((r) => r.width > 0 && r.height > 0);
+    if (_overlayIgnoreConfig && _overlayIgnoreConfig.ignore && _overlayIgnoreConfig.forward) _ensureOverlayPoll();
+  } catch (e) {}
+});
+
+ipcMain.on('app:close', () => {
+  try{
+    if (mainWindow) mainWindow.close();
+    else app.quit();
+  }catch(e){
+    try{ app.quit(); }catch(err){}
+  }
 });
 
 /**

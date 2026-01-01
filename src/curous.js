@@ -20,6 +20,11 @@ let draggingHandle = null;
 let pointerMap = new Map();
 let pinchState = null;
 let selectionEnabled = false;
+let transformEnabled = true;
+
+export function setTransformEnabled(enable){
+  transformEnabled = !!enable;
+}
 
 function ensureOverlay(){
   if (overlay) return;
@@ -110,9 +115,20 @@ function canvasClientToCanvasInternal(clientX, clientY){
   return { x, y };
 }
 
+function _isUiEventTarget(target){
+  try{
+    if (!target || !target.closest) return false;
+    return !!target.closest('.floating-panel, .submenu, #settingsModal, .settings-modal, #pageToolbar');
+  }catch(e){
+    return false;
+  }
+}
+
 function onPointerDown(e){
   if (!selectionEnabled) return;
+  if (_isUiEventTarget(e && e.target)) return;
   if (e.pointerType === 'touch'){
+    if (!transformEnabled) return;
     pointerMap.set(e.pointerId, e);
     if (pointerMap.size === 2){
       // start pinch
@@ -124,6 +140,7 @@ function onPointerDown(e){
   }
 
   if (e.button === 2){
+    if (!transformEnabled) return;
     // right-button pan
     draggingSelection = false;
     dragStart = { x: e.clientX, y: e.clientY, view: R.getViewTransform() };
@@ -254,6 +271,7 @@ function onHandleMove(e){
 function onHandleUp(e){ draggingHandle = null; window.removeEventListener('pointermove', onHandleMove); }
 
 function onPanMove(e){
+  if (!transformEnabled) return;
   if (!dragStart) return;
   const v0 = dragStart.view;
   const dx = e.clientX - dragStart.x;
@@ -266,6 +284,7 @@ function onPanUp(e){ window.removeEventListener('pointermove', onPanMove); dragS
 
 function onWheel(e){
   if (!selectionEnabled) return;
+  if (!transformEnabled) return;
   const rect = canvas.getBoundingClientRect();
   const v = R.getViewTransform();
   const wheel = -e.deltaY;
@@ -285,6 +304,7 @@ function onWheel(e){
 
 function onPointerMoveGlobal(e){
   if (e.pointerType === 'touch'){
+    if (!transformEnabled) return;
     if (!pointerMap.has(e.pointerId)) return;
     pointerMap.set(e.pointerId, e);
     if (pointerMap.size === 2 && pinchState){
@@ -336,4 +356,4 @@ export function enableSelectionMode(enable){
 // auto attach overlay element
 ensureOverlay();
 
-export default { enableSelectionMode };
+export default { enableSelectionMode, setTransformEnabled };
