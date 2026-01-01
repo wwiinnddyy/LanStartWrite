@@ -15,13 +15,14 @@ export function updateEraserModeLabel(){
 }
 
 export function initEraserUI(){
-  if (eraserSizeInput) eraserSizeInput.addEventListener('input', (e)=>{ setEraserSize(Number(e.target.value)); updateEraserModeLabel(); });
+  if (eraserSizeInput) eraserSizeInput.addEventListener('input', (e)=>{ setEraserSize(Number(e.target.value)); updateEraserModeLabel(); try{ window.dispatchEvent(new Event('toolbar:sync')); }catch(err){} });
 
   function updateEraserModeUI(mode){
     if (erasePixelBtn) erasePixelBtn.classList.toggle('active', mode==='pixel');
     if (eraseRectBtn) eraseRectBtn.classList.toggle('active', mode==='rect');
     if (eraseStrokeBtn) eraseStrokeBtn.classList.toggle('active', mode==='stroke');
     updateEraserModeLabel();
+    try{ window.dispatchEvent(new Event('toolbar:sync')); }catch(err){}
   }
 
   if (erasePixelBtn) erasePixelBtn.addEventListener('click', ()=>{ setEraserMode('pixel'); updateEraserModeUI('pixel'); });

@@ -6,6 +6,7 @@ const DEFAULTS = {
   // new settings
   theme: 'light', // 'light' | 'dark'
   showTooltips: true,
+  multiTouchPen: false,
   visualStyle: 'blur', // 'solid' | 'blur' | 'transparent'
   canvasColor: 'white', // 'white' | 'black' | 'chalkboard'
   shortcuts: { undo: 'Ctrl+Z', redo: 'Ctrl+Y' }

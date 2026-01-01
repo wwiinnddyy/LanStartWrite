@@ -1,5 +1,5 @@
 // ui-tools.js (ESM)
-import { clearAll, undo, redo, setBrushColor, setErasing, canUndo, canRedo, replaceStrokeColors, getToolState, setInputEnabled } from './renderer.js';
+import { clearAll, undo, redo, setBrushColor, setErasing, canUndo, canRedo, replaceStrokeColors, getToolState, setInputEnabled, setMultiTouchPenEnabled } from './renderer.js';
 import Curous from './curous.js';
 import Settings from './setting.js';
 import { showSubmenu, cleanupMenuStyles, initPinHandlers, closeAllSubmenus } from './more_decide_windows.js';
@@ -25,6 +25,61 @@ const exitTool = document.getElementById('exitTool');
 initPenUI();
 initEraserUI();
 
+function storeDefaultIcon(el){
+  if (!el) return;
+  if (!el.dataset.defaultIcon) el.dataset.defaultIcon = el.innerHTML || '';
+}
+
+function restoreDefaultIcon(el){
+  if (!el) return;
+  if (typeof el.dataset.defaultIcon === 'string') el.innerHTML = el.dataset.defaultIcon;
+}
+
+function escapeAttr(v){
+  return String(v)
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function getColorSwatchIconSvg(color){
+  const fill = escapeAttr(color || '#000000');
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7" fill="${fill}" stroke="currentColor" stroke-opacity="0.35" stroke-width="1.5"/></svg>`;
+}
+
+function getEraserModeIconSvg(mode){
+  const m = mode || 'pixel';
+  const btn = document.querySelector(`.erase-mode-btn[data-mode="${m}"]`);
+  const svg = btn ? btn.querySelector('svg') : null;
+  return svg ? svg.outerHTML : '';
+}
+
+function syncToolbarIcons(){
+  const s = getToolState();
+  const pointerActive = !!(pointerTool && pointerTool.classList.contains('active'));
+
+  if (eraserTool) {
+    if (s && s.erasing) {
+      const svg = getEraserModeIconSvg(s.eraserMode || 'pixel');
+      if (svg) eraserTool.innerHTML = svg;
+      else restoreDefaultIcon(eraserTool);
+    } else {
+      restoreDefaultIcon(eraserTool);
+    }
+  }
+
+  if (colorTool) {
+    if (!pointerActive && !(s && s.erasing)) colorTool.innerHTML = getColorSwatchIconSvg((s && s.brushColor) || '#000000');
+    else restoreDefaultIcon(colorTool);
+  }
+}
+
+storeDefaultIcon(colorTool);
+storeDefaultIcon(eraserTool);
+
+try{ window.addEventListener('toolbar:sync', syncToolbarIcons); }catch(e){}
+
 if (colorTool) {
   colorTool.addEventListener('click', ()=>{
     if (!colorMenu) return;
@@ -34,17 +89,27 @@ if (colorTool) {
     if (eraserTool) eraserTool.classList.remove('active');
     showSubmenu(colorMenu, colorTool);
     updatePenModeLabel();
+    syncToolbarIcons();
   });
 }
 
 if (eraserTool) {
   eraserTool.addEventListener('click', ()=>{
     if (!eraserMenu) return;
+    const closing = eraserMenu.classList.contains('open');
+    if (closing) {
+      showSubmenu(eraserMenu, eraserTool);
+      setErasing(false);
+      updateEraserModeLabel();
+      syncToolbarIcons();
+      return;
+    }
     setErasing(true);
     try{ Curous.enableSelectionMode(false); setInputEnabled(true); }catch(e){}
     if (colorTool) colorTool.classList.remove('active');
     showSubmenu(eraserMenu, eraserTool);
     updateEraserModeLabel();
+    syncToolbarIcons();
   });
 }
 
@@ -63,6 +128,7 @@ if (pointerTool) {
       Curous.enableSelectionMode(false);
       try{ setInputEnabled(true); }catch(e){}
     }
+    syncToolbarIcons();
   });
 }
 
@@ -73,6 +139,7 @@ if (moreTool) {
     if (colorTool) colorTool.classList.remove('active');
     if (eraserTool) eraserTool.classList.remove('active');
     showSubmenu(moreMenu, moreTool);
+    syncToolbarIcons();
   });
   // simple action hooks
   const exportBtn = document.getElementById('exportBtn');
@@ -85,8 +152,8 @@ if (moreTool) {
 
 // submenu logic moved to more_decide_windows.js
 
-document.addEventListener('click', (e)=>{ if (e.target.closest && (e.target.closest('.tool') || e.target.closest('.drag-handle'))) return; closeAllSubmenus(); });
-document.addEventListener('keydown', (e)=>{ if (e.key==='Escape') closeAllSubmenus(); });
+document.addEventListener('click', (e)=>{ if (e.target.closest && (e.target.closest('.tool') || e.target.closest('.drag-handle'))) return; closeAllSubmenus(); syncToolbarIcons(); });
+document.addEventListener('keydown', (e)=>{ if (e.key==='Escape') { closeAllSubmenus(); syncToolbarIcons(); } });
 
 // pin button handlers: toggle data-pinned on submenu
 // initialize pin handlers from more_decide_windows
@@ -106,7 +173,7 @@ if (dragHandle && panel) {
   });
 }
 
-if (clearBtn) clearBtn.addEventListener('click', ()=>{ clearAll(); setErasing(false); if (eraserTool) eraserTool.classList.remove('active'); updatePenModeLabel(); updateEraserModeLabel(); });
+if (clearBtn) clearBtn.addEventListener('click', ()=>{ clearAll(); setErasing(false); if (eraserTool) eraserTool.classList.remove('active'); updatePenModeLabel(); updateEraserModeLabel(); syncToolbarIcons(); });
 
 if (undoBtn) undoBtn.addEventListener('click', ()=>{ undo(); });
 if (redoBtn) redoBtn.addEventListener('click', ()=>{ redo(); });
@@ -118,6 +185,7 @@ document.addEventListener('keydown', (e)=>{
 // ensure labels reflect initial state
 updateEraserModeLabel();
 updatePenModeLabel();
+syncToolbarIcons();
 
 // Collapse/expand behavior for horizontal fold
 const settings = Settings.loadSettings();
@@ -150,6 +218,7 @@ const optAutoResize = document.getElementById('optAutoResize');
 const optCollapsed = document.getElementById('optCollapsed');
 const optTheme = document.getElementById('optTheme');
 const optTooltips = document.getElementById('optTooltips');
+const optMultiTouchPen = document.getElementById('optMultiTouchPen');
 const optVisualStyle = document.getElementById('optVisualStyle');
 const optCanvasColor = document.getElementById('optCanvasColor');
 const keyUndo = document.getElementById('keyUndo');
@@ -170,6 +239,7 @@ function openSettings(){
   if (optVisualStyle) optVisualStyle.value = s.visualStyle || 'blur';
   if (optCanvasColor) optCanvasColor.value = s.canvasColor || 'white';
   if (optTooltips) optTooltips.checked = !!s.showTooltips;
+  if (optMultiTouchPen) optMultiTouchPen.checked = !!s.multiTouchPen;
   if (keyUndo) keyUndo.value = (s.shortcuts && s.shortcuts.undo) || '';
   if (keyRedo) keyRedo.value = (s.shortcuts && s.shortcuts.redo) || '';
   settingsModal.classList.add('open');
@@ -192,6 +262,7 @@ if (saveSettings) saveSettings.addEventListener('click', ()=>{
     visualStyle: (optVisualStyle && optVisualStyle.value) || 'blur',
     canvasColor: (optCanvasColor && optCanvasColor.value) || 'white',
     showTooltips: !!(optTooltips && optTooltips.checked),
+    multiTouchPen: !!(optMultiTouchPen && optMultiTouchPen.checked),
     shortcuts: { undo: (keyUndo && keyUndo.value) || '', redo: (keyRedo && keyRedo.value) || '' }
   };
   // persist via cross-module helper which emits SETTINGS_CHANGED
@@ -206,10 +277,11 @@ if (saveSettings) saveSettings.addEventListener('click', ()=>{
   try{ applyVisualStyle(newS.visualStyle); }catch(e){}
   try{ applyCanvasColor(newS.canvasColor); }catch(e){}
   applyTooltips(newS.showTooltips);
+  try{ setMultiTouchPenEnabled(!!newS.multiTouchPen); }catch(e){}
   closeSettingsModal();
 });
 
-if (resetSettingsBtn) resetSettingsBtn.addEventListener('click', ()=>{ Settings.resetSettings(); const s = Settings.loadSettings(); if (optAutoResize) optAutoResize.checked = !!s.enableAutoResize; if (optCollapsed) optCollapsed.checked = !!s.toolbarCollapsed; if (optTheme) optTheme.value = s.theme || 'light'; if (optVisualStyle) optVisualStyle.value = s.visualStyle || 'blur'; if (optCanvasColor) optCanvasColor.value = s.canvasColor || 'white'; if (optTooltips) optTooltips.checked = !!s.showTooltips; if (keyUndo) keyUndo.value = (s.shortcuts && s.shortcuts.undo) || ''; if (keyRedo) keyRedo.value = (s.shortcuts && s.shortcuts.redo) || ''; });
+if (resetSettingsBtn) resetSettingsBtn.addEventListener('click', ()=>{ Settings.resetSettings(); const s = Settings.loadSettings(); if (optAutoResize) optAutoResize.checked = !!s.enableAutoResize; if (optCollapsed) optCollapsed.checked = !!s.toolbarCollapsed; if (optTheme) optTheme.value = s.theme || 'light'; if (optVisualStyle) optVisualStyle.value = s.visualStyle || 'blur'; if (optCanvasColor) optCanvasColor.value = s.canvasColor || 'white'; if (optTooltips) optTooltips.checked = !!s.showTooltips; if (optMultiTouchPen) optMultiTouchPen.checked = !!s.multiTouchPen; if (keyUndo) keyUndo.value = (s.shortcuts && s.shortcuts.undo) || ''; if (keyRedo) keyRedo.value = (s.shortcuts && s.shortcuts.redo) || ''; try{ setMultiTouchPenEnabled(!!s.multiTouchPen); }catch(e){} });
 
 // apply theme to document body
 function applyTheme(name){ try{ document.body.dataset.theme = name; if (name==='dark') document.documentElement.classList.add('theme-dark'); else document.documentElement.classList.remove('theme-dark'); }catch(e){} }
@@ -408,7 +480,7 @@ function bindShortcutsFromSettings(){
 // initial bind
 bindShortcutsFromSettings();
 // rebind on settings change and apply visual style
-Message.on(EVENTS.SETTINGS_CHANGED, (s)=>{ try{ bindShortcutsFromSettings(); if (s && s.visualStyle) applyVisualStyle(s.visualStyle); }catch(e){} });
+Message.on(EVENTS.SETTINGS_CHANGED, (s)=>{ try{ bindShortcutsFromSettings(); if (s && s.visualStyle) applyVisualStyle(s.visualStyle); if (s && typeof s.multiTouchPen !== 'undefined') setMultiTouchPenEnabled(!!s.multiTouchPen); }catch(e){} });
 
 // initialize undo/redo button states now (renderer may have emitted before listener attached)
 try{ if (undoBtn) undoBtn.disabled = !canUndo(); if (redoBtn) redoBtn.disabled = !canRedo(); if (historyStateDisplay) historyStateDisplay.textContent = `撤销: ${canUndo()? '可' : '—'}  重做: ${canRedo()? '可' : '—'}`; }catch(e){}
@@ -419,6 +491,7 @@ try{
 }catch(e){}
 try{ if (settings) { if (settings.visualStyle) applyVisualStyle(settings.visualStyle); else applyVisualStyle('blur'); } }catch(e){}
 try{ if (settings) { if (settings.canvasColor) applyCanvasColor(settings.canvasColor); else applyCanvasColor('white'); } }catch(e){}
+try{ if (settings && typeof settings.multiTouchPen !== 'undefined') setMultiTouchPenEnabled(!!settings.multiTouchPen); }catch(e){}
 
 // Auto-adjust floating panel width based on tools content
 (() => {

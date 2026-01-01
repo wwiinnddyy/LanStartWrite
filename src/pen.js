@@ -13,7 +13,7 @@ export function updatePenModeLabel(){
 }
 
 export function initPenUI(){
-  if (penSizeInput) penSizeInput.addEventListener('input', (e)=>{ setBrushSize(Number(e.target.value)); updatePenModeLabel(); });
+  if (penSizeInput) penSizeInput.addEventListener('input', (e)=>{ setBrushSize(Number(e.target.value)); updatePenModeLabel(); try{ window.dispatchEvent(new Event('toolbar:sync')); }catch(err){} });
 
   colorButtons.forEach(btn => {
     btn.addEventListener('click', () => {
@@ -22,6 +22,7 @@ export function initPenUI(){
       updatePenModeLabel();
       if (colorMenu) { cleanupMenuStyles(colorMenu); colorMenu.classList.remove('open'); colorMenu.setAttribute('aria-hidden','true'); }
       if (colorTool) colorTool.classList.remove('active');
+      try{ window.dispatchEvent(new Event('toolbar:sync')); }catch(err){}
     });
   });
 

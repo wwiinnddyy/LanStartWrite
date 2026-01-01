@@ -69,8 +69,14 @@ let viewOffsetY = 0;
 
 // allow enabling/disabling pointer input for drawing (selection mode will disable)
 let inputEnabled = true;
+let multiTouchPenEnabled = false;
+const touchStrokeMap = new Map();
 
 export function setInputEnabled(enabled){ inputEnabled = !!enabled; }
+
+export function setMultiTouchPenEnabled(enabled){
+  multiTouchPenEnabled = !!enabled;
+}
 
 function applyViewTransform(){
   canvas.style.transformOrigin = '0 0';
@@ -100,9 +106,89 @@ function screenToCanvas(clientX, clientY){
 
 window.addEventListener('resize', () => { updateCanvasSize(); redrawAll(); });
 
+function shouldUseMultiTouchStroke(e){
+  return !!(multiTouchPenEnabled && inputEnabled && !erasing && e && e.pointerType === 'touch' && e.pointerId);
+}
+
+function drawBufferedStrokeSegmentFromState(state, flush = false) {
+  if (!state || !state.strokePoints || state.strokePoints.length === 0) return;
+  const op = state.op;
+  const pts = state.strokePoints.slice();
+  ctx.save();
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.strokeStyle = (op && op.color) || '#000';
+  ctx.lineWidth = (op && op.size) || 1;
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+
+  if (pts.length === 1) {
+    const p = pts[0];
+    ctx.beginPath();
+    ctx.moveTo(p.x, p.y);
+    ctx.lineTo(p.x + 0.01, p.y + 0.01);
+    ctx.stroke();
+    ctx.restore();
+    if (flush) state.strokePoints.length = 0;
+    return;
+  }
+
+  for (let i = 1; i < pts.length - 1; i++) {
+    const p0 = pts[i - 1] || pts[i];
+    const p1 = pts[i];
+    const p2 = pts[i + 1];
+    const mid1 = { x: (p0.x + p1.x) / 2, y: (p0.y + p1.y) / 2 };
+    const mid2 = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
+    ctx.beginPath();
+    ctx.moveTo(mid1.x, mid1.y);
+    ctx.quadraticCurveTo(p1.x, p1.y, mid2.x, mid2.y);
+    ctx.stroke();
+    state.lastMid = mid2;
+  }
+
+  if (flush && pts.length >= 2) {
+    const last = pts[pts.length - 1];
+    ctx.beginPath();
+    ctx.moveTo(state.lastMid ? state.lastMid.x : pts[0].x, state.lastMid ? state.lastMid.y : pts[0].y);
+    ctx.lineTo(last.x, last.y);
+    ctx.stroke();
+    state.lastMid = null;
+  }
+
+  ctx.restore();
+  if (flush) state.strokePoints.length = 0;
+  else if (pts.length > 1) state.strokePoints = [pts[pts.length - 2], pts[pts.length - 1]];
+}
+
+function finalizeOp(op){
+  if (!op) return;
+  if (op.type === 'stroke' || op.type === 'erase' || op.type === 'clearRect') {
+    ops.push(op);
+    pushHistory();
+  }
+}
+
+function finalizeMultiTouchStroke(e){
+  const state = touchStrokeMap.get(e.pointerId);
+  if (!state) return false;
+  if (state.strokePoints && state.strokePoints.length > 0 && state.op && state.op.type === 'stroke') {
+    drawBufferedStrokeSegmentFromState(state, true);
+  }
+  try { if (e && e.pointerId && canvas.releasePointerCapture) canvas.releasePointerCapture(e.pointerId); } catch(err) {}
+  finalizeOp(state.op);
+  touchStrokeMap.delete(e.pointerId);
+  return true;
+}
+
 function pointerDown(e){
   if (!inputEnabled) return;
   const { x, y } = screenToCanvas(e.clientX, e.clientY);
+
+  if (shouldUseMultiTouchStroke(e)) {
+    const op = { type: 'stroke', color: brushColor, size: brushSize, points: [{x, y}] };
+    const state = { op, lastX: x, lastY: y, strokePoints: [{x, y}], drawPending: false, lastMid: null, rafId: null };
+    touchStrokeMap.set(e.pointerId, state);
+    try { if (e.pointerId && canvas.setPointerCapture) canvas.setPointerCapture(e.pointerId); } catch(err) {}
+    return;
+  }
 
   if (erasing && eraserMode === 'rect') {
     drawing = true;
@@ -134,6 +220,26 @@ function pointerDown(e){
 }
 
 function pointerMove(e){
+  if (multiTouchPenEnabled && e && e.pointerType === 'touch' && e.pointerId && touchStrokeMap.has(e.pointerId)) {
+    if (!inputEnabled) return;
+    const state = touchStrokeMap.get(e.pointerId);
+    if (!state) return;
+    const { x, y } = screenToCanvas(e.clientX, e.clientY);
+    if (state.op && state.op.type === 'stroke') {
+      state.op.points.push({x, y});
+      state.strokePoints.push({x, y});
+      if (!state.drawPending) {
+        state.drawPending = true;
+        state.rafId = requestAnimationFrame(() => {
+          state.drawPending = false;
+          drawBufferedStrokeSegmentFromState(state, false);
+        });
+      }
+      state.lastX = x; state.lastY = y;
+    }
+    return;
+  }
+
   if (!drawing) return;
   if (!inputEnabled) return;
   const { x, y } = screenToCanvas(e.clientX, e.clientY);
@@ -271,8 +377,32 @@ export function scaleOpsByIds(ids, scaleX, scaleY, originX, originY){
 updateCanvasSize();
 canvas.addEventListener('pointerdown', pointerDown);
 canvas.addEventListener('pointermove', pointerMove);
-canvas.addEventListener('pointerup', (e)=>{ if (currentOp && currentOp.type === 'rectSelect') { const x0 = Math.min(currentOp.startX, currentOp.x); const y0 = Math.min(currentOp.startY, currentOp.y); const w = Math.abs(currentOp.x - currentOp.startX); const h = Math.abs(currentOp.y - currentOp.startY); if (w>0 && h>0) { ops.push({type:'clearRect', x:x0, y:y0, w, h}); pushHistory(); } currentOp = null; redrawAll(); } else { finalizeCurrentOp(); } pointerUp(e); });
-canvas.addEventListener('pointerleave', (e)=>{ finalizeCurrentOp(); pointerUp(e); });
+canvas.addEventListener('pointerup', (e)=>{
+  if (multiTouchPenEnabled && e && e.pointerType === 'touch' && e.pointerId && touchStrokeMap.has(e.pointerId)) {
+    finalizeMultiTouchStroke(e);
+    return;
+  }
+  if (currentOp && currentOp.type === 'rectSelect') {
+    const x0 = Math.min(currentOp.startX, currentOp.x);
+    const y0 = Math.min(currentOp.startY, currentOp.y);
+    const w = Math.abs(currentOp.x - currentOp.startX);
+    const h = Math.abs(currentOp.y - currentOp.startY);
+    if (w>0 && h>0) { ops.push({type:'clearRect', x:x0, y:y0, w, h}); pushHistory(); }
+    currentOp = null;
+    redrawAll();
+  } else {
+    finalizeCurrentOp();
+  }
+  pointerUp(e);
+});
+canvas.addEventListener('pointerleave', (e)=>{
+  if (multiTouchPenEnabled && e && e.pointerType === 'touch' && e.pointerId && touchStrokeMap.has(e.pointerId)) {
+    finalizeMultiTouchStroke(e);
+    return;
+  }
+  finalizeCurrentOp();
+  pointerUp(e);
+});
 
 // Exported API for UI module
 export function setBrushSize(v){ brushSize = Number(v); }
