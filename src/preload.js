@@ -5,7 +5,7 @@ const { contextBridge, ipcRenderer } = require('electron');
  * @param {string} channel - 通道名称
  * @param {*} data - 要发送的数据
  */
-const sendToMain = (channel, data) => ipcRenderer.send(channel, data);
+const sendToMain = (channel, ...args) => ipcRenderer.send(channel, ...args);
 
 /**
  * 接收来自主进程的回复
@@ -22,7 +22,7 @@ const onReplyFromMain = (channel, callback) => {
  * @param {*} data - 要发送的数据
  * @returns {Promise} - 主进程的回复
  */
-const invokeMain = (channel, data) => ipcRenderer.invoke(channel, data);
+const invokeMain = (channel, ...args) => ipcRenderer.invoke(channel, ...args);
 
 /**
  * 移除监听器

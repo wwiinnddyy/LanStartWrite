@@ -86,6 +86,7 @@ const ENTER_WHITEBOARD_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width
 let _appMode = APP_MODES.WHITEBOARD;
 let _interactiveRectsRaf = 0;
 let _lastTouchActionAt = 0;
+let applyCollapsed = ()=>{};
 
 function readPersistedAppMode(){
   try{
@@ -424,13 +425,16 @@ if (moreTool) {
   // simple action hooks
   const exportBtn = document.getElementById('exportBtn');
   const settingsBtn = document.getElementById('settingsBtn');
+  const pluginManagerBtn = document.getElementById('pluginManagerBtn');
   const aboutBtn = document.getElementById('aboutBtn');
   const closeWhiteboardBtn = document.getElementById('closeWhiteboardBtn');
   const onExport = ()=>{ closeAllSubmenus(); syncToolbarIcons(); applyWindowInteractivity(); scheduleInteractiveRectsUpdate(); Message.emit(EVENTS.REQUEST_EXPORT, {}); };
   const onSettings = ()=>{ closeAllSubmenus(); syncToolbarIcons(); applyWindowInteractivity(); scheduleInteractiveRectsUpdate(); Message.emit(EVENTS.OPEN_SETTINGS, {}); };
+  const onPluginManager = ()=>{ closeAllSubmenus(); syncToolbarIcons(); applyWindowInteractivity(); scheduleInteractiveRectsUpdate(); try{ openPluginModal(); }catch(e){} };
   const onAbout = ()=>{ closeAllSubmenus(); syncToolbarIcons(); applyWindowInteractivity(); scheduleInteractiveRectsUpdate(); Message.emit(EVENTS.OPEN_ABOUT, {}); };
   if (exportBtn) { exportBtn.addEventListener('click', onExport); bindTouchTap(exportBtn, onExport, { delayMs: 20 }); }
   if (settingsBtn) { settingsBtn.addEventListener('click', onSettings); bindTouchTap(settingsBtn, onSettings, { delayMs: 20 }); }
+  if (pluginManagerBtn) { pluginManagerBtn.addEventListener('click', onPluginManager); bindTouchTap(pluginManagerBtn, onPluginManager, { delayMs: 20 }); }
   if (aboutBtn) { aboutBtn.addEventListener('click', onAbout); bindTouchTap(aboutBtn, onAbout, { delayMs: 20 }); }
   if (closeWhiteboardBtn) closeWhiteboardBtn.addEventListener('click', ()=>{
     closeAllSubmenus();
@@ -516,13 +520,13 @@ try{
 const settings = Settings.loadSettings();
 
 if (collapseTool && panel) {
-  function applyCollapsed(collapsed){
+  applyCollapsed = function(collapsed){
     try{ if (collapsed) panel.classList.add('collapsed'); else panel.classList.remove('collapsed'); }catch(e){}
     try{ localStorage.setItem('toolbarCollapsed', collapsed ? '1' : '0'); }catch(e){}
     // trigger layout recalculation used by ResizeObserver logic
     window.dispatchEvent(new Event('resize'));
     scheduleInteractiveRectsUpdate();
-  }
+  };
 
   const toggleCollapse = ()=>{
     const next = !panel.classList.contains('collapsed');
@@ -560,7 +564,18 @@ const historyStateDisplay = document.getElementById('historyStateDisplay');
 const aboutModal = document.getElementById('aboutModal');
 const closeAbout = document.getElementById('closeAbout');
 
+const pluginModal = document.getElementById('pluginModal');
+const closePluginModal = document.getElementById('closePluginModal');
+const pluginInstallBtn = document.getElementById('pluginInstallBtn');
+const pluginRefreshBtn = document.getElementById('pluginRefreshBtn');
+const pluginInstallStatus = document.getElementById('pluginInstallStatus');
+const pluginInstallProgress = document.getElementById('pluginInstallProgress');
+const pluginDropZone = document.getElementById('pluginDropZone');
+const pluginList = document.getElementById('pluginList');
+
 let _previewBackup = null;
+let _pluginDragId = '';
+let _pluginInstallRequestId = '';
 
 function openSettings(){
   if (!settingsModal) return;
@@ -593,6 +608,230 @@ function openAbout(){
 
 function closeAboutModal(){ if (aboutModal) aboutModal.classList.remove('open'); applyWindowInteractivity(); scheduleInteractiveRectsUpdate(); }
 
+function _invokeMainMessage(channel, data){
+  try{
+    if (!window || !window.electronAPI || typeof window.electronAPI.invokeMain !== 'function') return Promise.resolve({ success: false, error: 'ipc_unavailable' });
+    return window.electronAPI.invokeMain('message', String(channel || ''), data);
+  }catch(e){
+    return Promise.resolve({ success: false, error: String(e && e.message || e) });
+  }
+}
+
+function _setPluginStatus(text){
+  try{ if (pluginInstallStatus) pluginInstallStatus.textContent = String(text || ''); }catch(e){}
+}
+
+function _setPluginProgress(v){
+  const n = Number(v || 0);
+  try{ if (pluginInstallProgress) pluginInstallProgress.value = Number.isFinite(n) ? Math.max(0, Math.min(100, n)) : 0; }catch(e){}
+}
+
+function _sigBadge(meta){
+  const sig = meta && meta.signature ? meta.signature : null;
+  if (!sig) return { text: '签名: 未知', cls: 'plugin-sig-warn', warn: '' };
+  if (sig.verified) return { text: '签名: 已验证', cls: 'plugin-sig-ok', warn: '' };
+  const reason = String(sig.reason || '');
+  if (reason === 'unsigned') return { text: '签名: 未签名', cls: 'plugin-sig-warn', warn: '未签名插件存在更高安全风险，请谨慎启用。' };
+  return { text: '签名: 未通过', cls: 'plugin-sig-bad', warn: '签名验证失败，请勿启用来源不明的插件。' };
+}
+
+function _renderPluginItem(pl){
+  const id = String(pl && pl.id || '');
+  const m = pl && pl.manifest ? pl.manifest : {};
+  const name = String(m.name || id);
+  const ver = String(m.version || '');
+  const author = String(m.author || '');
+  const enabled = !!(pl && pl.enabled);
+  const perms = Array.isArray(m.permissions) ? m.permissions.map(String).filter(Boolean) : [];
+  const meta = pl && pl.meta ? pl.meta : null;
+  const sig = _sigBadge(meta);
+
+  const item = document.createElement('div');
+  item.className = 'plugin-item';
+  item.setAttribute('role', 'listitem');
+  item.setAttribute('draggable', 'true');
+  item.dataset.id = id;
+  item.setAttribute('aria-disabled', enabled ? 'false' : 'true');
+
+  const drag = document.createElement('div');
+  drag.className = 'plugin-drag';
+  drag.textContent = '⋮';
+  drag.setAttribute('aria-hidden', 'true');
+
+  const main = document.createElement('div');
+
+  const title = document.createElement('div');
+  title.className = 'plugin-title';
+  const nameEl = document.createElement('div');
+  nameEl.className = 'plugin-name';
+  nameEl.textContent = name;
+  const verEl = document.createElement('div');
+  verEl.className = 'plugin-ver';
+  verEl.textContent = ver ? `v${ver}` : '';
+  const authorEl = document.createElement('div');
+  authorEl.className = 'plugin-author';
+  authorEl.textContent = author ? `by ${author}` : '';
+  title.appendChild(nameEl);
+  if (verEl.textContent) title.appendChild(verEl);
+  if (authorEl.textContent) title.appendChild(authorEl);
+
+  const metaEl = document.createElement('div');
+  metaEl.className = 'plugin-meta';
+
+  const badges = document.createElement('div');
+  badges.className = 'plugin-badges';
+  const sigEl = document.createElement('span');
+  sigEl.className = `plugin-badge ${sig.cls}`;
+  sigEl.textContent = sig.text;
+  badges.appendChild(sigEl);
+  for (const p of perms) {
+    const b = document.createElement('span');
+    b.className = 'plugin-badge';
+    b.textContent = p;
+    badges.appendChild(b);
+  }
+  metaEl.appendChild(badges);
+
+  const permsLine = document.createElement('div');
+  permsLine.textContent = `权限需求：${perms.length ? perms.join(', ') : '无'}`;
+  metaEl.appendChild(permsLine);
+
+  if (sig.warn) {
+    const warn = document.createElement('div');
+    warn.className = 'plugin-warning';
+    warn.textContent = sig.warn;
+    metaEl.appendChild(warn);
+  }
+
+  main.appendChild(title);
+  main.appendChild(metaEl);
+
+  const actions = document.createElement('div');
+  actions.className = 'plugin-actions';
+  const toggle = document.createElement('input');
+  toggle.className = 'plugin-toggle';
+  toggle.type = 'checkbox';
+  toggle.checked = enabled;
+  toggle.setAttribute('aria-label', enabled ? '禁用插件' : '启用插件');
+  toggle.addEventListener('change', async ()=>{
+    toggle.disabled = true;
+    try{
+      const res = await _invokeMainMessage('mod:enable', { id, enabled: !!toggle.checked });
+      if (!res || !res.success) toggle.checked = !toggle.checked;
+    }catch(e){
+      toggle.checked = !toggle.checked;
+    }finally{
+      toggle.disabled = false;
+      try{ await refreshPluginList({ preserveStatus: true }); }catch(e){}
+    }
+  });
+  actions.appendChild(toggle);
+
+  item.appendChild(drag);
+  item.appendChild(main);
+  item.appendChild(actions);
+  return item;
+}
+
+async function refreshPluginList(opts){
+  const preserveStatus = !!(opts && opts.preserveStatus);
+  if (!preserveStatus) _setPluginStatus('');
+  try{
+    if (pluginList) pluginList.innerHTML = '';
+    const res = await _invokeMainMessage('mod:list', {});
+    const items = res && res.success && Array.isArray(res.installed) ? res.installed : [];
+    if (!items.length) {
+      if (pluginList) {
+        const empty = document.createElement('div');
+        empty.className = 'plugin-list-hint';
+        empty.textContent = '暂无已安装插件';
+        pluginList.appendChild(empty);
+      }
+      return;
+    }
+    for (const pl of items) {
+      const node = _renderPluginItem(pl);
+      if (pluginList) pluginList.appendChild(node);
+    }
+  }catch(e){
+    _setPluginStatus('加载插件列表失败');
+  }
+}
+
+function _persistPluginOrderFromDom(){
+  try{
+    if (!pluginList) return;
+    const order = Array.from(pluginList.querySelectorAll('.plugin-item')).map((n)=>String(n && n.dataset && n.dataset.id || '')).filter(Boolean);
+    if (!order.length) return;
+    _invokeMainMessage('mod:set-order', { order }).then(()=>{}).catch(()=>{});
+  }catch(e){}
+}
+
+function _wirePluginDnD(){
+  if (!pluginList) return;
+  pluginList.addEventListener('dragstart', (e)=>{
+    const item = e.target && e.target.closest ? e.target.closest('.plugin-item') : null;
+    if (!item) return;
+    _pluginDragId = String(item.dataset.id || '');
+    try{ e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', _pluginDragId); }catch(err){}
+  });
+  pluginList.addEventListener('dragover', (e)=>{
+    if (!_pluginDragId) return;
+    e.preventDefault();
+    const over = e.target && e.target.closest ? e.target.closest('.plugin-item') : null;
+    const dragging = pluginList.querySelector(`.plugin-item[data-id="${_pluginDragId}"]`);
+    if (!dragging) return;
+    if (!over || over === dragging) return;
+    const rect = over.getBoundingClientRect();
+    const before = e.clientY < rect.top + rect.height / 2;
+    if (before) pluginList.insertBefore(dragging, over);
+    else pluginList.insertBefore(dragging, over.nextSibling);
+  });
+  pluginList.addEventListener('drop', (e)=>{
+    if (!_pluginDragId) return;
+    e.preventDefault();
+    _pluginDragId = '';
+    _persistPluginOrderFromDom();
+  });
+  pluginList.addEventListener('dragend', ()=>{
+    if (!_pluginDragId) return;
+    _pluginDragId = '';
+    _persistPluginOrderFromDom();
+  });
+}
+
+async function _installPluginFromPath(p){
+  const path = String(p || '');
+  if (!path) return;
+  _pluginInstallRequestId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  _setPluginProgress(0);
+  _setPluginStatus('开始安装…');
+  try{
+    const r = await _invokeMainMessage('mod:install', { path, requestId: _pluginInstallRequestId });
+    if (!r || !r.success) {
+      _setPluginStatus(`安装失败：${r && r.error ? r.error : '未知错误'}`);
+      _setPluginProgress(0);
+      return;
+    }
+    _setPluginStatus('安装完成');
+    _setPluginProgress(100);
+    await refreshPluginList({ preserveStatus: true });
+  }catch(e){
+    _setPluginStatus('安装失败');
+    _setPluginProgress(0);
+  }
+}
+
+function openPluginModal(){
+  if (!pluginModal) return;
+  pluginModal.classList.add('open');
+  applyWindowInteractivity();
+  scheduleInteractiveRectsUpdate();
+  refreshPluginList({ preserveStatus: false });
+}
+
+function closePluginModalFn(){ if (pluginModal) pluginModal.classList.remove('open'); applyWindowInteractivity(); scheduleInteractiveRectsUpdate(); }
+
 // open when message requested
 Message.on(EVENTS.OPEN_SETTINGS, ()=>{ openSettings(); });
 Message.on(EVENTS.OPEN_ABOUT, ()=>{ openAbout(); });
@@ -601,6 +840,61 @@ if (closeSettings) closeSettings.addEventListener('click', closeSettingsModal);
 if (settingsModal) settingsModal.addEventListener('click', (e)=>{ if (e.target.classList && e.target.classList.contains('settings-backdrop')) closeSettingsModal(); });
 if (closeAbout) closeAbout.addEventListener('click', closeAboutModal);
 if (aboutModal) aboutModal.addEventListener('click', (e)=>{ if (e.target.classList && e.target.classList.contains('settings-backdrop')) closeAboutModal(); });
+if (closePluginModal) closePluginModal.addEventListener('click', closePluginModalFn);
+if (pluginModal) pluginModal.addEventListener('click', (e)=>{ if (e.target.classList && e.target.classList.contains('settings-backdrop')) closePluginModalFn(); });
+
+if (pluginRefreshBtn) pluginRefreshBtn.addEventListener('click', ()=>{ refreshPluginList({ preserveStatus: false }); });
+
+if (pluginInstallBtn) pluginInstallBtn.addEventListener('click', async ()=>{
+  _setPluginStatus('');
+  const r = await _invokeMainMessage('mod:open-install-dialog', {});
+  if (!r || !r.success) return;
+  await _installPluginFromPath(r.path);
+});
+
+if (pluginDropZone) {
+  pluginDropZone.addEventListener('click', async ()=>{
+    _setPluginStatus('');
+    const r = await _invokeMainMessage('mod:open-install-dialog', {});
+    if (!r || !r.success) return;
+    await _installPluginFromPath(r.path);
+  });
+  pluginDropZone.addEventListener('dragenter', (e)=>{ e.preventDefault(); try{ pluginDropZone.classList.add('dragover'); }catch(err){} });
+  pluginDropZone.addEventListener('dragover', (e)=>{ e.preventDefault(); try{ pluginDropZone.classList.add('dragover'); }catch(err){} });
+  pluginDropZone.addEventListener('dragleave', ()=>{ try{ pluginDropZone.classList.remove('dragover'); }catch(err){} });
+  pluginDropZone.addEventListener('drop', async (e)=>{
+    e.preventDefault();
+    try{ pluginDropZone.classList.remove('dragover'); }catch(err){}
+    const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0] ? e.dataTransfer.files[0] : null;
+    const fp = f && (f.path || '');
+    if (!fp) { _setPluginStatus('无法读取拖放文件路径'); return; }
+    await _installPluginFromPath(fp);
+  });
+}
+
+try{
+  if (window && window.electronAPI && typeof window.electronAPI.onReplyFromMain === 'function') {
+    window.electronAPI.onReplyFromMain('mod:install-progress', (payload)=>{
+      try{
+        const p = payload && typeof payload === 'object' ? payload : {};
+        const rid = String(p.requestId || '');
+        if (!_pluginInstallRequestId || rid !== _pluginInstallRequestId) return;
+        const percent = Number(p.percent || 0);
+        _setPluginProgress(percent);
+        const stage = String(p.stage || '');
+        if (stage === 'error') {
+          _setPluginStatus(`安装失败：${p.error ? String(p.error) : '未知错误'}`);
+        } else if (stage === 'done') {
+          _setPluginStatus('安装完成');
+        } else if (stage) {
+          _setPluginStatus(`安装中：${stage}`);
+        }
+      }catch(e){}
+    });
+  }
+}catch(e){}
+
+_wirePluginDnD();
 
 if (saveSettings) saveSettings.addEventListener('click', ()=>{
   const newS = {

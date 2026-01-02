@@ -1,14 +1,23 @@
 // ui-bootstrap.js — load UI fragments then start app modules
-async function loadFragment(path){
+async function loadFragment(key){
   try{
-    const resp = await fetch(path);
-    if (!resp.ok) throw new Error('fetch failed');
-    const txt = await resp.text();
+    let txt = '';
+    try{
+      if (window && window.electronAPI && typeof window.electronAPI.invokeMain === 'function'){
+        const o = await window.electronAPI.invokeMain('message', 'mod:get-fragment-override', { key: String(key || '') });
+        if (o && typeof o.content === 'string' && o.content.trim()) txt = o.content;
+      }
+    }catch(e){}
+    if (!txt) {
+      const resp = await fetch(key);
+      if (!resp.ok) throw new Error('fetch failed');
+      txt = await resp.text();
+    }
     const wrapper = document.createElement('div');
     wrapper.innerHTML = txt;
     // return children to be appended
     return Array.from(wrapper.children);
-  }catch(e){ console.warn('loadFragment', path, e); return []; }
+  }catch(e){ console.warn('loadFragment', key, e); return []; }
 }
 
 window.addEventListener('DOMContentLoaded', async ()=>{
@@ -29,5 +38,6 @@ window.addEventListener('DOMContentLoaded', async ()=>{
   try{ await import('./ipc_bridge.js'); }catch(e){ console.warn('import ipc_bridge failed', e); }
   try{ await import('./ui-tools.js'); }catch(e){ console.warn('import ui-tools failed', e); }
   try{ await import('./page.js'); }catch(e){ console.warn('import page failed', e); }
+  try{ await import('./mod.js'); }catch(e){ console.warn('import mod failed', e); }
 
 });

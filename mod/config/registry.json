@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "plugins": {
+    "demo.plugin": {
+      "enabled": true,
+      "version": "1.0.0",
+      "installedAt": 0
+    }
+  },
+  "order": [
+    "demo.plugin"
+  ]
+}

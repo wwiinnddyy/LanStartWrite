@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "demo.plugin",
+  "name": "Demo Plugin",
+  "version": "1.0.0",
+  "author": "LanStart",
+  "type": "feature",
+  "permissions": [
+    "ui:toolbar",
+    "ui:mode",
+    "ui:overlay",
+    "bus:cross"
+  ],
+  "dependencies": [],
+  "resources": [],
+  "entry": {
+    "kind": "worker",
+    "path": "main.js"
+  }
+}

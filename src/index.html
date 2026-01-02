@@ -25,18 +25,18 @@
       .tool-btn{width:44px;height:44px;border-radius:10px;border:1px solid #ccc;background:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer}
       .tool-btn.active{box-shadow:inset 0 -2px 0 rgba(0,0,0,0.06);background:#f6f6f6}
       /* 子菜单为固定排版：固定宽度，自适应高度包含所有控件 */
-      .submenu{position:absolute;right:0;top:48px;background:rgba(255,255,255,0.97);padding:0;border-radius:14px;box-shadow:0 8px 22px rgba(0,0,0,0.12);display:none;z-index:2500;width:240px;box-sizing:border-box;transition:top 0.3s cubic-bezier(0.25,0.46,0.45,0.94),opacity 0.3s ease;flex-direction:column;overflow:hidden}
+      .submenu{position:absolute;right:0;top:48px;background:rgba(255,255,255,0.97);padding:0;border-radius:18px;box-shadow:0 8px 22px rgba(0,0,0,0.12);display:none;z-index:2500;width:min(240px,calc(100vw - 40px));max-width:calc(100vw - 40px);box-sizing:border-box;transition:top 0.3s cubic-bezier(0.25,0.46,0.45,0.94),opacity 0.3s ease;flex-direction:column;overflow:hidden}
       .submenu.open{display:flex}
       .submenu .submenu-body{padding:12px;display:flex;flex-direction:column;gap:8px}
       .submenu .submenu-pin{border:1px solid #ccc;background:#fff;padding:6px 8px;border-radius:8px;cursor:pointer}
       .submenu .submenu-footer{display:flex;justify-content:flex-end;gap:8px;padding:8px 12px;border-top:1px solid #e5e5e5;background:rgba(255,255,255,0.5)}
       .submenu .submenu-drag-handle{border:1px solid #ccc;background:#fff;padding:6px 8px;border-radius:8px;cursor:grab}
-      .submenu.colors{width:240px;box-sizing:border-box}
+      .submenu.colors{width:min(240px,calc(100vw - 40px));max-width:calc(100vw - 40px);box-sizing:border-box}
       /* 折叠支持：将带有 .foldable 的项在折叠时隐藏 */
       .floating-panel .foldable{display:flex;transition:opacity 180ms ease}
       .floating-panel.collapsed .foldable{display:none}
       /* 颜色区固定网格（两行） */
-      .colorRow{display:grid;grid-template-columns:repeat(7,28px);grid-auto-rows:28px;gap:8px;justify-content:start}
+      .colorRow{display:grid;grid-template-columns:repeat(auto-fill,28px);grid-auto-rows:28px;gap:8px;justify-content:start;max-width:100%}
       .submenu.colors .color{width:28px;height:28px;border-radius:6px;border:1px solid #ddd;cursor:pointer}
       .submenu .sizeControl{width:100%;display:flex;align-items:center;justify-content:center;padding-top:8px}
       .submenu .sizeControl input{width:120px}
@@ -59,6 +59,41 @@
       .settings-header{display:flex;justify-content:space-between;align-items:center}
       .settings-body{padding:12px;display:flex;flex-direction:column;gap:8px}
       .settings-footer{display:flex;justify-content:flex-end;gap:8px;padding-top:8px}
+      
+      .plugin-panel{width:640px;max-width:92vw}
+      .plugin-body{gap:10px}
+      .plugin-install-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+      .plugin-status{font-size:12px;color:#444;margin-left:auto;min-height:18px}
+      .plugin-drop{border:1px dashed rgba(0,0,0,0.25);border-radius:12px;padding:12px;background:rgba(255,255,255,0.75);transition:border-color 160ms ease,background 160ms ease}
+      .plugin-drop.dragover{border-color:#2b7cff;background:rgba(43,124,255,0.08)}
+      .plugin-drop-title{font-weight:600}
+      .plugin-drop-sub{font-size:12px;color:#555;padding-top:4px}
+      .plugin-progress{width:100%;margin-top:10px;height:12px}
+      .plugin-list-head{display:flex;justify-content:space-between;align-items:center;padding-top:6px}
+      .plugin-list-hint{font-size:12px;color:#666}
+      .plugin-list{display:flex;flex-direction:column;gap:10px}
+      .plugin-item{display:grid;grid-template-columns:18px 1fr auto;gap:10px;align-items:start;padding:10px;border-radius:12px;border:1px solid rgba(0,0,0,0.08);background:rgba(255,255,255,0.92)}
+      .plugin-item[aria-disabled="true"]{opacity:0.6}
+      .plugin-drag{width:18px;line-height:18px;text-align:center;user-select:none;cursor:grab;opacity:0.8}
+      .plugin-drag:active{cursor:grabbing}
+      .plugin-title{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+      .plugin-name{font-weight:700}
+      .plugin-ver{font-size:12px;color:#666}
+      .plugin-author{font-size:12px;color:#666}
+      .plugin-meta{font-size:12px;color:#555;padding-top:6px;display:flex;flex-direction:column;gap:6px}
+      .plugin-badges{display:flex;gap:6px;flex-wrap:wrap}
+      .plugin-badge{font-size:11px;padding:2px 8px;border-radius:999px;border:1px solid rgba(0,0,0,0.12);background:rgba(0,0,0,0.03)}
+      .plugin-sig-ok{border-color:rgba(46,204,113,0.45);background:rgba(46,204,113,0.10)}
+      .plugin-sig-warn{border-color:rgba(245,158,11,0.55);background:rgba(245,158,11,0.12)}
+      .plugin-sig-bad{border-color:rgba(239,68,68,0.55);background:rgba(239,68,68,0.10)}
+      .plugin-warning{color:#a16207}
+      .plugin-actions{display:flex;gap:8px;align-items:center}
+      input.plugin-toggle{appearance:none;-webkit-appearance:none;width:42px;height:24px;border-radius:999px;border:1px solid rgba(0,0,0,0.18);background:rgba(0,0,0,0.10);position:relative;cursor:pointer;outline:none;transition:background 140ms ease,border-color 140ms ease}
+      input.plugin-toggle::before{content:'';position:absolute;top:2px;left:2px;width:20px;height:20px;border-radius:999px;background:#fff;box-shadow:0 2px 8px rgba(0,0,0,0.18);transition:left 140ms ease}
+      input.plugin-toggle:checked{background:rgba(46,204,113,0.35);border-color:rgba(46,204,113,0.55)}
+      input.plugin-toggle:checked::before{left:20px}
+      input.plugin-toggle:focus-visible{outline:2px solid rgba(43,124,255,0.75);outline-offset:2px}
+      .color:focus-visible,.mode-btn:focus-visible,.tool-btn:focus-visible,.plugin-drop:focus-visible{outline:2px solid rgba(43,124,255,0.75);outline-offset:2px}
 
       /* Dark theme styles */
       /* Dark theme palette and layered blacks */
@@ -73,6 +108,15 @@
       .theme-dark .mode-btn, .theme-dark .submenu .submenu-pin, .theme-dark .submenu .submenu-drag-handle{background:rgba(255,255,255,0.02);border-color:rgba(255,255,255,0.05);color:var(--text)}
       .theme-dark .mode-btn:hover{background:rgba(255,255,255,0.04)}
       .theme-dark .mode-btn.active{background:rgba(90,160,255,0.12);border-color:rgba(90,160,255,0.28);color:var(--text)}
+      .theme-dark .plugin-status{color:rgba(230,230,230,0.75)}
+      .theme-dark .plugin-drop{border-color:rgba(255,255,255,0.12);background:rgba(12,12,12,0.40)}
+      .theme-dark .plugin-drop-sub{color:rgba(230,230,230,0.7)}
+      .theme-dark .plugin-item{border-color:rgba(255,255,255,0.06);background:rgba(12,12,12,0.42)}
+      .theme-dark .plugin-ver,.theme-dark .plugin-author{color:rgba(230,230,230,0.65)}
+      .theme-dark .plugin-meta{color:rgba(230,230,230,0.75)}
+      .theme-dark .plugin-badge{border-color:rgba(255,255,255,0.10);background:rgba(255,255,255,0.03)}
+      .theme-dark input.plugin-toggle{border-color:rgba(255,255,255,0.14);background:rgba(255,255,255,0.08)}
+      .theme-dark input.plugin-toggle::before{background:rgba(255,255,255,0.92)}
       .theme-dark .erase-mode-btn svg{color:var(--text)}
       .erase-mode-btn svg *{stroke:currentColor;fill:currentColor}
 

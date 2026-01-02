@@ -7,6 +7,10 @@
     "start": "electron .",
     "dev": "electron ."
   },
+  "dependencies": {
+    "semver": "^7.6.3",
+    "yauzl": "^2.10.0"
+  },
   "devDependencies": {
     "electron": "^26.0.0"
   }

@@ -35,9 +35,6 @@
           <legend>批注</legend>
           <label>默认笔颜色 <input type="color" id="optAnnotationPenColor" value="#FF0000"></label>
         </fieldset>
-        <label>批注默认笔颜色
-          <input id="optAnnotationPenColor" type="color" value="#FF0000">
-        </label>
         <fieldset style="border:1px solid #eee;padding:8px;border-radius:8px">
           <legend>智能功能</legend>
           <label><input type="checkbox" id="optSmartInk"> 图形与直线智能识别</label>
@@ -72,6 +69,34 @@
         <div style="font-size:18px;font-weight:700">LanStartWrite</div>
         <div style="padding-top:6px;color:#555">揽星书写</div>
       </div>
+    </div>
+  </div>
+</div>
+
+<div id="pluginModal" class="settings-modal" role="dialog" aria-hidden="true" aria-label="插件管理">
+  <div class="settings-backdrop"></div>
+  <div class="settings-panel plugin-panel">
+    <div class="settings-header">
+      <h3>插件管理</h3>
+      <button id="closePluginModal" class="tool-btn" aria-label="关闭">✕</button>
+    </div>
+    <div class="settings-body plugin-body">
+      <div class="plugin-install-row">
+        <input id="pluginFileInput" type="file" accept=".lanmod" style="display:none" />
+        <button id="pluginInstallBtn" class="mode-btn">安装插件</button>
+        <button id="pluginRefreshBtn" class="mode-btn">刷新</button>
+        <div id="pluginInstallStatus" class="plugin-status" aria-live="polite"></div>
+      </div>
+      <div id="pluginDropZone" class="plugin-drop" tabindex="0" role="button" aria-label="拖放或选择插件安装">
+        <div class="plugin-drop-title">拖放 .lanmod 到这里安装</div>
+        <div class="plugin-drop-sub">或点击“安装插件”选择文件</div>
+        <progress id="pluginInstallProgress" value="0" max="100" class="plugin-progress" aria-label="安装进度"></progress>
+      </div>
+      <div class="plugin-list-head">
+        <div>已安装插件</div>
+        <div class="plugin-list-hint">拖动排序</div>
+      </div>
+      <div id="pluginList" class="plugin-list" role="list"></div>
     </div>
   </div>
 </div>
