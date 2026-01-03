@@ -269,31 +269,6 @@ LanStartWrite/
 
 本项目采用 MIT 许可证 - 详见 [LICENSE](LICENSE) 文件
 
-## 🙏 致谢
-
-感谢所有为本项目做出贡献的开发者！
-
-## 📮 联系方式
-
-- 项目主页：[GitHub](https://github.com/yourusername/LanStartWrite)
-- 问题反馈：[Issues](https://github.com/yourusername/LanStartWrite/issues)
-- 邮箱：your.email@example.com
-
-## 🎯 路线图
-
-### v0.2.0 (计划中)
-- [ ] 更多墨迹识别形状
-- [ ] 手势识别
-- [ ] 云端同步
-- [ ] 导出为图片/PDF
-- [ ] 录制回放功能
-
-### v0.3.0 (规划中)
-- [ ] 协作编辑
-- [ ] AI 辅助绘图
-- [ ] 模板库
-- [ ] 更多插件接口
-
 ---
 
-**LanStartWrite** - 新一代书写体验，让创作更自由！
+**LanStartWrite** - 新一代书写体验
