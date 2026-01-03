@@ -1,11 +1,12 @@
 {
   "name": "electron-app",
-  "version": "0.1.0",
+  "version": "0.2.1",
   "description": "Simple Electron starter",
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",
-    "dev": "electron ."
+    "dev": "electron .",
+    "test": "electron . --run-tests"
   },
   "dependencies": {
     "semver": "^7.6.3",

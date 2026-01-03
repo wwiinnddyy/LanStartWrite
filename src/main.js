@@ -5,6 +5,10 @@ const crypto = require('crypto');
 const yauzl = require('yauzl');
 const semver = require('semver');
 
+const _RUN_TESTS = process.argv.includes('--run-tests');
+
+let _testsTimeout = null;
+
 let mainWindow;
 let _overlayInteractiveRects = [];
 let _overlayIgnoreConfig = { ignore: false, forward: false };
@@ -64,7 +68,8 @@ function _stopOverlayPoll() {
   _overlayPollTimer = null;
 }
 
-function createWindow() {
+function createWindow(opts) {
+  const runTests = !!(opts && opts.runTests);
   mainWindow = new BrowserWindow({
     width: 900,
     height: 700,
@@ -74,6 +79,7 @@ function createWindow() {
     hasShadow: false,
     skipTaskbar: true,
     alwaysOnTop: true,
+    show: !runTests,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -81,7 +87,8 @@ function createWindow() {
     }
   });
 
-  mainWindow.loadFile(path.join(__dirname, 'index.html'));
+  if (runTests) mainWindow.loadFile(path.join(__dirname, 'index.html'), { query: { runTests: '1' } });
+  else mainWindow.loadFile(path.join(__dirname, 'index.html'));
   try{ mainWindow.setAlwaysOnTop(true, 'screen-saver'); }catch(e){}
   try{ mainWindow.maximize(); }catch(e){}
   
@@ -626,7 +633,15 @@ try {
 try { app.enableHardwareAcceleration(); } catch (e) {}
 
 app.whenReady().then(async () => {
-  createWindow();
+  createWindow({ runTests: _RUN_TESTS });
+  if (_RUN_TESTS) {
+    try{
+      _testsTimeout = setTimeout(() => {
+        try{ app.exit(1); }catch(e){ process.exit(1); }
+      }, 30000);
+    }catch(e){}
+    return;
+  }
   try { await _ensureModDirs(); } catch (e) {}
   try { _startModWatchers(); } catch (e) {}
 });
@@ -641,6 +656,17 @@ app.on('window-all-closed', () => {
 ipcMain.on('fromRenderer', (event, arg) => {
   console.log('[IPC] 来自渲染进程:', arg);
   event.reply('fromMain', 'Pong: ' + arg);
+});
+
+ipcMain.on('tests:result', (event, payload) => {
+  if (!_RUN_TESTS) return;
+  try{ if (_testsTimeout) clearTimeout(_testsTimeout); }catch(e){}
+  _testsTimeout = null;
+  const ok = !!(payload && payload.ok);
+  if (!ok) {
+    try{ console.error('unit tests failed', payload && payload.error ? payload.error : payload); }catch(e){}
+  }
+  try{ app.exit(ok ? 0 : 1); }catch(e){ process.exit(ok ? 0 : 1); }
 });
 
 ipcMain.on('overlay:set-ignore-mouse', (event, payload) => {

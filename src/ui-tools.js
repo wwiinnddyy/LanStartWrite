@@ -1,7 +1,7 @@
 // ui-tools.js (ESM)
 import { clearAll, undo, redo, setBrushColor, setErasing, canUndo, canRedo, replaceStrokeColors, getToolState, setInputEnabled, setMultiTouchPenEnabled, setInkRecognitionEnabled, setViewTransform, setCanvasMode } from './renderer.js';
 import Curous from './curous.js';
-import Settings from './setting.js';
+import Settings, { getPenColorFromSettings } from './setting.js';
 import { showSubmenu, cleanupMenuStyles, initPinHandlers, closeAllSubmenus } from './more_decide_windows.js';
 import Message, { EVENTS } from './message.js';
 import { updateAppSettings } from './write_a_change.js';
@@ -87,6 +87,8 @@ let _appMode = APP_MODES.WHITEBOARD;
 let _interactiveRectsRaf = 0;
 let _lastTouchActionAt = 0;
 let applyCollapsed = ()=>{};
+let _lastIgnoreMouse = { ignore: false, forward: false, at: 0 };
+let _rectWatchdogTimer = 0;
 
 function readPersistedAppMode(){
   try{
@@ -157,6 +159,7 @@ function bindTouchTap(el, onTap, opts){
 function sendIgnoreMouse(ignore, forward){
   try{
     if (!window.electronAPI || typeof window.electronAPI.sendToMain !== 'function') return;
+    _lastIgnoreMouse = { ignore: !!ignore, forward: !!forward, at: Date.now() };
     window.electronAPI.sendToMain('overlay:set-ignore-mouse', { ignore: !!ignore, forward: !!forward });
   }catch(e){}
 }
@@ -201,6 +204,26 @@ function flushInteractiveRects(){
   try{ sendInteractiveRects(collectInteractiveRects()); }catch(e){}
 }
 
+function _setRectWatchdog(on){
+  const next = !!on;
+  if (next) {
+    if (_rectWatchdogTimer) return;
+    _rectWatchdogTimer = setInterval(() => {
+      try{
+        if (_appMode !== APP_MODES.ANNOTATION) return;
+        const pointerActive = !!(pointerTool && pointerTool.classList.contains('active'));
+        if (!pointerActive) return;
+        sendInteractiveRects(collectInteractiveRects());
+      }catch(e){}
+    }, 200);
+    return;
+  }
+  if (_rectWatchdogTimer) {
+    try{ clearInterval(_rectWatchdogTimer); }catch(e){}
+    _rectWatchdogTimer = 0;
+  }
+}
+
 function updateExitToolUI(){
   if (!exitTool) return;
   if (_appMode === APP_MODES.ANNOTATION) {
@@ -217,19 +240,23 @@ function applyWindowInteractivity(){
   if (hasOpenModal) {
     sendIgnoreMouse(false, false);
     try{ sendInteractiveRects(collectInteractiveRects()); }catch(e){}
+    _setRectWatchdog(false);
     return;
   }
   if (_appMode === APP_MODES.WHITEBOARD) {
     sendIgnoreMouse(false, false);
+    _setRectWatchdog(false);
     return;
   }
   const pointerActive = !!(pointerTool && pointerTool.classList.contains('active'));
   if (!pointerActive) {
     sendIgnoreMouse(false, false);
+    _setRectWatchdog(false);
     return;
   }
   try{ sendInteractiveRects(collectInteractiveRects()); }catch(e){}
   sendIgnoreMouse(true, true);
+  _setRectWatchdog(true);
   scheduleInteractiveRectsUpdate();
 }
 
@@ -262,8 +289,7 @@ class SmartAnnotationController {
     try{ Curous.enableSelectionMode(true); }catch(e){}
     try{
       const s = Settings.loadSettings();
-      const c = String((s && s.annotationPenColor) ? s.annotationPenColor : '#FF0000').toUpperCase();
-      setBrushColor(c);
+      setBrushColor(getPenColorFromSettings(s, 'annotation'));
     }catch(e){}
     updateEraserModeLabel();
     updatePenModeLabel();
@@ -271,6 +297,7 @@ class SmartAnnotationController {
     applyWindowInteractivity();
     try{ sendInteractiveRects(collectInteractiveRects()); }catch(e){}
     scheduleInteractiveRectsUpdate();
+    try{ setTimeout(()=>{ try{ flushInteractiveRects(); }catch(e){} }, 0); }catch(e){}
   }
 
   deactivate(){
@@ -288,6 +315,10 @@ class WhiteboardController {
     if (pointerTool) pointerTool.classList.remove('active');
     try{ Curous.setTransformEnabled(true); }catch(e){}
     try{ Curous.enableSelectionMode(false); setInputEnabled(true); }catch(e){}
+    try{
+      const s = Settings.loadSettings();
+      setBrushColor(getPenColorFromSettings(s, 'whiteboard'));
+    }catch(e){}
     updateEraserModeLabel();
     updatePenModeLabel();
     syncToolbarIcons();
@@ -336,8 +367,15 @@ try{
 }catch(e){}
 
 if (colorTool) {
-  const openPen = ()=>{
+  let _lastOpenPenAt = 0;
+  const openPen = (ev)=>{
     if (!colorMenu) return;
+    const now = Date.now();
+    if (now - _lastOpenPenAt < 120) return;
+    _lastOpenPenAt = now;
+    const wasOpen = !!colorMenu.classList.contains('open');
+    const pinned = String(colorMenu.dataset && colorMenu.dataset.pinned) === 'true';
+    const pointerWasActive = !!(pointerTool && pointerTool.classList.contains('active'));
     try{
       const s = getToolState();
       setBrushColor((s && s.brushColor) || '#000000');
@@ -349,13 +387,36 @@ if (colorTool) {
     try{ Curous.enableSelectionMode(false); setInputEnabled(true); }catch(e){}
     if (pointerTool) pointerTool.classList.remove('active');
     if (eraserTool) eraserTool.classList.remove('active');
+    applyWindowInteractivity();
+    flushInteractiveRects();
     showSubmenu(colorMenu, colorTool);
+    const wantOpen = !wasOpen;
+    if (wantOpen && !colorMenu.classList.contains('open')) {
+      try{
+        const rects = collectInteractiveRects();
+        console.error('[pen-menu] open failed', {
+          appMode: _appMode,
+          pinned,
+          pointerWasActive,
+          ignoreMouse: _lastIgnoreMouse,
+          rectCount: Array.isArray(rects) ? rects.length : 0,
+          ariaHidden: colorMenu.getAttribute('aria-hidden'),
+          evType: ev && ev.type ? String(ev.type) : ''
+        });
+      }catch(e){}
+    }
     updatePenModeLabel();
     syncToolbarIcons();
     applyWindowInteractivity();
     scheduleInteractiveRectsUpdate();
   };
   colorTool.addEventListener('click', openPen);
+  colorTool.addEventListener('pointerdown', (e)=>{
+    try{
+      if (!e || e.pointerType === 'touch') return;
+      openPen(e);
+    }catch(err){}
+  });
   bindTouchTap(colorTool, openPen, { delayMs: 20 });
 }
 
