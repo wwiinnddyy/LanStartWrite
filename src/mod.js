@@ -5,6 +5,7 @@ const _hostBus = new MiniEventEmitter();
 const _plugins = new Map();
 const _toolDefs = new Map();
 const _modeDefs = new Map();
+const _menuButtonDefs = new Map();
 let _activeModeId = null;
 let _overlayEl = null;
 let _overlayStyleEl = null;
@@ -110,16 +111,59 @@ function _moreMenuBody() {
   return menu.querySelector('.submenu-body');
 }
 
+function _moreMenuQuickGrid() {
+  const menu = document.getElementById('moreMenu');
+  if (!menu) return null;
+  const byId = document.getElementById('moreMenuQuickGrid');
+  if (byId) return byId;
+  return menu.querySelector('.submenu-quick-grid');
+}
+
+function _applyButtonIcon(btn, def) {
+  const iconSvg = def && def.iconSvg ? String(def.iconSvg || '') : '';
+  const iconUrl = def && def.iconUrl ? String(def.iconUrl || '') : '';
+  const iconClass = def && def.iconClass ? String(def.iconClass || '') : '';
+  const label = def && def.label ? String(def.label || '') : '';
+  if (iconSvg && iconSvg.trim()) {
+    btn.innerHTML = iconSvg;
+    return;
+  }
+  if (iconUrl && iconUrl.trim()) {
+    btn.innerHTML = '';
+    const img = document.createElement('img');
+    img.src = iconUrl;
+    img.alt = '';
+    img.draggable = false;
+    try { img.style.width = '22px'; img.style.height = '22px'; } catch (e) {}
+    btn.appendChild(img);
+    return;
+  }
+  if (iconClass && iconClass.trim()) {
+    btn.innerHTML = '';
+    const el = document.createElement('i');
+    el.className = iconClass;
+    btn.appendChild(el);
+    return;
+  }
+  btn.textContent = label || 'Mod';
+}
+
+function _buildIconButton(def) {
+  const btn = document.createElement('button');
+  btn.className = 'tool-btn';
+  btn.id = def.domId;
+  btn.setAttribute('title', def.title || '');
+  btn.setAttribute('aria-label', def.title || '');
+  _applyButtonIcon(btn, def);
+  return btn;
+}
+
 function _createToolButton(def) {
   const container = _toolContainer();
   if (!container) return null;
   const wrap = document.createElement('div');
   wrap.className = 'tool';
-  const btn = document.createElement('button');
-  btn.className = 'tool-btn';
-  btn.id = def.domId;
-  btn.setAttribute('title', def.title || '');
-  btn.innerHTML = def.iconSvg || def.label || 'Mod';
+  const btn = _buildIconButton(def);
   btn.addEventListener('click', () => {
     _sendToPlugin(def.pluginId, { type: 'tool-click', data: { toolId: def.toolId } });
   });
@@ -148,6 +192,17 @@ function _createModeButton(def) {
   return btn;
 }
 
+function _createMenuButton(def) {
+  const grid = _moreMenuQuickGrid();
+  if (!grid) return null;
+  const btn = _buildIconButton(def);
+  btn.addEventListener('click', () => {
+    _sendToPlugin(def.pluginId, { type: 'menu-click', data: { buttonId: def.buttonId } });
+  });
+  grid.appendChild(btn);
+  return btn;
+}
+
 function _sendToPlugin(pluginId, msg) {
   const p = _plugins.get(pluginId);
   if (!p || !p.worker) return;
@@ -164,9 +219,19 @@ function _terminateAll() {
     try { if (p.moduleUrl) URL.revokeObjectURL(p.moduleUrl); } catch (e) {}
     try { if (p.bootUrl) URL.revokeObjectURL(p.bootUrl); } catch (e) {}
   }
+  try {
+    document.querySelectorAll('[id^="mod-tool-"]').forEach((el) => {
+      const wrap = el && el.closest ? el.closest('.tool') : null;
+      if (wrap && wrap.remove) wrap.remove();
+      else if (el && el.remove) el.remove();
+    });
+    document.querySelectorAll('[id^="mod-mode-"]').forEach((el) => { try { el.remove(); } catch (e) {} });
+    document.querySelectorAll('[id^="mod-menu-"]').forEach((el) => { try { el.remove(); } catch (e) {} });
+  } catch (e) {}
   _plugins.clear();
   _toolDefs.clear();
   _modeDefs.clear();
+  _menuButtonDefs.clear();
   _activeModeId = null;
   _closeOverlay();
 }
@@ -198,6 +263,7 @@ async function _spawnWorker(pluginId, manifest, entryPath, meta) {
       subscribe: (topic)=>{ self.postMessage({ type:'bus-subscribe', topic }); },
       registerTool: (def)=>{ self.postMessage({ type:'register-tool', def }); },
       registerMode: (def)=>{ self.postMessage({ type:'register-mode', def }); },
+      registerMenuButton: (def)=>{ self.postMessage({ type:'register-menu-button', def }); },
       showOverlay: (def)=>{ self.postMessage({ type:'show-overlay', def }); },
       closeOverlay: ()=>{ self.postMessage({ type:'close-overlay' }); }
     };
@@ -208,6 +274,7 @@ async function _spawnWorker(pluginId, manifest, entryPath, meta) {
       if (m.type === 'init') _evt.emit('init', m.data || {});
       if (m.type === 'bus-event') _evt.emit('bus', m.data || {});
       if (m.type === 'tool-click') _evt.emit('tool', m.data || {});
+      if (m.type === 'menu-click') _evt.emit('menu', m.data || {});
       if (m.type === 'mode-activate') _evt.emit('mode', m.data || {});
       if (m.type === 'ui-action') _evt.emit('ui', m.data || {});
     };
@@ -284,7 +351,17 @@ async function _spawnWorker(pluginId, manifest, entryPath, meta) {
       const domId = `mod-tool-${pluginId}-${toolId}`.replace(/[^a-zA-Z0-9_-]/g, '_');
       const fullId = `${pluginId}:${toolId}`;
       if (_toolDefs.has(fullId)) return;
-      const rec = { pluginId, toolId, domId, title: String(def.title || def.name || fullId), iconSvg: String(def.iconSvg || ''), label: String(def.label || ''), def };
+      const rec = {
+        pluginId,
+        toolId,
+        domId,
+        title: String(def.title || def.name || fullId),
+        iconSvg: String(def.iconSvg || ''),
+        iconUrl: String(def.iconUrl || ''),
+        iconClass: String(def.iconClass || ''),
+        label: String(def.label || ''),
+        def
+      };
       _toolDefs.set(fullId, rec);
       _createToolButton(rec);
       if (unsigned) _audit('plugin:activity', { pluginId, action: 'register-tool', toolId });
@@ -302,6 +379,30 @@ async function _spawnWorker(pluginId, manifest, entryPath, meta) {
       _modeDefs.set(fullId, rec);
       _createModeButton(rec);
       if (unsigned) _audit('plugin:activity', { pluginId, action: 'register-mode', modeId });
+      return;
+    }
+    if (msg.type === 'register-menu-button') {
+      const def = msg.def && typeof msg.def === 'object' ? msg.def : {};
+      const buttonId = String(def.id || '').trim();
+      if (!buttonId) return;
+      if (!_hasPerm(manifest, 'ui:menu')) return;
+      const domId = `mod-menu-${pluginId}-${buttonId}`.replace(/[^a-zA-Z0-9_-]/g, '_');
+      const fullId = `${pluginId}:${buttonId}`;
+      if (_menuButtonDefs.has(fullId)) return;
+      const rec = {
+        pluginId,
+        buttonId,
+        domId,
+        title: String(def.title || def.name || fullId),
+        iconSvg: String(def.iconSvg || ''),
+        iconUrl: String(def.iconUrl || ''),
+        iconClass: String(def.iconClass || ''),
+        label: String(def.label || ''),
+        def
+      };
+      _menuButtonDefs.set(fullId, rec);
+      _createMenuButton(rec);
+      if (unsigned) _audit('plugin:activity', { pluginId, action: 'register-menu-button', buttonId });
       return;
     }
     if (msg.type === 'show-overlay') {

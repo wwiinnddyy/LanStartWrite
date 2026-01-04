@@ -1,0 +1,26 @@
+{
+  "appId": "com.lanstart.write",
+  "productName": "LanStartWrite",
+  "directories": {
+    "output": "dist"
+  },
+  "files": [
+    "src/**/*",
+    "mod/**/*",
+    "fluent_icon/**/*",
+    "iconpack/**/*",
+    "package.json"
+  ],
+  "win": {
+    "target": [
+      {
+        "target": "portable",
+        "arch": "x64"
+      }
+    ],
+    "icon": "iconpack/1000120004.png"
+  },
+  "portable": {
+    "artifactName": "LanStartWrite-${version}-win64.exe"
+  }
+}

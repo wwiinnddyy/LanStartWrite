@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "id": "inkcanvas-with-electron-for-write",
+  "name": "InkCanvas for Electron Write",
+  "version": "1.0.0",
+  "author": "LanStart",
+  "type": "feature",
+  "description": "增强型书写控件，提供笔触绘制、线条渲染、压力感应、橡皮擦、图层管理等完整功能",
+  "permissions": [
+    "ui:toolbar",
+    "ui:mode",
+    "ui:overlay",
+    "ui:override",
+    "bus:cross"
+  ],
+  "dependencies": [],
+  "resources": [
+    {
+      "path": "icon.svg",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "styles.css",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "renderer-inkcanvas.js",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    }
+  ],
+  "entry": {
+    "kind": "worker",
+    "path": "main.js"
+  }
+}

@@ -376,6 +376,86 @@ async function runUnitTests(){
       assert(Number((stats.unsignedLoad && stats.unsignedLoad['unsigned.test']) || 0) >= 1, 'audit unsigned load recorded');
       assert(Number((stats.loadFailed && stats.loadFailed['broken.test']) || 0) >= 1, 'audit load failed recorded');
     }
+
+    {
+      const invoke = async (ch, payload) => {
+        if (!window || !window.electronAPI || typeof window.electronAPI.invokeMain !== 'function') throw new Error('ipc unavailable');
+        return await window.electronAPI.invokeMain('message', String(ch || ''), payload);
+      };
+
+      const state = {
+        format: 'cubenote-state',
+        schemaVersion: 1,
+        meta: { createdAt: 1700000000000, modifiedAt: 1700000001234 },
+        activeDocKey: 'whiteboard',
+        documents: {
+          whiteboard: {
+            ops: [{ type: 'stroke', color: '#000000', size: 4, points: [{ x: 1, y: 2 }, { x: 3, y: 4 }] }],
+            history: [[{ type: 'stroke', color: '#000000', size: 4, points: [{ x: 1, y: 2 }, { x: 3, y: 4 }] }]],
+            historyIndex: 0,
+            brushSize: 4,
+            eraserSize: 20,
+            brushColor: '#000000',
+            erasing: false,
+            eraserMode: 'pixel',
+            view: { scale: 1, offsetX: 0, offsetY: 0 }
+          },
+          annotation: {
+            ops: [],
+            history: [[]],
+            historyIndex: 0,
+            brushSize: 4,
+            eraserSize: 20,
+            brushColor: '#FF0000',
+            erasing: false,
+            eraserMode: 'pixel',
+            view: { scale: 1, offsetX: 0, offsetY: 0 }
+          }
+        }
+      };
+
+      const enc = await invoke('note:encode', { state });
+      assert(enc && enc.success && typeof enc.xaml === 'string', 'note encode ok');
+      assert(enc.xaml.includes('<Cubenote'), 'xaml root ok');
+
+      const dec = await invoke('note:decode', { xaml: enc.xaml });
+      assert(dec && dec.success, 'note decode ok');
+      eq(dec.state && dec.state.format, 'cubenote-state', 'state format ok');
+      eq(dec.state && dec.state.schemaVersion, 1, 'state schema ok');
+      eq(JSON.stringify(dec.state && dec.state.documents && dec.state.documents.whiteboard && dec.state.documents.whiteboard.ops || []), JSON.stringify(state.documents.whiteboard.ops), 'ops preserved');
+
+      const tamperedSha = enc.xaml.replace(/\bSha256="([a-fA-F0-9]{64})"/, (m, h) => {
+        const first = String(h || '')[0] || '0';
+        const repl = first.toLowerCase() === 'a' ? 'b' : 'a';
+        return `Sha256="${repl}${String(h).slice(1)}"`;
+      });
+      const badSha = await invoke('note:decode', { xaml: tamperedSha });
+      assert(badSha && badSha.success === false, 'note decode rejects tampered sha');
+      eq(String(badSha.reason || ''), 'integrity_failed', 'note decode integrity_failed');
+
+      const bad = await invoke('note:decode', { xaml: '<bad/>' });
+      assert(bad && bad.success === false, 'note decode rejects invalid root');
+
+      const incompatible = await invoke('note:decode', { xaml: '<Cubenote Version="2.0.0"><Payload Encoding="gzip+base64" Sha256="00"></Payload></Cubenote>' });
+      assert(incompatible && incompatible.success === false, 'note decode rejects incompatible version');
+
+      const tmp = await invoke('tests:get-temp-file', { ext: 'tmp', prefix: 'note' });
+      assert(tmp && tmp.success && tmp.path, 'got temp file path');
+      const exportRes = await invoke('note:export-cubenote', { path: String(tmp.path), state, requestId: `t-${Date.now()}` });
+      assert(exportRes && exportRes.success && exportRes.path, 'export-cubenote ok');
+      assert(String(exportRes.path).toLowerCase().endsWith('.cubenote'), 'export-cubenote normalizes extension');
+
+      const importRes = await invoke('note:import-cubenote', { path: String(exportRes.path), requestId: `t-${Date.now()}-2` });
+      assert(importRes && importRes.success && importRes.state, 'import-cubenote ok');
+      eq(JSON.stringify(importRes.state), JSON.stringify(state), 'imported state equals exported state');
+
+      const tmpBad = await invoke('tests:get-temp-file', { ext: 'cubenote', prefix: 'note-bad' });
+      assert(tmpBad && tmpBad.success && tmpBad.path, 'got temp bad file path');
+      const wr = await invoke('io:request-file-write', { path: String(tmpBad.path), content: '<bad/>' });
+      assert(wr && wr.success, 'wrote bad file');
+      const importBad = await invoke('note:import-cubenote', { path: String(tmpBad.path), requestId: `t-${Date.now()}-3` });
+      assert(importBad && importBad.success === false, 'import-cubenote rejects invalid file');
+    }
   }finally{
     try{
       if (prior === null) localStorage.removeItem('appSettings');

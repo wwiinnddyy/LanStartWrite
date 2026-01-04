@@ -1,0 +1,43 @@
+/* InkCanvas Enhanced Styles */
+
+.mode-btn {
+  padding: 8px 16px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 0.2s;
+}
+
+.mode-btn:hover {
+  background: #f5f5f5;
+  border-color: #ccc;
+}
+
+.mode-btn:active {
+  background: #e8e8e8;
+}
+
+#layer-list {
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  padding: 8px;
+}
+
+input[type="range"] {
+  cursor: pointer;
+}
+
+input[type="color"] {
+  cursor: pointer;
+  border: 1px solid #ddd;
+  border-radius: 2px;
+}
+
+select {
+  cursor: pointer;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 4px 8px;
+}

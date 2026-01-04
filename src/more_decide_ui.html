@@ -55,12 +55,18 @@
 </div>
 
 <div class="submenu actions" id="moreMenu" aria-hidden="true" data-pinned="false">
-  <div class="submenu-body">
-    <button id="exportBtn" class="mode-btn">导出图片</button>
-    <button id="settingsBtn" class="mode-btn">设置</button>
-    <button id="pluginManagerBtn" class="mode-btn">插件</button>
-    <button id="aboutBtn" class="mode-btn">关于</button>
-    <button id="closeWhiteboardBtn" class="mode-btn">关闭白板</button>
+  <div class="submenu-content">
+    <div class="submenu-quick" role="toolbar" aria-label="快捷功能">
+      <div class="submenu-quick-grid" id="moreMenuQuickGrid"></div>
+    </div>
+    <div class="submenu-body">
+      <button id="noteExportBtn" class="mode-btn">导出 .cubenote</button>
+      <button id="noteImportBtn" class="mode-btn">导入 .cubenote</button>
+      <button id="settingsBtn" class="mode-btn">设置</button>
+      <button id="pluginManagerBtn" class="mode-btn">插件</button>
+      <button id="aboutBtn" class="mode-btn">关于</button>
+      <button id="closeWhiteboardBtn" class="mode-btn">关闭白板</button>
+    </div>
   </div>
   <div class="submenu-footer">
     <button class="submenu-drag-handle" title="拖动子菜单">⋮</button>

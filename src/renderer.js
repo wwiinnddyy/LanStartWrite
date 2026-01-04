@@ -34,6 +34,8 @@ const HISTORY_LIMIT = 30;
 
 import Message, { EVENTS } from './message.js';
 
+let _noteMeta = { createdAt: Date.now(), modifiedAt: Date.now() };
+
 // 深拷贝并对超长笔画点数组进行下采样，防止单个操作占用过多内存
 function snapshotOps(srcOps) {
   const cloned = JSON.parse(JSON.stringify(Array.isArray(srcOps) ? srcOps : []));
@@ -53,6 +55,7 @@ function pushHistory() {
   historyIndex = history.length - 1;
   if (history.length > HISTORY_LIMIT) { history.shift(); historyIndex--; }
   try{ _documents[_activeDocKey].historyIndex = historyIndex; }catch(e){}
+  try{ _noteMeta.modifiedAt = Date.now(); }catch(e){}
   try{ Message.emit(EVENTS.HISTORY_CHANGED, { canUndo: canUndo(), canRedo: canRedo() }); }catch(e){}
 }
 
@@ -515,6 +518,95 @@ export function loadSnapshot(snap){
   // redraw and create a fresh history snapshot for the loaded state
   redrawAll();
   pushHistory();
+}
+
+export function getCubenoteState(){
+  try{ finalizeCurrentOp(); }catch(e){}
+  try{
+    _documents[_activeDocKey].historyIndex = historyIndex;
+    _documents[_activeDocKey].brushSize = brushSize;
+    _documents[_activeDocKey].eraserSize = eraserSize;
+    _documents[_activeDocKey].brushColor = brushColor;
+    _documents[_activeDocKey].erasing = erasing;
+    _documents[_activeDocKey].eraserMode = eraserMode;
+    _documents[_activeDocKey].view = { scale: viewScale, offsetX: viewOffsetX, offsetY: viewOffsetY };
+  }catch(e){}
+  return {
+    format: 'cubenote-state',
+    schemaVersion: 1,
+    meta: Object.assign({}, _noteMeta),
+    activeDocKey: _activeDocKey,
+    documents: {
+      whiteboard: JSON.parse(JSON.stringify(_documents.whiteboard)),
+      annotation: JSON.parse(JSON.stringify(_documents.annotation))
+    }
+  };
+}
+
+export function applyCubenoteState(state, opts){
+  const s = (state && typeof state === 'object') ? state : null;
+  if (!s || s.format !== 'cubenote-state' || Number(s.schemaVersion) !== 1) throw new Error('invalid cubenote state');
+  const docs = s.documents && typeof s.documents === 'object' ? s.documents : null;
+  if (!docs || !docs.whiteboard || !docs.annotation) throw new Error('invalid cubenote documents');
+  const conflict = (opts && opts.conflict) ? String(opts.conflict) : 'overwrite';
+  if (conflict === 'merge') {
+    const incomingKey = (s.activeDocKey === 'annotation') ? 'annotation' : 'whiteboard';
+    const incoming = docs[incomingKey];
+    const incomingOps = Array.isArray(incoming && incoming.ops) ? incoming.ops : [];
+    if (incomingOps.length) {
+      const appended = JSON.parse(JSON.stringify(incomingOps));
+      Array.prototype.push.apply(ops, appended);
+      redrawAll();
+      pushHistory();
+    }
+    return;
+  }
+  try{
+    const wb = JSON.parse(JSON.stringify(docs.whiteboard));
+    const an = JSON.parse(JSON.stringify(docs.annotation));
+
+    _documents.whiteboard.ops = Array.isArray(wb.ops) ? wb.ops : [];
+    _documents.whiteboard.history = Array.isArray(wb.history) ? wb.history : [];
+    _documents.whiteboard.historyIndex = Number.isFinite(Number(wb.historyIndex)) ? Number(wb.historyIndex) : 0;
+    _documents.whiteboard.brushSize = Number(wb.brushSize) || 4;
+    _documents.whiteboard.eraserSize = Number(wb.eraserSize) || 20;
+    _documents.whiteboard.brushColor = String(wb.brushColor || '#000000');
+    _documents.whiteboard.erasing = !!wb.erasing;
+    _documents.whiteboard.eraserMode = String(wb.eraserMode || 'pixel');
+    _documents.whiteboard.view = wb.view && typeof wb.view === 'object'
+      ? { scale: Number(wb.view.scale) || 1, offsetX: Number(wb.view.offsetX) || 0, offsetY: Number(wb.view.offsetY) || 0 }
+      : { scale: 1, offsetX: 0, offsetY: 0 };
+
+    _documents.annotation.ops = Array.isArray(an.ops) ? an.ops : [];
+    _documents.annotation.history = Array.isArray(an.history) ? an.history : [];
+    _documents.annotation.historyIndex = Number.isFinite(Number(an.historyIndex)) ? Number(an.historyIndex) : 0;
+    _documents.annotation.brushSize = Number(an.brushSize) || 4;
+    _documents.annotation.eraserSize = Number(an.eraserSize) || 20;
+    _documents.annotation.brushColor = String(an.brushColor || '#ff0000');
+    _documents.annotation.erasing = !!an.erasing;
+    _documents.annotation.eraserMode = String(an.eraserMode || 'pixel');
+    _documents.annotation.view = an.view && typeof an.view === 'object'
+      ? { scale: Number(an.view.scale) || 1, offsetX: Number(an.view.offsetX) || 0, offsetY: Number(an.view.offsetY) || 0 }
+      : { scale: 1, offsetX: 0, offsetY: 0 };
+
+    _activeDocKey = (s.activeDocKey === 'annotation') ? 'annotation' : 'whiteboard';
+    _ensureDocInitialized('whiteboard');
+    _ensureDocInitialized('annotation');
+    _loadDocState(_activeDocKey);
+
+    if (s.meta && typeof s.meta === 'object') {
+      const ca = Number(s.meta.createdAt || 0) || Date.now();
+      const ma = Number(s.meta.modifiedAt || 0) || Date.now();
+      _noteMeta = { createdAt: ca, modifiedAt: ma };
+    } else {
+      _noteMeta = { createdAt: Date.now(), modifiedAt: Date.now() };
+    }
+
+    redrawAll();
+    try{ Message.emit(EVENTS.HISTORY_CHANGED, { canUndo: canUndo(), canRedo: canRedo() }); }catch(e){}
+  }catch(e){
+    throw e;
+  }
 }
 
 // Replace stroke colors in all operations (for canvas color theme switching)

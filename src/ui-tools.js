@@ -13,7 +13,7 @@
  * 1. UI 打开/关闭子菜单、弹窗 → 计算可交互矩形 → 发送给主进程
  * 2. 主进程根据矩形决定窗口哪些区域接收鼠标，其他区域穿透到下层应用
  */
-import { clearAll, undo, redo, setBrushColor, setErasing, canUndo, canRedo, replaceStrokeColors, getToolState, setInputEnabled, setMultiTouchPenEnabled, setInkRecognitionEnabled, setViewTransform, setCanvasMode } from './renderer.js';
+import { clearAll, undo, redo, setBrushColor, setErasing, canUndo, canRedo, replaceStrokeColors, getToolState, setInputEnabled, setMultiTouchPenEnabled, setInkRecognitionEnabled, setViewTransform, setCanvasMode, getCubenoteState, applyCubenoteState } from './renderer.js';
 import Curous from './curous.js';
 import Settings, { getPenColorFromSettings } from './setting.js';
 import { showSubmenu, cleanupMenuStyles, initPinHandlers, closeAllSubmenus } from './more_decide_windows.js';
@@ -100,6 +100,7 @@ const ENTER_WHITEBOARD_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width
 let _appMode = APP_MODES.WHITEBOARD;
 let _interactiveRectsRaf = 0;
 let _lastTouchActionAt = 0;
+let _lastMouseMoveAt = 0;
 let applyCollapsed = ()=>{};
 let _lastIgnoreMouse = { ignore: false, forward: false, at: 0 };
 let _rectWatchdogTimer = 0;
@@ -157,6 +158,7 @@ function bindTouchTap(el, onTap, opts){
 
   el.addEventListener('pointerdown', (e)=>{
     if (!e || e.pointerType !== 'touch') return;
+    _lastTouchActionAt = Date.now();
     down = { id: e.pointerId, x: e.clientX, y: e.clientY, t: (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now() };
     moved = false;
     try{ if (el.setPointerCapture) el.setPointerCapture(e.pointerId); }catch(err){}
@@ -225,6 +227,7 @@ function sendIgnoreMouse(ignore, forward){
   try{
     if (!window.electronAPI || typeof window.electronAPI.sendToMain !== 'function') return;
     _lastIgnoreMouse = { ignore: !!ignore, forward: !!forward, at: Date.now() };
+    _menuDebug('overlay', 'ignore-mouse', { ignore: !!ignore, forward: !!forward, mode: _appMode });
     window.electronAPI.sendToMain('overlay:set-ignore-mouse', { ignore: !!ignore, forward: !!forward });
   }catch(e){}
 }
@@ -237,6 +240,7 @@ function sendIgnoreMouse(ignore, forward){
 function sendInteractiveRects(rects){
   try{
     if (!window.electronAPI || typeof window.electronAPI.sendToMain !== 'function') return;
+    _menuDebug('overlay', 'interactive-rects', { count: Array.isArray(rects) ? rects.length : 0 });
     window.electronAPI.sendToMain('overlay:set-interactive-rects', { rects: Array.isArray(rects) ? rects : [] });
   }catch(e){}
 }
@@ -344,8 +348,19 @@ function applyWindowInteractivity(){
     _setRectWatchdog(false);
     return;
   }
-  if (_isTouchEnvironment()){
-    _menuDebug('interactivity', 'touch-env-force-interactive');
+  const recentTouch = (Date.now() - _lastTouchActionAt) < 1500;
+  if (recentTouch){
+    _menuDebug('interactivity', 'recent-touch-force-interactive');
+    sendIgnoreMouse(false, false);
+    try{ sendInteractiveRects(collectInteractiveRects()); }catch(e){}
+    _setRectWatchdog(false);
+    scheduleInteractiveRectsUpdate();
+    return;
+  }
+  const touchCapable = _isTouchEnvironment();
+  const recentMouse = (Date.now() - _lastMouseMoveAt) < 1200;
+  if (touchCapable && !recentMouse) {
+    _menuDebug('interactivity', 'touch-capable-no-mouse-force-interactive');
     sendIgnoreMouse(false, false);
     try{ sendInteractiveRects(collectInteractiveRects()); }catch(e){}
     _setRectWatchdog(false);
@@ -454,6 +469,7 @@ try{
   mo.observe(document.body, { subtree: true, attributes: true, attributeFilter: ['class', 'style', 'aria-hidden'] });
 }catch(e){}
 try{ window.addEventListener('resize', ()=>{ scheduleInteractiveRectsUpdate(); }, { passive: true }); }catch(e){}
+try{ window.addEventListener('mousemove', ()=>{ _lastMouseMoveAt = Date.now(); }, { passive: true }); }catch(e){}
 
 try{ window.addEventListener('toolbar:sync', syncToolbarIcons); }catch(e){}
 
@@ -585,12 +601,26 @@ if (moreTool) {
   moreTool.addEventListener('click', openMore);
   bindTouchTap(moreTool, openMore, { delayMs: 20 });
   // simple action hooks
-  const exportBtn = document.getElementById('exportBtn');
+  const noteExportBtn = document.getElementById('noteExportBtn');
+  const noteImportBtn = document.getElementById('noteImportBtn');
   const settingsBtn = document.getElementById('settingsBtn');
   const pluginManagerBtn = document.getElementById('pluginManagerBtn');
   const aboutBtn = document.getElementById('aboutBtn');
   const closeWhiteboardBtn = document.getElementById('closeWhiteboardBtn');
-  const onExport = ()=>{ closeAllSubmenus(); syncToolbarIcons(); applyWindowInteractivity(); scheduleInteractiveRectsUpdate(); Message.emit(EVENTS.REQUEST_EXPORT, {}); };
+  const onNoteExport = async ()=>{
+    closeAllSubmenus();
+    syncToolbarIcons();
+    applyWindowInteractivity();
+    scheduleInteractiveRectsUpdate();
+    try{ await startNoteExportFlow(); }catch(e){ try{ showToast('导出失败', 'error'); }catch(err){} }
+  };
+  const onNoteImport = async ()=>{
+    closeAllSubmenus();
+    syncToolbarIcons();
+    applyWindowInteractivity();
+    scheduleInteractiveRectsUpdate();
+    try{ await startNoteImportFlow(); }catch(e){ try{ showToast('导入失败', 'error'); }catch(err){} }
+  };
   const onSettings = ()=>{ closeAllSubmenus(); syncToolbarIcons(); applyWindowInteractivity(); scheduleInteractiveRectsUpdate(); Message.emit(EVENTS.OPEN_SETTINGS, {}); };
   const onPluginManager = ()=>{ closeAllSubmenus(); syncToolbarIcons(); applyWindowInteractivity(); scheduleInteractiveRectsUpdate(); try{ openPluginModal(); }catch(e){} };
   const onAbout = ()=>{ closeAllSubmenus(); syncToolbarIcons(); applyWindowInteractivity(); scheduleInteractiveRectsUpdate(); Message.emit(EVENTS.OPEN_ABOUT, {}); };
@@ -607,7 +637,8 @@ if (moreTool) {
     }catch(e){}
     try{ window.close(); }catch(e){}
   };
-  if (exportBtn) { exportBtn.addEventListener('click', onExport); bindTouchTap(exportBtn, onExport, { delayMs: 20 }); }
+  if (noteExportBtn) { noteExportBtn.addEventListener('click', onNoteExport); bindTouchTap(noteExportBtn, onNoteExport, { delayMs: 20 }); }
+  if (noteImportBtn) { noteImportBtn.addEventListener('click', onNoteImport); bindTouchTap(noteImportBtn, onNoteImport, { delayMs: 20 }); }
   if (settingsBtn) { settingsBtn.addEventListener('click', onSettings); bindTouchTap(settingsBtn, onSettings, { delayMs: 20 }); }
   if (pluginManagerBtn) { pluginManagerBtn.addEventListener('click', onPluginManager); bindTouchTap(pluginManagerBtn, onPluginManager, { delayMs: 20 }); }
   if (aboutBtn) { aboutBtn.addEventListener('click', onAbout); bindTouchTap(aboutBtn, onAbout, { delayMs: 20 }); }
@@ -1206,6 +1237,239 @@ function showToast(msg, type='success', ms=2500){
   t._hideT = setTimeout(()=>{ t.classList.remove('show'); }, ms);
 }
 
+let _noteIOModal = null;
+let _noteIOTitleEl = null;
+let _noteIOStatusEl = null;
+let _noteIOProgressEl = null;
+let _noteIOFooterEl = null;
+let _noteIOResolve = null;
+let _noteIORequestId = '';
+
+function _ensureNoteIOModal(){
+  if (_noteIOModal) return _noteIOModal;
+  const modal = document.createElement('div');
+  modal.className = 'settings-modal';
+  modal.setAttribute('role', 'dialog');
+  modal.setAttribute('aria-hidden', 'true');
+
+  const backdrop = document.createElement('div');
+  backdrop.className = 'settings-backdrop';
+
+  const panel = document.createElement('div');
+  panel.className = 'settings-panel';
+
+  const header = document.createElement('div');
+  header.className = 'settings-header';
+  _noteIOTitleEl = document.createElement('h3');
+  _noteIOTitleEl.textContent = '笔记管理';
+  const closeBtn = document.createElement('button');
+  closeBtn.className = 'tool-btn';
+  closeBtn.textContent = '✕';
+
+  header.appendChild(_noteIOTitleEl);
+  header.appendChild(closeBtn);
+
+  const body = document.createElement('div');
+  body.className = 'settings-body';
+  _noteIOStatusEl = document.createElement('div');
+  _noteIOStatusEl.style.whiteSpace = 'pre-wrap';
+  _noteIOStatusEl.style.color = '#444';
+
+  _noteIOProgressEl = document.createElement('progress');
+  _noteIOProgressEl.max = 100;
+  _noteIOProgressEl.value = 0;
+  _noteIOProgressEl.className = 'plugin-progress';
+  _noteIOProgressEl.style.width = '100%';
+
+  body.appendChild(_noteIOStatusEl);
+  body.appendChild(_noteIOProgressEl);
+
+  _noteIOFooterEl = document.createElement('div');
+  _noteIOFooterEl.className = 'settings-footer';
+
+  panel.appendChild(header);
+  panel.appendChild(body);
+  panel.appendChild(_noteIOFooterEl);
+
+  modal.appendChild(backdrop);
+  modal.appendChild(panel);
+  document.body.appendChild(modal);
+
+  const close = ()=>{
+    try{ modal.classList.remove('open'); }catch(e){}
+    try{ modal.setAttribute('aria-hidden', 'true'); }catch(e){}
+    const r = _noteIOResolve;
+    _noteIOResolve = null;
+    if (typeof r === 'function') r(null);
+    applyWindowInteractivity();
+    scheduleInteractiveRectsUpdate();
+  };
+
+  backdrop.addEventListener('click', close);
+  closeBtn.addEventListener('click', close);
+  _noteIOModal = modal;
+  return modal;
+}
+
+function _noteIOModalSet(title, status, percent){
+  const modal = _ensureNoteIOModal();
+  if (_noteIOTitleEl) _noteIOTitleEl.textContent = String(title || '笔记管理');
+  if (_noteIOStatusEl) _noteIOStatusEl.textContent = String(status || '');
+  const p = Number(percent || 0);
+  if (_noteIOProgressEl) _noteIOProgressEl.value = Number.isFinite(p) ? Math.max(0, Math.min(100, p)) : 0;
+  try{ modal.classList.add('open'); }catch(e){}
+  try{ modal.setAttribute('aria-hidden', 'false'); }catch(e){}
+  applyWindowInteractivity();
+  scheduleInteractiveRectsUpdate();
+}
+
+function _noteIOModalSetActions(actions){
+  _ensureNoteIOModal();
+  if (!_noteIOFooterEl) return;
+  _noteIOFooterEl.innerHTML = '';
+  const list = Array.isArray(actions) ? actions : [];
+  for (const a of list) {
+    const id = a && a.id ? String(a.id) : '';
+    const text = a && a.text ? String(a.text) : '';
+    if (!id || !text) continue;
+    const btn = document.createElement('button');
+    btn.className = 'mode-btn';
+    btn.textContent = text;
+    btn.addEventListener('click', ()=>{
+      const r = _noteIOResolve;
+      _noteIOResolve = null;
+      if (typeof r === 'function') r(id);
+    });
+    _noteIOFooterEl.appendChild(btn);
+  }
+}
+
+function showNoteConfirm(opts){
+  const o = (opts && typeof opts === 'object') ? opts : {};
+  _noteIOModalSet(o.title || '确认', o.message || '', 0);
+  if (_noteIOProgressEl) _noteIOProgressEl.style.display = 'none';
+  _noteIOModalSetActions(o.actions || [{ id: 'ok', text: '确定' }, { id: 'cancel', text: '取消' }]);
+  return new Promise((resolve)=>{
+    _noteIOResolve = (v)=>{
+      try{ if (_noteIOModal) { _noteIOModal.classList.remove('open'); _noteIOModal.setAttribute('aria-hidden','true'); } }catch(e){}
+      applyWindowInteractivity();
+      scheduleInteractiveRectsUpdate();
+      resolve(v);
+    };
+  });
+}
+
+function showNoteProgress(title, status, percent){
+  _noteIOModalSet(title || '处理中', status || '', percent || 0);
+  if (_noteIOProgressEl) _noteIOProgressEl.style.display = '';
+  if (_noteIOFooterEl) _noteIOFooterEl.innerHTML = '';
+}
+
+async function startNoteExportFlow(){
+  const pick = await showNoteConfirm({
+    title: '导出笔记',
+    message: '将当前笔记与历史记录导出为 .cubenote 文件。',
+    actions: [{ id: 'export', text: '导出' }, { id: 'cancel', text: '取消' }]
+  });
+  if (pick !== 'export') return;
+
+  showNoteProgress('导出笔记', '选择保存位置…', 0);
+  const r = await _invokeMainMessage('note:open-export-dialog', {});
+  if (!r || !r.success || !r.path) {
+    try{ if (_noteIOModal) { _noteIOModal.classList.remove('open'); _noteIOModal.setAttribute('aria-hidden','true'); } }catch(e){}
+    applyWindowInteractivity();
+    scheduleInteractiveRectsUpdate();
+    showToast('已取消导出', 'success');
+    return;
+  }
+
+  const requestId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  _noteIORequestId = requestId;
+  showNoteProgress('导出笔记', '准备导出…', 10);
+  const state = getCubenoteState();
+  const res = await _invokeMainMessage('note:export-cubenote', { path: String(r.path), state, requestId });
+  _noteIORequestId = '';
+  try{ if (_noteIOModal) { _noteIOModal.classList.remove('open'); _noteIOModal.setAttribute('aria-hidden','true'); } }catch(e){}
+  applyWindowInteractivity();
+  scheduleInteractiveRectsUpdate();
+  if (res && res.success) showToast('导出完成', 'success');
+  else showToast(`导出失败：${res && (res.error || res.reason) ? String(res.error || res.reason) : '未知错误'}`, 'error', 3200);
+}
+
+async function startNoteImportFlow(){
+  showNoteProgress('导入笔记', '选择要导入的 .cubenote…', 0);
+  const r = await _invokeMainMessage('note:open-import-dialog', {});
+  if (!r || !r.success || !r.path) {
+    try{ if (_noteIOModal) { _noteIOModal.classList.remove('open'); _noteIOModal.setAttribute('aria-hidden','true'); } }catch(e){}
+    applyWindowInteractivity();
+    scheduleInteractiveRectsUpdate();
+    showToast('已取消导入', 'success');
+    return;
+  }
+
+  const choice = await showNoteConfirm({
+    title: '导入方式',
+    message: '选择冲突处理方式：覆盖将替换当前笔记与历史记录；合并将把导入内容追加到当前页面。',
+    actions: [{ id: 'overwrite', text: '覆盖' }, { id: 'merge', text: '合并' }, { id: 'cancel', text: '取消' }]
+  });
+  if (choice !== 'overwrite' && choice !== 'merge') {
+    try{ if (_noteIOModal) { _noteIOModal.classList.remove('open'); _noteIOModal.setAttribute('aria-hidden','true'); } }catch(e){}
+    applyWindowInteractivity();
+    scheduleInteractiveRectsUpdate();
+    return;
+  }
+  if (choice === 'overwrite') {
+    const c2 = await showNoteConfirm({
+      title: '二次确认',
+      message: '覆盖导入会丢失当前笔记的撤销/重做历史，是否继续？',
+      actions: [{ id: 'continue', text: '继续' }, { id: 'cancel', text: '取消' }]
+    });
+    if (c2 !== 'continue') return;
+  }
+
+  const requestId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  _noteIORequestId = requestId;
+  showNoteProgress('导入笔记', '读取文件…', 10);
+  const res = await _invokeMainMessage('note:import-cubenote', { path: String(r.path), requestId });
+  _noteIORequestId = '';
+  if (!res || !res.success || !res.state) {
+    try{ if (_noteIOModal) { _noteIOModal.classList.remove('open'); _noteIOModal.setAttribute('aria-hidden','true'); } }catch(e){}
+    applyWindowInteractivity();
+    scheduleInteractiveRectsUpdate();
+    showToast(`导入失败：${res && (res.error || res.reason) ? String(res.error || res.reason) : '未知错误'}`, 'error', 3200);
+    return;
+  }
+  try{
+    applyCubenoteState(res.state, { conflict: choice });
+  }catch(e){
+    try{ if (_noteIOModal) { _noteIOModal.classList.remove('open'); _noteIOModal.setAttribute('aria-hidden','true'); } }catch(err){}
+    applyWindowInteractivity();
+    scheduleInteractiveRectsUpdate();
+    showToast('导入失败：数据应用失败', 'error', 3200);
+    return;
+  }
+  try{ if (_noteIOModal) { _noteIOModal.classList.remove('open'); _noteIOModal.setAttribute('aria-hidden','true'); } }catch(e){}
+  applyWindowInteractivity();
+  scheduleInteractiveRectsUpdate();
+  showToast('导入完成', 'success');
+}
+
+try{
+  if (window && window.electronAPI && typeof window.electronAPI.onReplyFromMain === 'function') {
+    window.electronAPI.onReplyFromMain('note:io-progress', (payload)=>{
+      try{
+        const p = payload && typeof payload === 'object' ? payload : {};
+        const rid = String(p.requestId || '');
+        if (!_noteIORequestId || rid !== _noteIORequestId) return;
+        const title = p.type === 'import' ? '导入笔记' : '导出笔记';
+        const stage = p.stage ? String(p.stage) : '';
+        const percent = Number(p.percent || 0);
+        showNoteProgress(title, stage, percent);
+      }catch(e){}
+    });
+  }
+}catch(e){}
+
 // Show file write results forwarded from main via ipc_bridge
 Message.on('io:request-file-write:result', (res)=>{
   try{
@@ -1332,4 +1596,3 @@ try{ if (settings && typeof settings.smartInkRecognition !== 'undefined') setInk
     setTimeout(recalc, 16);
   }catch(e){/* fail silently if ResizeObserver not available */}
 })();
-

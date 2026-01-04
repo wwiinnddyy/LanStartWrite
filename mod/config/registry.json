@@ -5,6 +5,9 @@
       "enabled": false,
       "version": "1.0.0",
       "installedAt": 0
+    },
+    "inkcanvas-with-electron-for-write": {
+      "enabled": false
     }
   },
   "order": [

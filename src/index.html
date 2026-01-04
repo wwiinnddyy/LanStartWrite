@@ -24,10 +24,17 @@
       .tool{position:relative}
       .tool-btn{width:44px;height:44px;border-radius:10px;border:1px solid #ccc;background:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;touch-action:manipulation;-webkit-user-select:none;user-select:none}
       .tool-btn.active{box-shadow:inset 0 -2px 0 rgba(0,0,0,0.06);background:#f6f6f6}
+      .tool-btn:hover{background:#f6f6f6}
+      .tool-btn:active{background:#f0f0f0}
       /* 子菜单为固定排版：固定宽度，自适应高度包含所有控件 */
       .submenu{position:absolute;right:0;top:48px;background:rgba(255,255,255,0.97);padding:0;border-radius:18px;box-shadow:0 8px 22px rgba(0,0,0,0.12);display:none;z-index:2500;width:min(240px,calc(100vw - 40px));max-width:calc(100vw - 40px);box-sizing:border-box;transition:top 0.3s cubic-bezier(0.25,0.46,0.45,0.94),opacity 0.3s ease;flex-direction:column;overflow:hidden}
       .submenu.open{display:flex}
-      .submenu .submenu-body{padding:12px;display:flex;flex-direction:column;gap:8px}
+      .submenu .submenu-content{display:flex;min-width:0}
+      .submenu .submenu-quick{width:72px;flex:0 0 72px;padding:12px 10px 12px 12px;box-sizing:border-box;border-right:1px solid #e5e5e5;background:rgba(0,0,0,0.02);display:flex;align-items:flex-start;justify-content:flex-start}
+      .submenu .submenu-quick-grid{display:grid;grid-template-columns:1fr;grid-auto-rows:min-content;gap:8px;justify-items:start;align-content:start;width:100%}
+      .submenu .submenu-quick-grid .tool-btn svg,.submenu .submenu-quick-grid .tool-btn img{width:22px;height:22px}
+      .submenu .submenu-quick-grid .tool-btn i{font-size:22px;line-height:22px}
+      .submenu .submenu-body{padding:12px;display:flex;flex-direction:column;gap:8px;flex:1;min-width:0}
       .submenu .submenu-pin{border:1px solid #ccc;background:#fff;padding:10px 12px;border-radius:10px;cursor:pointer;min-height:44px;touch-action:manipulation;-webkit-user-select:none;user-select:none}
       .submenu .submenu-footer{display:flex;justify-content:flex-end;gap:8px;padding:8px 12px;border-top:1px solid #e5e5e5;background:rgba(255,255,255,0.5)}
       .submenu .submenu-drag-handle{border:1px solid #ccc;background:#fff;padding:10px 12px;border-radius:10px;cursor:grab;min-height:44px;touch-action:none;-webkit-user-select:none;user-select:none}
@@ -105,6 +112,7 @@
       .theme-dark .tool-btn:hover{background: rgba(255,255,255,0.04)}
       .theme-dark .tool-btn.active{background: rgba(90,160,255,0.12); border-color: rgba(90,160,255,0.28); box-shadow: 0 6px 18px rgba(90,160,255,0.08); color: var(--text)}
       .theme-dark .submenu{background: rgba(12,12,12,0.9); border: 1px solid rgba(255,255,255,0.04); color: var(--text)}
+      .theme-dark .submenu .submenu-quick{background:rgba(255,255,255,0.03);border-right-color:rgba(255,255,255,0.06)}
       .theme-dark .settings-panel{background:#0f1011;color:var(--text);box-shadow:0 14px 48px rgba(0,0,0,0.7);border:1px solid rgba(255,255,255,0.04)}
       .theme-dark .mode-btn, .theme-dark .submenu .submenu-pin, .theme-dark .submenu .submenu-drag-handle{background:rgba(255,255,255,0.02);border-color:rgba(255,255,255,0.05);color:var(--text)}
       .theme-dark .mode-btn:hover{background:rgba(255,255,255,0.04)}
@@ -128,6 +136,9 @@
       /* submenu body text and labels */
       .theme-dark .submenu .submenu-body, .theme-dark .submenu .submenu-body label, .theme-dark .modeLabel{color:var(--subtle)}
       .theme-dark .submenu .submenu-footer{background:transparent;border-top-color:rgba(255,255,255,0.02)}
+      @media (max-width: 420px){
+        .submenu .submenu-quick{width:64px;flex-basis:64px;padding:10px 8px 10px 10px}
+      }
 
       /* Color swatches border contrast */
       .theme-dark .colorRow .color{border-color:rgba(255,255,255,0.06)}

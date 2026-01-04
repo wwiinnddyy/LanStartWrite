@@ -4,6 +4,7 @@ const fs = require('fs');
 const crypto = require('crypto');
 const yauzl = require('yauzl');
 const semver = require('semver');
+const zlib = require('zlib');
 
 const _RUN_TESTS = process.argv.includes('--run-tests');
 const _ALLOW_UNSIGNED_PLUGINS = true;
@@ -15,6 +16,17 @@ let _overlayInteractiveRects = [];
 let _overlayIgnoreConfig = { ignore: false, forward: false };
 let _overlayLastApplied = null;
 let _overlayPollTimer = null;
+let _overlayAllowState = null;
+let _overlayAllowDesired = null;
+let _overlayAllowDesiredAt = 0;
+let _overlayAllowLastSwitchAt = 0;
+
+function _overlayDebug() {
+  try {
+    if (!process || !process.env || process.env.LANSTART_DEBUG_OVERLAY !== '1') return;
+  } catch (e) { return; }
+  try { console.log('[overlay]', ...arguments); } catch (e) {}
+}
 
 let _modWatcher = null;
 let _modRegistryWatcher = null;
@@ -95,6 +107,7 @@ function _applyIgnoreMouse(ignore, forward) {
   const key = `${ignore ? 1 : 0}:${forward ? 1 : 0}`;
   if (_overlayLastApplied === key) return;
   _overlayLastApplied = key;
+  _overlayDebug('apply', { ignore: !!ignore, forward: !!forward });
   if (ignore) mainWindow.setIgnoreMouseEvents(true, { forward: !!forward });
   else mainWindow.setIgnoreMouseEvents(false);
 }
@@ -127,17 +140,47 @@ function _ensureOverlayPoll() {
       if (!_overlayIgnoreConfig.ignore) return;
       if (!_overlayIgnoreConfig.forward) return;
       if (!mainWindow) return;
-      const allow = _shouldAllowOverlayInteraction();
-      if (allow) _applyIgnoreMouse(false, false);
+      const now = Date.now();
+      const allowNow = _shouldAllowOverlayInteraction();
+      if (_overlayAllowState === null) {
+        _overlayAllowState = allowNow;
+        _overlayAllowDesired = allowNow;
+        _overlayAllowDesiredAt = now;
+        _overlayAllowLastSwitchAt = now;
+        if (allowNow) _applyIgnoreMouse(false, false);
+        else _applyIgnoreMouse(true, true);
+        return;
+      }
+      if (allowNow === _overlayAllowState) {
+        _overlayAllowDesired = allowNow;
+        _overlayAllowDesiredAt = now;
+        return;
+      }
+      if (_overlayAllowDesired !== allowNow) {
+        _overlayAllowDesired = allowNow;
+        _overlayAllowDesiredAt = now;
+        return;
+      }
+      const settleMs = allowNow ? 30 : 80;
+      if (now - _overlayAllowDesiredAt < settleMs) return;
+      if (now - _overlayAllowLastSwitchAt < 50) return;
+      _overlayAllowState = allowNow;
+      _overlayAllowLastSwitchAt = now;
+      _overlayDebug('switch', { allow: allowNow, settleMs });
+      if (allowNow) _applyIgnoreMouse(false, false);
       else _applyIgnoreMouse(true, true);
     } catch (e) {}
-  }, 10);
+  }, 40);
 }
 
 function _stopOverlayPoll() {
   if (!_overlayPollTimer) return;
   try { clearInterval(_overlayPollTimer); } catch (e) {}
   _overlayPollTimer = null;
+  _overlayAllowState = null;
+  _overlayAllowDesired = null;
+  _overlayAllowDesiredAt = 0;
+  _overlayAllowLastSwitchAt = 0;
 }
 
 function createWindow(opts) {
@@ -385,6 +428,95 @@ function _buildZipStore(entries) {
   end.writeUInt16LE(0, 20);
 
   return Buffer.concat(parts.concat(central).concat([end]));
+}
+
+const _CUBENOTE_XAML_VERSION = '1.0.0';
+
+function _escapeXmlAttr(v) {
+  return String(v)
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function _noteProgress(requestId, type, stage, percent) {
+  try {
+    if (!requestId) return;
+    broadcastMessage('note:io-progress', {
+      requestId: String(requestId),
+      type: String(type || ''),
+      stage: String(stage || ''),
+      percent: Number(percent || 0)
+    });
+  } catch (e) {}
+}
+
+function _encodeCubenoteXaml(state) {
+  const json = JSON.stringify(state || {});
+  const sha256 = crypto.createHash('sha256').update(json, 'utf8').digest('hex');
+  const gz = zlib.gzipSync(Buffer.from(json, 'utf8'), { level: 9 });
+  const b64 = gz.toString('base64');
+
+  const meta = state && state.meta && typeof state.meta === 'object' ? state.meta : {};
+  const createdAt = Number(meta.createdAt || 0) || Date.now();
+  const modifiedAt = Number(meta.modifiedAt || 0) || Date.now();
+  const createdIso = new Date(createdAt).toISOString();
+  const modifiedIso = new Date(modifiedAt).toISOString();
+  const genVer = String(app.getVersion ? app.getVersion() : '');
+
+  const xaml =
+    `<Cubenote xmlns="https://lanstartwrite/cubenote" Version="${_escapeXmlAttr(_CUBENOTE_XAML_VERSION)}">` +
+    `<Meta CreatedAt="${_escapeXmlAttr(createdIso)}" ModifiedAt="${_escapeXmlAttr(modifiedIso)}" Generator="LanStartWrite" GeneratorVersion="${_escapeXmlAttr(genVer)}" />` +
+    `<Payload Encoding="gzip+base64" Sha256="${_escapeXmlAttr(sha256)}">${b64}</Payload>` +
+    `</Cubenote>`;
+  return { xaml, sha256 };
+}
+
+function _decodeCubenoteXaml(xamlText) {
+  const txt = String(xamlText || '').trim();
+  if (!txt || !/^<Cubenote\b/i.test(txt)) return { success: false, reason: 'not_cubenote' };
+
+  const vMatch = txt.match(/\bVersion="([^"]+)"/i);
+  const ver = vMatch && vMatch[1] ? String(vMatch[1]).trim() : '';
+  if (!semver.valid(ver)) return { success: false, reason: 'invalid_version' };
+  if (semver.major(ver) !== 1) return { success: false, reason: 'version_incompatible', version: ver };
+
+  const payloadMatch = txt.match(/<Payload\b([^>]*)>([\s\S]*?)<\/Payload>/i);
+  if (!payloadMatch) return { success: false, reason: 'missing_payload' };
+  const payloadAttrs = String(payloadMatch[1] || '');
+  const payloadBody = String(payloadMatch[2] || '').trim();
+  const shaMatch = payloadAttrs.match(/\bSha256="([^"]+)"/i);
+  const expectSha = shaMatch && shaMatch[1] ? String(shaMatch[1]).trim().toLowerCase() : '';
+  if (!payloadBody) return { success: false, reason: 'empty_payload' };
+
+  let jsonBuf = null;
+  try {
+    const gzBuf = Buffer.from(payloadBody, 'base64');
+    jsonBuf = zlib.gunzipSync(gzBuf);
+  } catch (e) {
+    return { success: false, reason: 'decompress_failed' };
+  }
+
+  const jsonText = jsonBuf.toString('utf8');
+  if (expectSha) {
+    const gotSha = crypto.createHash('sha256').update(jsonText, 'utf8').digest('hex').toLowerCase();
+    if (gotSha !== expectSha) return { success: false, reason: 'integrity_failed' };
+  }
+
+  try {
+    const state = JSON.parse(jsonText);
+    return { success: true, state, version: ver };
+  } catch (e) {
+    return { success: false, reason: 'json_parse_failed' };
+  }
+}
+
+function _normalizeCubenotePath(p) {
+  const fp = String(p || '');
+  if (!fp) return '';
+  if (fp.toLowerCase().endsWith('.cubenote')) return fp;
+  return fp + '.cubenote';
 }
 
 async function _createTestLanmodFile(opts) {
@@ -854,6 +986,7 @@ ipcMain.on('overlay:set-ignore-mouse', (event, payload) => {
     if (!mainWindow) return;
     const ignore = !!(payload && payload.ignore);
     const forward = !!(payload && payload.forward);
+    _overlayDebug('ipc-ignore', { ignore, forward });
     _overlayIgnoreConfig = { ignore, forward };
     _applyIgnoreMouse(ignore, forward);
     if (ignore && forward) {
@@ -879,6 +1012,7 @@ ipcMain.on('overlay:set-interactive-rects', (event, payload) => {
         height: Number(r && r.height) || 0
       }))
       .filter((r) => r.width > 0 && r.height > 0);
+    _overlayDebug('ipc-rects', { count: _overlayInteractiveRects.length });
     if (_overlayIgnoreConfig && _overlayIgnoreConfig.ignore && _overlayIgnoreConfig.forward) {
       const allow = _shouldAllowOverlayInteraction();
       if (allow) _applyIgnoreMouse(false, false);
@@ -985,12 +1119,118 @@ ipcMain.handle('message', async (event, channel, data) => {
         return { success: false, error: String(e && e.message || e) };
       }
     }
+    case 'tests:get-temp-file': {
+      if (!_RUN_TESTS) return { success: false, error: 'not allowed' };
+      try {
+        const extRaw = data && typeof data === 'object' && data.ext ? String(data.ext) : 'tmp';
+        const ext = extRaw.replace(/[^a-zA-Z0-9._-]/g, '').replace(/^\.+/, '') || 'tmp';
+        const prefixRaw = data && typeof data === 'object' && data.prefix ? String(data.prefix) : 'test';
+        const prefix = prefixRaw.replace(/[^a-zA-Z0-9._-]/g, '_') || 'test';
+        const dir = path.join(app.getPath('userData'), 'tmp-tests');
+        await fs.promises.mkdir(dir, { recursive: true });
+        const fp = path.join(dir, `${prefix}-${_nowId()}.${ext}`);
+        return { success: true, path: fp };
+      } catch (e) {
+        return { success: false, error: String(e && e.message || e) };
+      }
+    }
     case 'get-info':
       return {
         appVersion: app.getVersion(),
         electronVersion: process.versions.electron,
         platform: process.platform
       };
+
+    case 'note:open-export-dialog': {
+      try{
+        const r = await dialog.showSaveDialog(mainWindow, {
+          title: '导出 .cubenote 笔记',
+          filters: [{ name: 'Cubenote', extensions: ['cubenote'] }]
+        });
+        if (!r || r.canceled) return { success: false, reason: 'canceled' };
+        const fp = r.filePath ? _normalizeCubenotePath(String(r.filePath)) : '';
+        if (!fp) return { success: false, reason: 'no_path' };
+        return { success: true, path: fp };
+      }catch(e){
+        return { success: false, error: String(e && e.message || e) };
+      }
+    }
+
+    case 'note:open-import-dialog': {
+      try{
+        const r = await dialog.showOpenDialog(mainWindow, {
+          title: '导入 .cubenote 笔记',
+          properties: ['openFile'],
+          filters: [{ name: 'Cubenote', extensions: ['cubenote'] }]
+        });
+        if (!r || r.canceled) return { success: false, reason: 'canceled' };
+        const fp = Array.isArray(r.filePaths) && r.filePaths[0] ? String(r.filePaths[0]) : '';
+        if (!fp) return { success: false, reason: 'no_path' };
+        return { success: true, path: fp };
+      }catch(e){
+        return { success: false, error: String(e && e.message || e) };
+      }
+    }
+
+    case 'note:export-cubenote': {
+      const requestId = data && typeof data === 'object' && data.requestId ? String(data.requestId) : '';
+      try{
+        const fp = data && typeof data === 'object' && data.path ? _normalizeCubenotePath(String(data.path)) : '';
+        if (!fp) return { success: false, reason: 'no_path' };
+        const state = data && typeof data === 'object' ? data.state : null;
+        if (!state || typeof state !== 'object') return { success: false, reason: 'no_state' };
+        _noteProgress(requestId, 'export', '序列化…', 20);
+        const { xaml } = _encodeCubenoteXaml(state);
+        _noteProgress(requestId, 'export', '写入文件…', 75);
+        await fs.promises.writeFile(fp, xaml, 'utf8');
+        _noteProgress(requestId, 'export', '完成', 100);
+        return { success: true, path: fp };
+      }catch(e){
+        _noteProgress(requestId, 'export', '失败', 100);
+        return { success: false, error: String(e && e.message || e) };
+      }
+    }
+
+    case 'note:import-cubenote': {
+      const requestId = data && typeof data === 'object' && data.requestId ? String(data.requestId) : '';
+      try{
+        const fp = data && typeof data === 'object' && data.path ? String(data.path) : '';
+        if (!fp) return { success: false, reason: 'no_path' };
+        _noteProgress(requestId, 'import', '读取文件…', 15);
+        const xaml = await fs.promises.readFile(fp, 'utf8');
+        _noteProgress(requestId, 'import', '解析与校验…', 55);
+        const dec = _decodeCubenoteXaml(xaml);
+        if (!dec || !dec.success) {
+          _noteProgress(requestId, 'import', '失败', 100);
+          return { success: false, reason: dec && dec.reason ? String(dec.reason) : 'decode_failed', version: dec && dec.version ? String(dec.version) : '' };
+        }
+        _noteProgress(requestId, 'import', '完成', 100);
+        return { success: true, state: dec.state, version: dec.version };
+      }catch(e){
+        _noteProgress(requestId, 'import', '失败', 100);
+        return { success: false, error: String(e && e.message || e) };
+      }
+    }
+
+    case 'note:encode': {
+      try{
+        const state = data && typeof data === 'object' ? data.state : null;
+        const { xaml } = _encodeCubenoteXaml(state || {});
+        return { success: true, xaml };
+      }catch(e){
+        return { success: false, error: String(e && e.message || e) };
+      }
+    }
+
+    case 'note:decode': {
+      try{
+        const xaml = data && typeof data === 'object' && typeof data.xaml === 'string' ? data.xaml : '';
+        const dec = _decodeCubenoteXaml(xaml);
+        return Object.assign({ }, dec || { success: false, reason: 'decode_failed' });
+      }catch(e){
+        return { success: false, error: String(e && e.message || e) };
+      }
+    }
       
     case 'open-file':
       // 处理文件打开请求等

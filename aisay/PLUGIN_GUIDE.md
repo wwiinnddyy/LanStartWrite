@@ -100,6 +100,7 @@ mod/
 
 - ui:toolbar：允许 `registerTool`
 - ui:mode：允许 `registerMode`
+- ui:menu：允许 `registerMenuButton`（二级菜单快捷区）
 - ui:overlay：允许 `showOverlay/closeOverlay`
 - bus:cross：允许访问 `public/*` 或 `*/public/*` 主题
 - net:fetch：允许在 Worker 中使用 `fetch/WebSocket`（否则会被宿主裁剪为不可用）
@@ -118,6 +119,8 @@ Worker 启动后，宿主会注入全局对象 `self.Mod`，并以事件方式�
   - data：{ topic, payload }
 - Mod.on('tool', (data)=>{})
   - data：{ toolId }
+- Mod.on('menu', (data)=>{})
+  - data：{ buttonId }
 - Mod.on('mode', (data)=>{})
   - data：{ modeId, active }
 - Mod.on('ui', (data)=>{})
@@ -138,11 +141,16 @@ Worker 启动后，宿主会注入全局对象 `self.Mod`，并以事件方式�
 - Mod.registerTool(def)
   - 需要权限 ui:toolbar
   - def.id：工具 id（与 pluginId 组合成全局唯一）
-  - def.title/def.iconSvg/def.label：用于宿主创建按钮
+  - def.title/def.iconSvg/def.iconUrl/def.iconClass/def.label：用于宿主创建按钮
 - Mod.registerMode(def)
   - 需要权限 ui:mode
   - def.id：模式 id
   - def.ui：可选 Overlay 定义（kind=html/asset）
+- Mod.registerMenuButton(def)
+  - 需要权限 ui:menu
+  - def.id：按钮 id（与 pluginId 组合成全局唯一）
+  - def.title：用于 tooltip/无障碍标签
+  - def.iconSvg/def.iconUrl/def.iconClass/def.label：用于宿主创建按钮
 - Mod.showOverlay(def)
   - 需要权限 ui:overlay
   - def.kind='html'：def.html 为 HTML 字符串
@@ -191,4 +199,3 @@ Worker 启动后，宿主会注入全局对象 `self.Mod`，并以事件方式�
 - 主题命名：优先使用 `pluginId/<feature>` 私有主题；公共主题使用 `public/<event>` 并明确版本/兼容策略。
 - 权限最小化：只申请需要的 permissions，减少潜在风险面。
 - UI 扩展一致性：工具按钮 iconSvg 需提供合理的 aria/title 文本；避免破坏宿主样式。
-
