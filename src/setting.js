@@ -20,6 +20,15 @@ const DEFAULTS = {
   showTooltips: true,
   multiTouchPen: false,
   smartInkRecognition: false,
+  penTail: {
+    enabled: false,
+    intensity: 50,
+    samplePoints: 10,
+    speedSensitivity: 100,
+    pressureSensitivity: 100,
+    shape: 'natural',
+    profile: 'standard'
+  },
   annotationPenColor: '#FF0000',
   whiteboardPenColor: '#000000',
   visualStyle: 'blur', // 'solid' | 'blur' | 'transparent'

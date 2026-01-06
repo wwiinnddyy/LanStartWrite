@@ -105,6 +105,54 @@
                     </label>
                   </div>
                 </section>
+                <section class="settings-card" aria-label="笔锋功能">
+                  <div class="settings-card-title">笔锋功能</div>
+                  <div class="settings-card-body">
+                    <label class="settings-control"><input type="checkbox" id="optPenTailEnabled"> <span>启用末端采样笔锋</span></label>
+                    <div class="settings-divider"></div>
+                    <label class="settings-field">
+                      <span class="settings-field-label">参数预设</span>
+                      <select id="optPenTailProfile">
+                        <option value="standard">标准</option>
+                        <option value="calligraphy">书法</option>
+                        <option value="speed">速记</option>
+                      </select>
+                    </label>
+                    <div class="settings-divider"></div>
+                    <label class="settings-field">
+                      <span class="settings-field-label">笔锋强度 <span id="penTailIntensityText">50%</span></span>
+                      <input id="optPenTailIntensity" type="range" min="0" max="100" step="1" value="50" aria-label="笔锋强度">
+                    </label>
+                    <div class="settings-divider"></div>
+                    <label class="settings-field">
+                      <span class="settings-field-label">采样点数量 <span id="penTailSamplePointsText">10</span></span>
+                      <input id="optPenTailSamplePoints" type="range" min="5" max="20" step="1" value="10" aria-label="采样点数量">
+                    </label>
+                    <div class="settings-divider"></div>
+                    <label class="settings-field">
+                      <span class="settings-field-label">速度敏感度 <span id="penTailSpeedText">100%</span></span>
+                      <input id="optPenTailSpeedSensitivity" type="range" min="0" max="200" step="5" value="100" aria-label="速度敏感度">
+                    </label>
+                    <div class="settings-divider"></div>
+                    <label class="settings-field">
+                      <span class="settings-field-label">压力敏感度 <span id="penTailPressureText">100%</span></span>
+                      <input id="optPenTailPressureSensitivity" type="range" min="0" max="200" step="5" value="100" aria-label="压力敏感度">
+                    </label>
+                    <div class="settings-divider"></div>
+                    <label class="settings-field">
+                      <span class="settings-field-label">笔锋形状</span>
+                      <select id="optPenTailShape">
+                        <option value="sharp">锐利</option>
+                        <option value="round">圆润</option>
+                        <option value="natural">自然</option>
+                        <option value="custom">自定义</option>
+                      </select>
+                    </label>
+                    <div class="settings-divider"></div>
+                    <div class="settings-hint" style="padding-bottom:6px">实时预览</div>
+                    <canvas id="penTailPreview" class="pen-tail-preview" width="520" height="150" aria-label="笔锋预览"></canvas>
+                  </div>
+                </section>
                 <section class="settings-card" aria-label="智能功能">
                   <div class="settings-card-title">智能功能</div>
                   <div class="settings-card-body">

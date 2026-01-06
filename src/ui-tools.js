@@ -22,6 +22,7 @@ import { updateAppSettings } from './write_a_change.js';
 import { initPenUI, updatePenModeLabel } from './pen.js';
 import { initEraserUI, updateEraserModeLabel } from './erese.js';
 import { applyModeCanvasBackground } from './mode_background.js';
+import { buildPenTailSegment, normalizePenTailSettings } from './pen_tail.js';
 
 const colorTool = document.getElementById('colorTool');
 const pointerTool = document.getElementById('pointerTool');
@@ -784,6 +785,18 @@ const optTheme = document.getElementById('optTheme');
 const optTooltips = document.getElementById('optTooltips');
 const optMultiTouchPen = document.getElementById('optMultiTouchPen');
 const optAnnotationPenColor = document.getElementById('optAnnotationPenColor');
+const optPenTailEnabled = document.getElementById('optPenTailEnabled');
+const optPenTailProfile = document.getElementById('optPenTailProfile');
+const optPenTailIntensity = document.getElementById('optPenTailIntensity');
+const optPenTailSamplePoints = document.getElementById('optPenTailSamplePoints');
+const optPenTailSpeedSensitivity = document.getElementById('optPenTailSpeedSensitivity');
+const optPenTailPressureSensitivity = document.getElementById('optPenTailPressureSensitivity');
+const optPenTailShape = document.getElementById('optPenTailShape');
+const penTailIntensityText = document.getElementById('penTailIntensityText');
+const penTailSamplePointsText = document.getElementById('penTailSamplePointsText');
+const penTailSpeedText = document.getElementById('penTailSpeedText');
+const penTailPressureText = document.getElementById('penTailPressureText');
+const penTailPreview = document.getElementById('penTailPreview');
 const optSmartInk = document.getElementById('optSmartInk');
 const optVisualStyle = document.getElementById('optVisualStyle');
 const optCanvasColor = document.getElementById('optCanvasColor');
@@ -854,6 +867,7 @@ function _makeSettingsDraftFromSettings(s){
     multiTouchPen: !!src.multiTouchPen,
     annotationPenColor: normalizeHexColor(src.annotationPenColor, '#FF0000'),
     smartInkRecognition: !!src.smartInkRecognition,
+    penTail: normalizePenTailSettings(src.penTail),
     shortcuts: { undo: undoKey, redo: redoKey }
   };
 }
@@ -876,7 +890,7 @@ if (settingsPages && settingsPages.length) {
   for (const p of settingsPages) {
     const tab = String(p.dataset.tab || '');
     if (!tab) continue;
-    if (!p.hidden) _settingsLoadedTabs.add(tab);
+    _settingsLoadedTabs.add(tab);
   }
 }
 
@@ -942,6 +956,14 @@ function _validateSettingsDraft(d){
   if (redoKey && redoKey.length > 20) return { ok: false, message: '重做快捷键过长', focusId: 'keyRedo' };
   if (undoKey && redoKey && undoKey.toLowerCase() === redoKey.toLowerCase()) return { ok: false, message: '撤销与重做快捷键不能相同', focusId: 'keyRedo' };
 
+  const pt = normalizePenTailSettings(draft.penTail);
+  if (!['standard','calligraphy','speed'].includes(String(pt.profile || 'standard'))) return { ok: false, message: '笔锋预设值无效', focusId: 'optPenTailProfile' };
+  if (!(pt.intensity >= 0 && pt.intensity <= 100)) return { ok: false, message: '笔锋强度无效', focusId: 'optPenTailIntensity' };
+  if (!(pt.samplePoints >= 5 && pt.samplePoints <= 20)) return { ok: false, message: '采样点数量无效', focusId: 'optPenTailSamplePoints' };
+  if (!(pt.speedSensitivity >= 0 && pt.speedSensitivity <= 200)) return { ok: false, message: '速度敏感度无效', focusId: 'optPenTailSpeedSensitivity' };
+  if (!(pt.pressureSensitivity >= 0 && pt.pressureSensitivity <= 200)) return { ok: false, message: '压力敏感度无效', focusId: 'optPenTailPressureSensitivity' };
+  if (!['sharp','round','natural','custom'].includes(String(pt.shape || 'natural'))) return { ok: false, message: '笔锋形状无效', focusId: 'optPenTailShape' };
+
   return { ok: true };
 }
 
@@ -968,6 +990,22 @@ function _settingsUiReducer(state, action){
     if (key === 'shortcuts.undo' || key === 'shortcuts.redo') {
       const k = key.endsWith('undo') ? 'undo' : 'redo';
       next.shortcuts = Object.assign({}, next.shortcuts || {}, { [k]: String(a.value || '') });
+    } else if (key.startsWith('penTail.')) {
+      const sub = key.slice('penTail.'.length);
+      const cur = normalizePenTailSettings(next.penTail);
+      if (sub === 'profile') {
+        const prof = String(a.value || 'standard');
+        next.penTail = normalizePenTailSettings({ enabled: cur.enabled, profile: prof });
+      } else {
+        const patch = Object.assign({}, cur);
+        if (sub === 'enabled') patch.enabled = !!a.value;
+        else if (sub === 'intensity') patch.intensity = Number(a.value);
+        else if (sub === 'samplePoints') patch.samplePoints = Number(a.value);
+        else if (sub === 'speedSensitivity') patch.speedSensitivity = Number(a.value);
+        else if (sub === 'pressureSensitivity') patch.pressureSensitivity = Number(a.value);
+        else if (sub === 'shape') patch.shape = String(a.value || '');
+        next.penTail = normalizePenTailSettings(patch);
+      }
     } else if (key) {
       next[key] = a.value;
     }
@@ -1017,10 +1055,77 @@ function _renderSettingsUi(){
     if (optMultiTouchPen) optMultiTouchPen.checked = !!d.multiTouchPen;
     if (optAnnotationPenColor) optAnnotationPenColor.value = normalizeHexColor(d.annotationPenColor, '#FF0000');
     if (optSmartInk) optSmartInk.checked = !!d.smartInkRecognition;
+    const pt = normalizePenTailSettings(d.penTail);
+    if (optPenTailEnabled) optPenTailEnabled.checked = !!pt.enabled;
+    if (optPenTailProfile) optPenTailProfile.value = String(pt.profile || 'standard');
+    if (optPenTailIntensity) optPenTailIntensity.value = String(pt.intensity);
+    if (optPenTailSamplePoints) optPenTailSamplePoints.value = String(pt.samplePoints);
+    if (optPenTailSpeedSensitivity) optPenTailSpeedSensitivity.value = String(pt.speedSensitivity);
+    if (optPenTailPressureSensitivity) optPenTailPressureSensitivity.value = String(pt.pressureSensitivity);
+    if (optPenTailShape) optPenTailShape.value = String(pt.shape || 'natural');
+    try{ if (penTailIntensityText) penTailIntensityText.textContent = `${pt.intensity}%`; }catch(e){}
+    try{ if (penTailSamplePointsText) penTailSamplePointsText.textContent = `${pt.samplePoints}`; }catch(e){}
+    try{ if (penTailSpeedText) penTailSpeedText.textContent = `${pt.speedSensitivity}%`; }catch(e){}
+    try{ if (penTailPressureText) penTailPressureText.textContent = `${pt.pressureSensitivity}%`; }catch(e){}
     if (keyUndo) keyUndo.value = d.shortcuts && typeof d.shortcuts.undo === 'string' ? d.shortcuts.undo : '';
     if (keyRedo) keyRedo.value = d.shortcuts && typeof d.shortcuts.redo === 'string' ? d.shortcuts.redo : '';
   }catch(e){}
   _settingsUiSyncing = false;
+  try{ _schedulePenTailPreviewRender(normalizePenTailSettings(d.penTail)); }catch(e){}
+}
+
+let _penTailPreviewRaf = 0;
+let _penTailPreviewLastCfg = null;
+function _schedulePenTailPreviewRender(cfg){
+  _penTailPreviewLastCfg = cfg;
+  if (_penTailPreviewRaf) return;
+  _penTailPreviewRaf = requestAnimationFrame(()=>{
+    _penTailPreviewRaf = 0;
+    _renderPenTailPreview(_penTailPreviewLastCfg);
+  });
+}
+
+function _renderPenTailPreview(cfg){
+  if (!penTailPreview) return;
+  const c = normalizePenTailSettings(cfg);
+  const ctx = penTailPreview.getContext('2d');
+  if (!ctx) return;
+
+  const w = penTailPreview.width || 520;
+  const h = penTailPreview.height || 150;
+  ctx.clearRect(0, 0, w, h);
+
+  const baseSize = 6;
+  const pts = [];
+  const t0 = 0;
+  for (let i = 0; i < 26; i++) {
+    const u = i / 25;
+    const x = 18 + u * (w - 36);
+    const y = h * 0.58 + Math.sin(u * Math.PI * 1.3) * (h * 0.18);
+    const dt = (i < 12) ? 18 : 8;
+    const t = (i === 0) ? t0 : (pts[pts.length - 1].t + dt);
+    const p = (i < 14) ? 0.25 + u * 0.55 : 0.65 - (u - 0.5) * 0.5;
+    pts.push({ x, y, t, p: Math.max(0.05, Math.min(1, p)) });
+  }
+
+  const segRes = buildPenTailSegment(pts, baseSize, c);
+  const outPts = segRes && Array.isArray(segRes.segment) ? segRes.segment : pts;
+
+  ctx.save();
+  ctx.strokeStyle = '#111';
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  for (let i = 1; i < outPts.length; i++) {
+    const a = outPts[i - 1];
+    const b = outPts[i];
+    const lw = Math.max(0.2, Number((a && a.w) || (b && b.w) || baseSize) || baseSize);
+    ctx.lineWidth = lw;
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+  }
+  ctx.restore();
 }
 
 _settingsUiStore.subscribe(_renderSettingsUi);
@@ -1088,7 +1193,7 @@ function _wireSettingsUi(){
     const evt = mode === 'input' ? 'input' : 'change';
     el.addEventListener(evt, ()=>{
       if (_settingsUiSyncing) return;
-      const value = (el.type === 'checkbox') ? !!el.checked : String(el.value || '');
+      const value = (el.type === 'checkbox') ? !!el.checked : ((el.type === 'range' || el.type === 'number') ? Number(el.value) : String(el.value || ''));
       _settingsUiStore.dispatch({ type: 'UPDATE_FIELD', key, value });
     });
   };
@@ -1101,6 +1206,13 @@ function _wireSettingsUi(){
   bindField(optTooltips, 'showTooltips');
   bindField(optMultiTouchPen, 'multiTouchPen');
   bindField(optAnnotationPenColor, 'annotationPenColor', 'input');
+  bindField(optPenTailEnabled, 'penTail.enabled');
+  bindField(optPenTailProfile, 'penTail.profile');
+  bindField(optPenTailIntensity, 'penTail.intensity', 'input');
+  bindField(optPenTailSamplePoints, 'penTail.samplePoints', 'input');
+  bindField(optPenTailSpeedSensitivity, 'penTail.speedSensitivity', 'input');
+  bindField(optPenTailPressureSensitivity, 'penTail.pressureSensitivity', 'input');
+  bindField(optPenTailShape, 'penTail.shape');
   bindField(optSmartInk, 'smartInkRecognition');
   bindField(keyUndo, 'shortcuts.undo', 'input');
   bindField(keyRedo, 'shortcuts.redo', 'input');
@@ -1494,6 +1606,7 @@ if (saveSettings) saveSettings.addEventListener('click', ()=>{
     multiTouchPen: !!d.multiTouchPen,
     annotationPenColor: normalizeHexColor(d.annotationPenColor, '#FF0000'),
     smartInkRecognition: !!d.smartInkRecognition,
+    penTail: normalizePenTailSettings(d.penTail),
     shortcuts: {
       undo: d.shortcuts && typeof d.shortcuts.undo === 'string' ? d.shortcuts.undo.trim() : '',
       redo: d.shortcuts && typeof d.shortcuts.redo === 'string' ? d.shortcuts.redo.trim() : ''

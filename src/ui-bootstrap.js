@@ -22,13 +22,13 @@ async function loadFragment(key){
 
 async function runUnitTests(){
   const prior = localStorage.getItem('appSettings');
-  const assert = (cond, msg) => { if (!cond) throw new Error(msg || 'assert'); };
-  const eq = (a, b, msg) => { if (a !== b) throw new Error(msg || `expected ${String(b)} got ${String(a)}`); };
-  try{
-    try{ localStorage.removeItem('appSettings'); }catch(e){}
-    const SettingsMod = await import('./setting.js');
-    const MessageMod = await import('./message.js');
-    const WriteMod = await import('./write_a_change.js');
+    const assert = (cond, msg) => { if (!cond) throw new Error(msg || 'assert'); };
+    const eq = (a, b, msg) => { if (a !== b) throw new Error(msg || `expected ${String(b)} got ${String(a)}`); };
+    try{
+      try{ localStorage.removeItem('appSettings'); }catch(e){}
+      const SettingsMod = await import('./setting.js');
+      const MessageMod = await import('./message.js');
+      const WriteMod = await import('./write_a_change.js');
     const Settings = SettingsMod.default;
     const { buildPenColorSettingsPatch, getPenColorFromSettings, normalizeHexColor } = SettingsMod;
     const Message = MessageMod.default;
@@ -74,6 +74,16 @@ async function runUnitTests(){
       eq(normalizeHexColor('#a1b2c3', '#000000'), '#A1B2C3');
       eq(normalizeHexColor('A1B2C3', '#000000'), '#A1B2C3');
       eq(normalizeHexColor('bad', '#000000'), '#000000');
+    }
+
+    {
+      const el = document.createElement('div');
+      el.className = 'settings-loading';
+      el.hidden = true;
+      document.body.appendChild(el);
+      const disp = String(getComputedStyle(el).display || '');
+      assert(disp === 'none', `settings-loading hidden display none (got ${disp})`);
+      el.remove();
     }
 
     {
@@ -456,6 +466,43 @@ async function runUnitTests(){
       const importBad = await invoke('note:import-cubenote', { path: String(tmpBad.path), requestId: `t-${Date.now()}-3` });
       assert(importBad && importBad.success === false, 'import-cubenote rejects invalid file');
     }
+
+    {
+      document.body.innerHTML = '<div class="canvas-wrap"><canvas id="board"></canvas></div>';
+      const toolNodes = await loadFragment('./tool_ui.html');
+      toolNodes.forEach(n => document.body.appendChild(n));
+      const moreNodes = await loadFragment('./more_decide_ui.html');
+      const panel = document.querySelector('.floating-panel');
+      if (panel) moreNodes.forEach(n => panel.appendChild(n)); else moreNodes.forEach(n => document.body.appendChild(n));
+      const settingsNodes = await loadFragment('./setting_ui.html');
+      settingsNodes.forEach(n => document.body.appendChild(n));
+
+      await import(`./ui-tools.js?tabsTest=${Date.now()}`);
+
+      const tab = document.querySelector('.settings-tab[data-tab="appearance"]') || document.querySelector('.settings-tab[data-tab="input"]');
+      assert(!!tab, 'settings tab exists');
+      tab.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+      const waitRaf = ()=>new Promise(r => {
+        try{
+          if (typeof requestAnimationFrame === 'function') requestAnimationFrame(()=>r());
+          else setTimeout(()=>r(), 16);
+        }catch(e){ setTimeout(()=>r(), 16); }
+      });
+      await new Promise(r => setTimeout(r, 120));
+      await waitRaf();
+      await waitRaf();
+      eq(tab.getAttribute('aria-selected'), 'true', 'tab click selects');
+      const panelId = String(tab.getAttribute('aria-controls') || '');
+      const page = panelId ? document.getElementById(panelId) : null;
+      assert(!!page && page.hidden === false, 'tab click shows page');
+      eq(page.getAttribute('aria-hidden'), 'false', 'tab click aria-hidden false');
+
+      const loading = document.querySelector('.settings-loading');
+      assert(!!loading, 'settings-loading exists');
+      const disp = String(getComputedStyle(loading).display || '');
+      assert(disp === 'none', `settings-loading hidden after load (got ${disp})`);
+    }
   }finally{
     try{
       if (prior === null) localStorage.removeItem('appSettings');
@@ -531,6 +578,62 @@ window.addEventListener('DOMContentLoaded', async ()=>{
         }catch(e){}
       }
 
+      let _lastTouchActionAt = 0;
+      function bindTouchTap(el, onTap, opts){
+        if (!el || typeof onTap !== 'function') return;
+        const delayMs = (opts && typeof opts.delayMs === 'number') ? Math.max(0, opts.delayMs) : 20;
+        const moveThreshold = (opts && typeof opts.moveThreshold === 'number') ? Math.max(0, opts.moveThreshold) : 8;
+        let down = null;
+        let moved = false;
+
+        function clear(){
+          down = null;
+          moved = false;
+        }
+
+        el.addEventListener('pointerdown', (e)=>{
+          if (!e || e.pointerType !== 'touch') return;
+          _lastTouchActionAt = Date.now();
+          down = { id: e.pointerId, x: e.clientX, y: e.clientY, t: (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now() };
+          moved = false;
+          try{ if (el.setPointerCapture) el.setPointerCapture(e.pointerId); }catch(err){}
+        }, { passive: true });
+
+        el.addEventListener('pointermove', (e)=>{
+          if (!down || !e || e.pointerId !== down.id) return;
+          const dx = (e.clientX - down.x);
+          const dy = (e.clientY - down.y);
+          if ((dx*dx + dy*dy) > (moveThreshold*moveThreshold)) moved = true;
+        }, { passive: true });
+
+        el.addEventListener('pointerup', (e)=>{
+          if (!down || !e || e.pointerId !== down.id) return;
+          const tUp = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+          const elapsed = tUp - down.t;
+          const shouldFire = !moved;
+          const delay = Math.max(0, delayMs - elapsed);
+          const ev = e;
+          clear();
+          try{ if (el.releasePointerCapture) el.releasePointerCapture(ev.pointerId); }catch(err){}
+          if (!shouldFire) return;
+          _lastTouchActionAt = Date.now();
+          try{ ev.preventDefault(); ev.stopImmediatePropagation(); ev.stopPropagation(); }catch(err){}
+          setTimeout(()=>{ try{ onTap(ev); }catch(err){} }, delay);
+        });
+
+        el.addEventListener('pointercancel', (e)=>{
+          if (!down || !e || e.pointerId !== down.id) return;
+          clear();
+          try{ if (el.releasePointerCapture) el.releasePointerCapture(e.pointerId); }catch(err){}
+        });
+
+        el.addEventListener('click', (e)=>{
+          if (Date.now() - _lastTouchActionAt < 400) {
+            try{ e.preventDefault(); e.stopImmediatePropagation(); e.stopPropagation(); }catch(err){}
+          }
+        }, true);
+      }
+
       function _broadcastSettings(merged){
         try{
           if (!window || !window.electronAPI || typeof window.electronAPI.invokeMain !== 'function') return;
@@ -539,6 +642,10 @@ window.addEventListener('DOMContentLoaded', async ()=>{
       }
 
       const settingsModal = document.getElementById('settingsModal');
+      const settingsContent = settingsModal ? settingsModal.querySelector('.settings-content') : null;
+      const settingsLoading = settingsModal ? settingsModal.querySelector('.settings-loading') : null;
+      const settingsTabButtons = settingsModal ? Array.from(settingsModal.querySelectorAll('.settings-tab')) : [];
+      const settingsPages = settingsModal ? Array.from(settingsModal.querySelectorAll('.settings-page')) : [];
       const closeSettings = document.getElementById('closeSettings');
       const saveSettings = document.getElementById('saveSettings');
       const resetSettingsBtn = document.getElementById('resetSettings');
@@ -555,6 +662,117 @@ window.addEventListener('DOMContentLoaded', async ()=>{
       const keyRedo = document.getElementById('keyRedo');
       const previewSettingsBtn = document.getElementById('previewSettings');
       const revertPreviewBtn = document.getElementById('revertPreview');
+
+      function _setSettingsLoading(loading){
+        const on = !!loading;
+        try{ if (settingsContent) settingsContent.setAttribute('aria-busy', on ? 'true' : 'false'); }catch(e){}
+        try{
+          if (settingsLoading) {
+            if (on) { settingsLoading.hidden = false; settingsLoading.setAttribute('aria-hidden', 'false'); }
+            else { settingsLoading.hidden = true; settingsLoading.setAttribute('aria-hidden', 'true'); }
+          }
+        }catch(e){}
+      }
+
+      const _SETTINGS_TAB_STORAGE_KEY = 'settingsSelectedTab';
+      function _readPersistedSettingsTab(){
+        try{
+          const v = localStorage.getItem(_SETTINGS_TAB_STORAGE_KEY);
+          return v ? String(v) : '';
+        }catch(e){ return ''; }
+      }
+
+      function _writePersistedSettingsTab(tab){
+        try{ localStorage.setItem(_SETTINGS_TAB_STORAGE_KEY, String(tab || '')); }catch(e){}
+      }
+
+      function _getFirstSettingsTab(){
+        const t = settingsTabButtons && settingsTabButtons[0] ? String(settingsTabButtons[0].dataset.tab || '') : '';
+        return t || 'general';
+      }
+
+      function _normalizeSettingsTab(tab){
+        const t = String(tab || '');
+        if (!t) return _getFirstSettingsTab();
+        if (!settingsTabButtons || !settingsTabButtons.length) return t;
+        const ok = settingsTabButtons.some(b => String(b.dataset.tab || '') === t);
+        return ok ? t : _getFirstSettingsTab();
+      }
+
+      const _settingsLoadedTabs = new Set();
+      if (settingsPages && settingsPages.length) {
+        for (const p of settingsPages) {
+          const tab = String(p.dataset.tab || '');
+          if (!tab) continue;
+          _settingsLoadedTabs.add(tab);
+        }
+      }
+
+      const _settingsPageHideTimers = new WeakMap();
+      function _activateSettingsPage(page){
+        if (!page) return;
+        const t = _settingsPageHideTimers.get(page);
+        if (t) { clearTimeout(t); _settingsPageHideTimers.delete(page); }
+        try{ page.hidden = false; }catch(e){}
+        try{ page.setAttribute('aria-hidden', 'false'); }catch(e){}
+        requestAnimationFrame(()=>{ try{ page.classList.add('active'); }catch(e){} });
+      }
+
+      function _deactivateSettingsPage(page){
+        if (!page) return;
+        try{ page.classList.remove('active'); }catch(e){}
+        try{ page.setAttribute('aria-hidden', 'true'); }catch(e){}
+        const timer = setTimeout(()=>{ try{ page.hidden = true; }catch(e){} }, 320);
+        _settingsPageHideTimers.set(page, timer);
+      }
+
+      function _renderSettingsTab(tab){
+        const sel = _normalizeSettingsTab(tab);
+        if (settingsTabButtons && settingsTabButtons.length) {
+          for (const btn of settingsTabButtons) {
+            const t = String(btn.dataset.tab || '');
+            const active = t === sel;
+            try{ btn.setAttribute('aria-selected', active ? 'true' : 'false'); }catch(e){}
+            try{ btn.tabIndex = active ? 0 : -1; }catch(e){}
+          }
+        }
+        if (settingsPages && settingsPages.length) {
+          for (const p of settingsPages) {
+            const t = String(p.dataset.tab || '');
+            if (!t) continue;
+            if (t === sel) _activateSettingsPage(p);
+            else _deactivateSettingsPage(p);
+          }
+        }
+      }
+
+      function _loadSettingsTabAsync(tab){
+        const t = String(tab || '');
+        if (!t) return Promise.resolve();
+        if (_settingsLoadedTabs.has(t)) return Promise.resolve();
+        _setSettingsLoading(true);
+        return new Promise((resolve)=>{
+          setTimeout(()=>{
+            _settingsLoadedTabs.add(t);
+            _setSettingsLoading(false);
+            resolve();
+          }, 80);
+        });
+      }
+
+      function _selectSettingsTab(tab, opts){
+        const t = _normalizeSettingsTab(tab);
+        _writePersistedSettingsTab(t);
+        _renderSettingsTab(t);
+        _loadSettingsTabAsync(t).then(()=>{}).catch(()=>{ _setSettingsLoading(false); });
+        const o = opts && typeof opts === 'object' ? opts : {};
+        if (o.focus) {
+          try{
+            const btn = settingsModal ? settingsModal.querySelector(`.settings-tab[data-tab="${t}"]`) : null;
+            if (btn) btn.focus();
+          }catch(e){}
+        }
+      }
 
       let _previewBackup = null;
 
@@ -618,6 +836,21 @@ window.addEventListener('DOMContentLoaded', async ()=>{
 
       [optAutoResize,optCollapsed,optTheme,optVisualStyle,optCanvasColor,optTooltips,optMultiTouchPen,optSmartInk,optAnnotationPenColor,keyUndo,keyRedo].forEach(_wireRealtime);
 
+      if (settingsTabButtons && settingsTabButtons.length) {
+        for (const btn of settingsTabButtons) {
+          btn.addEventListener('click', ()=>{
+            const t = String(btn.dataset.tab || '');
+            if (!t) return;
+            _selectSettingsTab(t, { focus: false });
+          });
+          bindTouchTap(btn, ()=>{
+            const t = String(btn.dataset.tab || '');
+            if (!t) return;
+            _selectSettingsTab(t, { focus: true });
+          }, { delayMs: 20 });
+        }
+      }
+
       if (saveSettings) saveSettings.addEventListener('click', ()=>{ _saveAndBroadcast(_readForm()); });
       if (resetSettingsBtn) resetSettingsBtn.addEventListener('click', ()=>{
         Settings.resetSettings();
@@ -649,10 +882,12 @@ window.addEventListener('DOMContentLoaded', async ()=>{
       });
 
       const initial = Settings.loadSettings();
+      _setSettingsLoading(false);
       _applyToForm(initial);
       applyTheme(initial.theme || 'light');
       applyTooltips(typeof initial.showTooltips !== 'undefined' ? !!initial.showTooltips : true);
       applyVisualStyle(initial.visualStyle || 'blur');
+      _selectSettingsTab(_readPersistedSettingsTab() || _getFirstSettingsTab(), { focus: false });
       if (settingsModal) {
         try{ settingsModal.classList.add('open'); }catch(e){}
         try{ settingsModal.setAttribute('aria-hidden','false'); }catch(e){}

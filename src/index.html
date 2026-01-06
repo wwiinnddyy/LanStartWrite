@@ -12,10 +12,69 @@
 
     <script type="module" src="ui-bootstrap.js"></script>
     <style>
-      :root{--accent:#2b7cff}
-      html,body{height:100%;margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans","Helvetica Neue",Arial,"Apple Color Emoji","Segoe UI Emoji";background:transparent}
+      :root{
+        --accent:#2b7cff;
+        /* Material 3 Expressive Tokens - Light */
+        --md-sys-color-primary: #005ac1;
+        --md-sys-color-on-primary: #ffffff;
+        --md-sys-color-secondary: #535f70;
+        --md-sys-color-on-secondary: #ffffff;
+        --md-sys-color-surface: #fdfbff;
+        --md-sys-color-on-surface: #1a1c1e;
+        --md-sys-color-outline: #73777f;
+        
+        --text-high: rgba(0,0,0,0.87);
+        --text-medium: rgba(0,0,0,0.60);
+        --text-disabled: rgba(0,0,0,0.38);
+      }
+      html,body{height:100%;margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans","Helvetica Neue",Arial,"Apple Color Emoji","Segoe UI Emoji";background:transparent;color: var(--text-high);transition: background-color 0.3s ease, color 0.3s ease;}
       .canvas-wrap{height:100%;background:transparent;display:flex}
       body[data-app-mode="whiteboard"] .canvas-wrap{background:#ffffff}
+      
+      /* Material 3 Button Styles */
+      .md3-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0 24px;
+        height: 40px;
+        border-radius: 20px;
+        font-size: 14px;
+        font-weight: 500;
+        letter-spacing: 0.1px;
+        cursor: pointer;
+        border: none;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        gap: 8px;
+        user-select: none;
+      }
+      .md3-button.filled {
+        background-color: var(--md-sys-color-primary);
+        color: var(--md-sys-color-on-primary);
+      }
+      .md3-button.filled:hover {
+        box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        filter: brightness(1.1);
+      }
+      .md3-button.tonal {
+        background-color: var(--md-sys-color-secondary);
+        color: var(--md-sys-color-on-secondary);
+        opacity: 0.8;
+      }
+      .md3-button.text {
+        background: transparent;
+        color: var(--md-sys-color-primary);
+        padding: 0 12px;
+      }
+      .md3-button.text:hover {
+        background: rgba(0, 90, 193, 0.08);
+      }
+      .md3-button:disabled {
+        opacity: 0.38;
+        cursor: default;
+        pointer-events: none;
+      }
+
       #board{flex:1;display:block;width:100%;height:100%;touch-action:none;background:transparent}
       .floating-panel{position:fixed;right:20px;top:80px;width:auto;min-width:64px;max-width:calc(100vw - 40px);border-radius:18px;padding:12px;background:rgba(255,255,255,0.96);box-shadow:0 8px 24px rgba(0,0,0,0.15);z-index:3000;display:flex;flex-direction:column;gap:10px;align-items:flex-start;transition:width 240ms cubic-bezier(0.22,0.9,0.33,1),border-radius 200ms ease}
       /* blur + translucent style for floating panel */
@@ -79,6 +138,7 @@
       .settings-content{min-width:0;min-height:0;position:relative}
       .settings-content-inner{height:100%;min-height:0;overflow:auto;padding-right:4px}
       .settings-loading{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:10px;background:rgba(255,255,255,0.72);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);z-index:2}
+      .settings-loading[hidden]{display:none !important}
       .settings-spinner{width:18px;height:18px;border-radius:999px;border:2px solid rgba(0,0,0,0.18);border-top-color:var(--accent);animation:settingsSpin 900ms linear infinite}
       .settings-loading-text{font-size:12px;font-weight:700;color:#333}
       @keyframes settingsSpin{to{transform:rotate(360deg)}}
@@ -96,6 +156,7 @@
       .settings-divider{height:1px;background:rgba(0,0,0,0.08)}
       .settings-row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
       .settings-hint{font-size:12px;color:#555}
+      .pen-tail-preview{width:100%;height:150px;display:block;border:1px solid rgba(0,0,0,0.10);border-radius:12px;background:rgba(255,255,255,0.85)}
       .settings-footer{display:flex;justify-content:flex-end;gap:8px;padding:8px 12px 12px}
       
       .plugin-panel{width:640px;max-width:92vw}
@@ -135,8 +196,31 @@
 
       /* Dark theme styles */
       /* Dark theme palette and layered blacks */
-      .theme-dark body, .theme-dark html { background: #0b0b0c; color: #e6e6e6; }
-      .theme-dark { --bg-1: #0b0b0c; --bg-2: rgba(20,20,22,0.7); --panel: rgba(24,24,26,0.6); --surface: #121214; --muted: #9aa0a6; --text: #e6e6e6; --subtle: #bdbdbd; --accent: #5aa0ff; }
+      .theme-dark {
+        --bg-1: #0b0b0c;
+        --bg-2: rgba(20,20,22,0.7);
+        --panel: rgba(24,24,26,0.6);
+        --surface: #121214;
+        --muted: #9aa0a6;
+        --text: #e6e6e6;
+        --subtle: #bdbdbd;
+        --accent: #5aa0ff;
+
+        /* Material 3 Expressive Tokens - Dark */
+        --md-sys-color-primary: #adc6ff;
+        --md-sys-color-on-primary: #002e69;
+        --md-sys-color-secondary: #bbc7db;
+        --md-sys-color-on-secondary: #253140;
+        --md-sys-color-surface: #1a1c1e;
+        --md-sys-color-on-surface: #e2e2e6;
+        --md-sys-color-outline: #8d9199;
+
+        --text-high: rgba(255,255,255,0.87);
+        --text-medium: rgba(255,255,255,0.60);
+        --text-disabled: rgba(255,255,255,0.38);
+      }
+      .theme-dark body, .theme-dark html { background: transparent; color: var(--text-high); }
+      .theme-dark body[data-app-mode="whiteboard"] .canvas-wrap { background: var(--bg-1); }
       .theme-dark .floating-panel{background: var(--panel); box-shadow: 0 10px 36px rgba(0,0,0,0.7); border: 1px solid rgba(255,255,255,0.04);}
       .theme-dark .tool-btn{background: rgba(255,255,255,0.02); border-color: rgba(255,255,255,0.05); color: var(--text);}
       .theme-dark .tool-btn:hover{background: rgba(255,255,255,0.04)}
