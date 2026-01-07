@@ -2,9 +2,11 @@ export function applyModeCanvasBackground(mode, canvasColor, deps){
   try{
     const wrap = document.querySelector('.canvas-wrap');
     const board = document.getElementById('board');
+    const root = document.documentElement;
+    const isDarkUi = !!(root && root.classList && root.classList.contains('theme-dark'));
 
     const map = {
-      white: { bg: '#ffffff', pen: '#000000' },
+      white: { bg: isDarkUi ? '#121212' : '#ffffff', pen: isDarkUi ? '#ffffff' : '#000000' },
       black: { bg: '#000000', pen: '#ffffff' },
       chalkboard: { bg: '#041604ff', pen: '#ffffff' }
     };

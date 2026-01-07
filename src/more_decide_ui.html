@@ -55,21 +55,54 @@
 </div>
 
 <div class="submenu actions" id="moreMenu" aria-hidden="true" data-pinned="false">
-  <div class="submenu-content">
-    <div class="submenu-quick" role="toolbar" aria-label="快捷功能">
-      <div class="submenu-quick-grid" id="moreMenuQuickGrid"></div>
+  <div class="submenu-content more-split">
+    <div class="more-region more-left" aria-label="功能库">
+      <div class="more-title">功能库</div>
+      <div class="submenu-quick" role="toolbar" aria-label="功能库快捷功能">
+        <div class="submenu-quick-grid" id="moreMenuQuickGrid"></div>
+      </div>
     </div>
-    <div class="submenu-body">
-      <button id="noteExportBtn" class="mode-btn">导出 .cubenote</button>
-      <button id="noteImportBtn" class="mode-btn">导入 .cubenote</button>
-      <button id="settingsBtn" class="mode-btn">设置</button>
-      <button id="pluginManagerBtn" class="mode-btn">插件</button>
-      <button id="aboutBtn" class="mode-btn">关于</button>
-      <button id="closeWhiteboardBtn" class="mode-btn">关闭白板</button>
+    <div class="more-divider" aria-hidden="true"></div>
+    <div class="more-region more-right" aria-label="更多设置">
+      <div class="more-title">更多设置</div>
+      <div class="submenu-body">
+        <button id="noteExportBtn" class="mode-btn">导出 .cubenote</button>
+        <button id="noteImportBtn" class="mode-btn">导入 .cubenote</button>
+        <button id="settingsBtn" class="mode-btn">设置</button>
+        <button id="pluginManagerBtn" class="mode-btn">插件</button>
+        <button id="aboutBtn" class="mode-btn">关于</button>
+        <button id="closeWhiteboardBtn" class="mode-btn">关闭白板</button>
+      </div>
     </div>
   </div>
   <div class="submenu-footer">
     <button class="submenu-drag-handle" title="拖动子菜单">⋮</button>
     <button class="submenu-pin" title="固定/取消固定">📌</button>
+  </div>
+</div>
+
+<div id="resourceModal" class="settings-modal resource-modal" role="dialog" aria-hidden="true">
+  <div class="settings-backdrop"></div>
+  <div class="settings-panel resource-panel" aria-modal="true" aria-label="资源库管理">
+    <div class="settings-header">
+      <h3>资源库</h3>
+      <button id="closeResourceModal" class="tool-btn" aria-label="关闭">✕</button>
+    </div>
+    <div class="settings-body resource-body">
+      <div class="resource-layout">
+        <div class="resource-sort">
+          <div class="resource-hint">拖拽排序，实时预览</div>
+          <div id="resourceList" class="resource-list" role="list"></div>
+        </div>
+        <div class="resource-preview" aria-label="预览">
+          <div class="resource-preview-title">预览</div>
+          <div id="resourcePreviewGrid" class="resource-preview-grid"></div>
+        </div>
+      </div>
+    </div>
+    <div class="resource-footer">
+      <button id="resourceResetBtn" class="mode-btn" type="button">恢复默认</button>
+      <button id="resourceSaveBtn" class="md3-button filled" type="button">保存排序</button>
+    </div>
   </div>
 </div>

@@ -21,6 +21,7 @@ import Message, { EVENTS } from './message.js';
 import { updateAppSettings } from './write_a_change.js';
 import { initPenUI, updatePenModeLabel } from './pen.js';
 import { initEraserUI, updateEraserModeLabel } from './erese.js';
+import { initAppCase } from './app_case.js';
 import { applyModeCanvasBackground } from './mode_background.js';
 import { buildPenTailSegment, normalizePenTailSettings } from './pen_tail.js';
 import { applyThemeMode, initThemeAutoSync, buildContrastReport, measureApplyCost, serializeLanTheme, parseLanTheme } from './colors_features.js';
@@ -675,6 +676,8 @@ if (moreTool) {
   if (closeWhiteboardBtn) { closeWhiteboardBtn.addEventListener('click', onCloseWhiteboard); bindTouchTap(closeWhiteboardBtn, onCloseWhiteboard, { delayMs: 20 }); }
 }
 
+try{ initAppCase(); }catch(e){}
+
 if (exitTool) {
   const toggleMode = ()=>{
     if (_appMode === APP_MODES.WHITEBOARD) enterAnnotationMode();
@@ -688,6 +691,10 @@ if (exitTool) {
 
 document.addEventListener('click', (e)=>{ if (e.target.closest && (e.target.closest('.tool') || e.target.closest('.drag-handle'))) return; closeAllSubmenus(); syncToolbarIcons(); applyWindowInteractivity(); scheduleInteractiveRectsUpdate(); });
 document.addEventListener('keydown', (e)=>{ if (e.key==='Escape') { closeAllSubmenus(); syncToolbarIcons(); applyWindowInteractivity(); scheduleInteractiveRectsUpdate(); } });
+try{
+  Message.on(EVENTS.SUBMENU_OPEN, ()=>{ applyWindowInteractivity(); scheduleInteractiveRectsUpdate(); });
+  Message.on(EVENTS.SUBMENU_CLOSE, ()=>{ applyWindowInteractivity(); scheduleInteractiveRectsUpdate(); });
+}catch(e){}
 
 // pin button handlers: toggle data-pinned on submenu
 // initialize pin handlers from more_decide_windows
