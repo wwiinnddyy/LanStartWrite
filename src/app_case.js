@@ -1,6 +1,8 @@
 import Settings from './setting.js';
 import { updateAppSettings } from './write_a_change.js';
 import Message, { EVENTS } from './message.js';
+import ButtonBox from './button_box.js';
+import { openPdfFile } from './pdf_viewer.js';
 
 /**
  * 功能库统一功能管理模块（Feature Hub）
@@ -71,7 +73,8 @@ const IDS = {
   resourceResetBtn: 'resourceResetBtn',
   closeResourceModal: 'closeResourceModal',
   btnResource: 'appCaseResourceBtn',
-  btnTheme: 'appCaseThemeBtn'
+  btnTheme: 'appCaseThemeBtn',
+  btnPdf: 'appCasePdfBtn'
 };
 
 const DB = {
@@ -448,6 +451,15 @@ export function invoke(featureId, params, callback){
   return featureHub.invoke(featureId, params, callback);
 }
 
+export function addFeatureButtonToToolbar(featureId, defLike, options) {
+  const fid = String(featureId || '');
+  if (!fid) return null;
+  const base = defLike && typeof defLike === 'object' ? defLike : {};
+  const title = base.title || '';
+  const iconSvg = base.iconSvg || '';
+  return ButtonBox.createToolbarButtonForFeature(fid, { title, iconSvg }, options);
+}
+
 function _ensureSeq(btn){
   if (!btn || !(btn instanceof HTMLElement)) return;
   if (btn.dataset.appCaseSeq) return;
@@ -493,19 +505,29 @@ function _applyOrderToGrid(orderIds){
 }
 
 function _buildToolBtn(id, title, iconSvg){
-  const btn = document.createElement('button');
-  btn.className = 'tool-btn';
-  btn.id = id;
-  btn.setAttribute('title', title);
-  btn.setAttribute('aria-label', title);
-  btn.innerHTML = iconSvg;
+  const logicalId = id ? String(id) : '';
+  const base = {
+    id: logicalId,
+    title: title || '',
+    iconSvg: iconSvg || '',
+    kind: 'feature',
+    source: 'feature'
+  };
+  const reg = ButtonBox.registerButton(base) || base;
+  const btn = ButtonBox.createButtonElement(reg, {
+    domId: id,
+    variant: 'toolbar'
+  });
+  if (!btn) return null;
+  ButtonBox.registerInstance(reg.id, btn, 'feature-grid');
   return btn;
 }
 
 const ICONS = {
   library: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><g fill="currentColor"><path d="M5.75 4A2.75 2.75 0 0 0 3 6.75v10.5A2.75 2.75 0 0 0 5.75 20h12.5A2.75 2.75 0 0 0 21 17.25V6.75A2.75 2.75 0 0 0 18.25 4zM4.5 6.75c0-.69.56-1.25 1.25-1.25h12.5c.69 0 1.25.56 1.25 1.25v10.5c0 .69-.56 1.25-1.25 1.25H5.75c-.69 0-1.25-.56-1.25-1.25z"/><path d="M8 8.25c0-.41.34-.75.75-.75h6.5a.75.75 0 0 1 0 1.5h-6.5A.75.75 0 0 1 8 8.25m0 3c0-.41.34-.75.75-.75h6.5a.75.75 0 0 1 0 1.5h-6.5A.75.75 0 0 1 8 11.25m0 3c0-.41.34-.75.75-.75h4.5a.75.75 0 0 1 0 1.5h-4.5A.75.75 0 0 1 8 14.25"/></g></svg>`,
   sun: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><g fill="currentColor"><path d="M12 18.5a6.5 6.5 0 1 0 0-13a6.5 6.5 0 0 0 0 13m0-11.5a5 5 0 1 1 0 10a5 5 0 0 1 0-10"/><path d="M12 2.75c.41 0 .75.34.75.75v1.25a.75.75 0 0 1-1.5 0V3.5c0-.41.34-.75.75-.75m0 16.5c.41 0 .75.34.75.75v1.25a.75.75 0 0 1-1.5 0V20c0-.41.34-.75.75-.75M3.5 11.25h1.25a.75.75 0 0 1 0 1.5H3.5a.75.75 0 0 1 0-1.5m15.75 0h1.25a.75.75 0 0 1 0 1.5h-1.25a.75.75 0 0 1 0-1.5M5.22 5.22c.3-.3.77-.3 1.06 0l.88.88a.75.75 0 0 1-1.06 1.06l-.88-.88a.75.75 0 0 1 0-1.06m11.62 11.62c.3-.3.77-.3 1.06 0l.88.88a.75.75 0 1 1-1.06 1.06l-.88-.88a.75.75 0 0 1 0-1.06M18.78 5.22c.3.3.3.77 0 1.06l-.88.88a.75.75 0 1 1-1.06-1.06l.88-.88c.3-.3.77-.3 1.06 0M7.16 16.84c.3.3.3.77 0 1.06l-.88.88a.75.75 0 1 1-1.06-1.06l.88-.88c.3-.3.77-.3 1.06 0"/></g></svg>`,
-  moon: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M13.93 2.5a.75.75 0 0 1 .69.98a8.75 8.75 0 0 0 10.9 11.1a.75.75 0 0 1 .96.88A10.25 10.25 0 1 1 13.93 2.5m-.98 2.38A8.75 8.75 0 1 0 24.1 16.97A10.26 10.26 0 0 1 12.95 4.88"/></svg>`
+  moon: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M13.93 2.5a.75.75 0 0 1 .69.98a8.75 8.75 0 0 0 10.9 11.1a.75.75 0 0 1 .96.88A10.25 10.25 0 1 1 13.93 2.5m-.98 2.38A8.75 8.75 0 1 0 24.1 16.97A10.26 10.26 0 0 1 12.95 4.88"/></svg>`,
+  pdf: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><g fill="currentColor"><path d="M6.75 3A2.75 2.75 0 0 0 4 5.75v12.5A2.75 2.75 0 0 0 6.75 21h10.5A2.75 2.75 0 0 0 20 18.25V9.414a2.75 2.75 0 0 0-.805-1.945l-3.664-3.664A2.75 2.75 0 0 0 13.586 3zM5.5 5.75C5.5 4.784 6.284 4 7.25 4h6.086c.464 0 .909.184 1.237.513l3.664 3.664c.329.328.513.773.513 1.237v8.836c0 .966-.784 1.75-1.75 1.75H6.75A1.75 1.75 0 0 1 5.5 18.25z"/><path d="M8.25 11h1.25a1.75 1.75 0 0 1 0 3.5H9v1.25a.75.75 0 0 1-1.5 0v-4.5a.75.75 0 0 1 .75-.75m.75 2a.25.25 0 0 0 0-.5H9v.5zM12 11a.75.75 0 0 1 .75.75v1.25h.75a1.75 1.75 0 0 1 0 3.5H12a.75.75 0 0 1-.75-.75v-4.5A.75.75 0 0 1 12 11m.75 4h.75a.25.25 0 0 0 0-.5h-.75zM16.25 11a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0V15h-.25a.75.75 0 0 1 0-1.5h.25v-.75a.75.75 0 0 1 .75-.75"/></g></svg>`
 };
 
 function _ensureAppButtons(){
@@ -528,10 +550,19 @@ function _ensureAppButtons(){
     g.insertBefore(themeBtn, resourceBtn.nextSibling);
   }
 
+  let pdfBtn = document.getElementById(IDS.btnPdf);
+  if (!pdfBtn) {
+    pdfBtn = _buildToolBtn(IDS.btnPdf, '打开PDF文件', ICONS.pdf);
+    pdfBtn.dataset.appCaseSeq = '2';
+    pdfBtn.dataset.featureId = 'core:open-pdf';
+    g.insertBefore(pdfBtn, themeBtn.nextSibling);
+  }
+
   _ensureSeq(resourceBtn);
   _ensureSeq(themeBtn);
+  _ensureSeq(pdfBtn);
 
-  return { g, resourceBtn, themeBtn };
+  return { g, resourceBtn, themeBtn, pdfBtn };
 }
 
 function _modalEls(){
@@ -578,11 +609,21 @@ function _syncFeatureRegistryFromGrid(){
 }
 
 function _clonePreviewButton(src){
-  const btn = document.createElement('button');
+  if (!src || !(src instanceof HTMLElement)) return null;
+  const meta = ButtonBox.getInstance(src);
+  const buttonId = meta && meta.id ? meta.id : (src.dataset && src.dataset.buttonId ? String(src.dataset.buttonId || '') : String(src.id || ''));
+  const title = String(src.getAttribute('aria-label') || src.getAttribute('title') || '');
+  const def = buttonId
+    ? ButtonBox.getButton(buttonId) || ButtonBox.registerButton({ id: buttonId, title, iconSvg: src.innerHTML || '', kind: 'feature', source: 'feature' })
+    : ButtonBox.registerButton({ id: String(src.id || ''), title, iconSvg: src.innerHTML || '', kind: 'feature', source: 'feature' });
+  if (!def) return null;
+  const btn = ButtonBox.createButtonElement(def, {
+    variant: 'toolbar',
+    disabled: true,
+    preview: true
+  });
+  if (!btn) return null;
   btn.className = 'tool-btn';
-  btn.disabled = true;
-  btn.setAttribute('tabindex', '-1');
-  btn.innerHTML = src.innerHTML || '';
   return btn;
 }
 
@@ -841,7 +882,7 @@ function _wireAppCase(){
   const created = _ensureAppButtons();
   if (!created) return;
 
-  const { resourceBtn, themeBtn } = created;
+  const { resourceBtn, themeBtn, pdfBtn } = created;
 
   if (!resourceBtn.dataset.wired) {
     resourceBtn.dataset.wired = '1';
@@ -853,9 +894,17 @@ function _wireAppCase(){
     themeBtn.addEventListener('click', _toggleTheme);
   }
 
+  if (pdfBtn && !pdfBtn.dataset.wired) {
+    pdfBtn.dataset.wired = '1';
+    pdfBtn.addEventListener('click', ()=>{
+      openPdfFile();
+    });
+  }
+
   try{
     featureHub.register({ featureId: 'core:resource-library', title: '编辑资源库', version: '1.0.0', weight: 1000, domButton: resourceBtn, invoke: ()=>_openResourceEditor() });
     featureHub.register({ featureId: 'core:theme-toggle', title: '日夜模式', version: '1.0.0', weight: 900, domButton: themeBtn, invoke: ()=>_toggleTheme() });
+    if (pdfBtn) featureHub.register({ featureId: 'core:open-pdf', title: '打开PDF文件', version: '1.0.0', weight: 800, domButton: pdfBtn, invoke: (params)=>openPdfFile(params) });
   }catch(e){}
   _syncFeatureRegistryFromGrid();
 

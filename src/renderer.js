@@ -1,6 +1,6 @@
 // renderer.js (ESM module)
 // Core drawing logic and exported API for UI module
-
+//
 const canvas = document.getElementById('board');
 const ctx = canvas.getContext('2d');
 
@@ -33,8 +33,18 @@ let historyIndex = _documents[_activeDocKey].historyIndex;
 const HISTORY_LIMIT = 30;
 
 import Message, { EVENTS } from './message.js';
+import Settings from './setting.js';
+import { normalizePenTailSettings, buildPenTailSegment } from './pen_tail.js';
 
 let _noteMeta = { createdAt: Date.now(), modifiedAt: Date.now() };
+
+let _penTailConfig = normalizePenTailSettings({});
+try{
+  const _initialSettings = Settings.loadSettings();
+  if (_initialSettings && typeof _initialSettings === 'object' && _initialSettings.penTail && typeof _initialSettings.penTail === 'object') {
+    _penTailConfig = normalizePenTailSettings(_initialSettings.penTail);
+  }
+}catch(e){}
 
 // 深拷贝并对超长笔画点数组进行下采样，防止单个操作占用过多内存
 function snapshotOps(srcOps) {
@@ -104,6 +114,15 @@ export function setInkRecognitionEnabled(enabled){
   _cancelInkTimers();
   if (!_inkRecognitionEnabled) _dismissInkPreview(false);
 }
+
+Message.on(EVENTS.SETTINGS_CHANGED, (payload)=>{
+  try{
+    const s = payload && typeof payload === 'object' ? payload : {};
+    if (s.penTail && typeof s.penTail === 'object') {
+      _penTailConfig = normalizePenTailSettings(s.penTail);
+    }
+  }catch(e){}
+});
 
 function applyViewTransform(){
   canvas.style.transformOrigin = '0 0';
@@ -189,6 +208,15 @@ function drawBufferedStrokeSegmentFromState(state, flush = false) {
 function finalizeOp(op){
   if (!op) return;
   if (op.type === 'stroke' || op.type === 'erase' || op.type === 'clearRect') {
+    if (op.type === 'stroke' && _penTailConfig && _penTailConfig.enabled && Array.isArray(op.points) && op.points.length >= 3) {
+      try{
+        const baseSize = Number(op.size) || brushSize || 1;
+        const seg = buildPenTailSegment(op.points, baseSize, _penTailConfig);
+        if (seg && seg.segment && Array.isArray(seg.segment) && seg.segment.length) {
+          op.points = seg.segment;
+        }
+      }catch(e){}
+    }
     ops.push(op);
     pushHistory();
     if (op.type === 'stroke') _enqueueInkRecognition(op);
@@ -214,10 +242,13 @@ function pointerDown(e){
   _cancelInkTimers();
   _dismissInkPreview(true);
   const { x, y } = screenToCanvas(e.clientX, e.clientY);
+  const t = typeof e.timeStamp === 'number' ? e.timeStamp : ((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now());
+  const p = typeof e.pressure === 'number' ? e.pressure : NaN;
 
   if (shouldUseMultiTouchStroke(e)) {
-    const op = { type: 'stroke', color: brushColor, size: brushSize, points: [{x, y}] };
-    const state = { op, lastX: x, lastY: y, strokePoints: [{x, y}], drawPending: false, lastMid: null, rafId: null };
+    const pt = { x, y, t, p };
+    const op = { type: 'stroke', color: brushColor, size: brushSize, points: [pt] };
+    const state = { op, lastX: x, lastY: y, strokePoints: [pt], drawPending: false, lastMid: null, rafId: null };
     touchStrokeMap.set(e.pointerId, state);
     try { if (e.pointerId && canvas.setPointerCapture) canvas.setPointerCapture(e.pointerId); } catch(err) {}
     return;
@@ -242,14 +273,15 @@ function pointerDown(e){
   try { if (_activePointerId && canvas.setPointerCapture) canvas.setPointerCapture(_activePointerId); } catch(err) {}
   // start smoothing buffer
   _strokePoints.length = 0;
-  _strokePoints.push({x, y});
+  const pt = { x, y, t, p };
+  _strokePoints.push(pt);
   _lastMid = null;
   _drawPending = false;
 
   if (erasing && eraserMode === 'pixel') {
-    currentOp = { type: 'erase', size: eraserSize, points: [{x, y}] };
+    currentOp = { type: 'erase', size: eraserSize, points: [pt] };
   } else {
-    currentOp = { type: 'stroke', color: brushColor, size: brushSize, points: [{x, y}] };
+    currentOp = { type: 'stroke', color: brushColor, size: brushSize, points: [pt] };
   }
 }
 
@@ -259,9 +291,12 @@ function pointerMove(e){
     const state = touchStrokeMap.get(e.pointerId);
     if (!state) return;
     const { x, y } = screenToCanvas(e.clientX, e.clientY);
+    const t = typeof e.timeStamp === 'number' ? e.timeStamp : ((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now());
+    const p = typeof e.pressure === 'number' ? e.pressure : NaN;
     if (state.op && state.op.type === 'stroke') {
-      state.op.points.push({x, y});
-      state.strokePoints.push({x, y});
+      const pt = { x, y, t, p };
+      state.op.points.push(pt);
+      state.strokePoints.push(pt);
       if (!state.drawPending) {
         state.drawPending = true;
         state.rafId = requestAnimationFrame(() => {
@@ -277,15 +312,18 @@ function pointerMove(e){
   if (!drawing) return;
   if (!inputEnabled) return;
   const { x, y } = screenToCanvas(e.clientX, e.clientY);
+  const t = typeof e.timeStamp === 'number' ? e.timeStamp : ((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now());
+  const p = typeof e.pressure === 'number' ? e.pressure : NaN;
 
   if (currentOp && currentOp.type === 'rectSelect') { currentOp.x = x; currentOp.y = y; redrawAll(); drawRectOverlay(currentOp.startX, currentOp.startY, x, y); return; }
   if (erasing && eraserMode === 'stroke') { deleteStrokesAtPoint(x, y); return; }
   if (currentOp && (currentOp.type === 'stroke' || currentOp.type === 'erase')) {
-    currentOp.points.push({x, y});
+    const pt = { x, y, t, p };
+    currentOp.points.push(pt);
     if (currentOp.type === 'stroke') {
       _scheduleInkHoldFromMove(currentOp);
       // smoothing: store points and draw smoothed quad segments via RAF
-      _strokePoints.push({x, y});
+      _strokePoints.push(pt);
       if (!_drawPending) {
         _drawPending = true;
         _rafId = requestAnimationFrame(() => {
@@ -368,12 +406,7 @@ function drawBufferedStrokeSegment(op, flush = false) {
 
 function finalizeCurrentOp() {
   if (!currentOp) return;
-  if (currentOp.type === 'stroke' || currentOp.type === 'erase' || currentOp.type === 'clearRect') {
-    const op = currentOp;
-    ops.push(op);
-    pushHistory();
-    if (op.type === 'stroke') _enqueueInkRecognition(op);
-  }
+  finalizeOp(currentOp);
   currentOp = null;
 }
 
@@ -395,7 +428,48 @@ function redrawAll() {
   }
 }
 
-function drawOp(op, composite) { ctx.save(); ctx.globalCompositeOperation = composite || 'source-over'; if (op.type === 'stroke') ctx.strokeStyle = op.color || '#000'; else ctx.strokeStyle = 'rgba(0,0,0,1)'; ctx.lineWidth = op.size || 1; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.beginPath(); const pts = op.points; if (!pts || pts.length === 0) { ctx.restore(); return; } ctx.moveTo(pts[0].x, pts[0].y); for (let i=1;i<pts.length;i++) ctx.lineTo(pts[i].x, pts[i].y); ctx.stroke(); ctx.restore(); }
+function drawOp(op, composite) {
+  ctx.save();
+  ctx.globalCompositeOperation = composite || 'source-over';
+  if (op.type === 'stroke') ctx.strokeStyle = op.color || '#000';
+  else ctx.strokeStyle = 'rgba(0,0,0,1)';
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  const pts = op.points;
+  if (!pts || pts.length === 0) {
+    ctx.restore();
+    return;
+  }
+  let hasWidth = false;
+  for (let i = 0; i < pts.length; i++) {
+    const p = pts[i];
+    if (p && typeof p.w !== 'undefined') {
+      hasWidth = true;
+      break;
+    }
+  }
+  if (!hasWidth) {
+    ctx.lineWidth = op.size || 1;
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+    ctx.stroke();
+    ctx.restore();
+    return;
+  }
+  const baseSize = op.size || 1;
+  for (let i = 1; i < pts.length; i++) {
+    const a = pts[i - 1];
+    const b = pts[i];
+    const lw = Math.max(0.2, Number((a && a.w) || (b && b.w) || baseSize) || baseSize);
+    ctx.lineWidth = lw;
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
 
 function drawOpSegment(op, x0, y0, x1, y1) { ctx.save(); ctx.globalCompositeOperation = (op.type === 'erase') ? 'destination-out' : 'source-over'; ctx.lineWidth = op.size || 1; ctx.lineCap='round'; ctx.lineJoin='round'; if (op.type === 'stroke') ctx.strokeStyle = op.color || '#000'; else ctx.strokeStyle='rgba(0,0,0,1)'; ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke(); ctx.restore(); }
 

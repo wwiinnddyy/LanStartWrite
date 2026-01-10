@@ -25,6 +25,10 @@
             <svg class="md-icon" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M20 5H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2ZM7 17H5v-2h2v2Zm0-4H5v-2h2v2Zm0-4H5V7h2v2Zm4 8H9v-2h2v2Zm0-4H9v-2h2v2Zm0-4H9V7h2v2Zm4 8h-2v-2h2v2Zm0-4h-2v-2h2v2Zm0-4h-2V7h2v2Zm4 8h-2v-2h2v2Zm0-4h-2v-2h2v2Zm0-4h-2V7h2v2Z"/></svg>
             <span class="settings-tab-text">快捷键</span>
           </button>
+          <button class="settings-tab" type="button" role="tab" id="settingsTab-toolbar" data-tab="toolbar" aria-controls="settingsPanel-toolbar" aria-selected="false" tabindex="-1">
+            <svg class="md-icon" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M4 5.75A1.75 1.75 0 0 1 5.75 4h12.5A1.75 1.75 0 0 1 20 5.75v2.5A1.75 1.75 0 0 1 18.25 10H5.75A1.75 1.75 0 0 1 4 8.25Zm0 8.5A1.75 1.75 0 0 1 5.75 12h7.5A1.75 1.75 0 0 1 15 13.75v4.5A1.75 1.75 0 0 1 13.25 20h-7.5A1.75 1.75 0 0 1 4 18.25Z"/></svg>
+            <span class="settings-tab-text">工具栏控件</span>
+          </button>
         </div>
         <div class="settings-content" aria-live="polite" aria-busy="false">
           <div class="settings-loading" hidden aria-hidden="true">
@@ -145,6 +149,14 @@
                         <option value="chalkboard">黑板绿</option>
                       </select>
                     </label>
+                    <div class="settings-divider"></div>
+                    <label class="settings-field">
+                      <span class="settings-field-label">PDF默认打开模式</span>
+                      <select id="optPdfDefaultMode">
+                        <option value="window">窗口模式</option>
+                        <option value="fullscreen">全屏模式</option>
+                      </select>
+                    </label>
                   </div>
                 </section>
               </div>
@@ -232,6 +244,28 @@
                       <span class="settings-field-label">重做</span>
                       <input id="keyRedo" type="text" placeholder="Ctrl+Y" maxlength="20" inputmode="text" aria-label="重做快捷键">
                     </label>
+                  </div>
+                </section>
+              </div>
+            </div>
+            <div class="settings-page" id="settingsPanel-toolbar" data-tab="toolbar" role="tabpanel" aria-labelledby="settingsTab-toolbar" hidden>
+              <div class="settings-cards">
+                <section class="settings-card" aria-label="浮动工具栏控件">
+                  <div class="settings-card-title">浮动工具栏控件</div>
+                  <div class="settings-card-body">
+                    <div class="resource-layout">
+                      <div class="resource-sort">
+                        <div class="resource-hint">拖拽排序，点击隐藏/显示按钮，下方实时预览</div>
+                        <div id="toolbarLayoutList" class="resource-list" role="list"></div>
+                      </div>
+                      <div class="resource-preview" aria-label="预览">
+                        <div class="resource-preview-title">工具栏预览</div>
+                        <div id="toolbarLayoutPreview" class="resource-preview-grid"></div>
+                      </div>
+                    </div>
+                    <div class="settings-row" style="margin-top:8px">
+                      <button id="toolbarLayoutReset" class="mode-btn" type="button">恢复默认布局</button>
+                    </div>
                   </div>
                 </section>
               </div>

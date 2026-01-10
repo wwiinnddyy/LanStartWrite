@@ -5,6 +5,7 @@ const crypto = require('crypto');
 const yauzl = require('yauzl');
 const semver = require('semver');
 const zlib = require('zlib');
+const { pathToFileURL } = require('url');
 
 const _RUN_TESTS = process.argv.includes('--run-tests');
 const _ALLOW_UNSIGNED_PLUGINS = true;
@@ -1249,6 +1250,55 @@ ipcMain.handle('message', async (event, channel, data) => {
         if (!fp) return { success: false, reason: 'no_path' };
         return { success: true, path: fp };
       }catch(e){
+        return { success: false, error: String(e && e.message || e) };
+      }
+    }
+
+    case 'pdf:open-dialog': {
+      try {
+        const r = await dialog.showOpenDialog(mainWindow, {
+          title: '打开 PDF 文件',
+          properties: ['openFile'],
+          filters: [{ name: 'PDF', extensions: ['pdf'] }]
+        });
+        if (!r || r.canceled) return { success: false, reason: 'canceled' };
+        const fp = Array.isArray(r.filePaths) && r.filePaths[0] ? String(r.filePaths[0]) : '';
+        if (!fp) return { success: false, reason: 'no_path' };
+        return { success: true, path: fp };
+      } catch (e) {
+        return { success: false, error: String(e && e.message || e) };
+      }
+    }
+
+    case 'pdf:open-window': {
+      try {
+        const payload = data && typeof data === 'object' ? data : {};
+        const rawPath = payload.path ? String(payload.path) : '';
+        if (!rawPath) return { success: false, reason: 'no_path' };
+        const mode = payload.mode === 'fullscreen' ? 'fullscreen' : 'window';
+        const fileUrl = pathToFileURL(rawPath).toString();
+        const win = new BrowserWindow({
+          width: 980,
+          height: 720,
+          minWidth: 720,
+          minHeight: 520,
+          backgroundColor: '#ffffff',
+          frame: true,
+          show: true,
+          icon: _appIconPath(),
+          title: 'PDF 预览',
+          webPreferences: {
+            contextIsolation: true,
+            nodeIntegration: false
+          }
+        });
+        if (mode === 'fullscreen') {
+          try { win.setFullScreen(true); } catch (e) {}
+        }
+        await win.loadURL(fileUrl);
+        try { win.setMenuBarVisibility(true); } catch (e) {}
+        return { success: true };
+      } catch (e) {
         return { success: false, error: String(e && e.message || e) };
       }
     }

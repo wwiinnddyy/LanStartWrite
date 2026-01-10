@@ -21,6 +21,7 @@ import Message, { EVENTS } from './message.js';
 import { updateAppSettings } from './write_a_change.js';
 import { initPenUI, updatePenModeLabel } from './pen.js';
 import { initEraserUI, updateEraserModeLabel } from './erese.js';
+import ButtonBox from './button_box.js';
 import { initAppCase } from './app_case.js';
 import { applyModeCanvasBackground } from './mode_background.js';
 import { buildPenTailSegment, normalizePenTailSettings } from './pen_tail.js';
@@ -31,6 +32,7 @@ const pointerTool = document.getElementById('pointerTool');
 const colorMenu = document.getElementById('colorMenu');
 const eraserTool = document.getElementById('eraserTool');
 const eraserMenu = document.getElementById('eraserMenu');
+const featureLibraryTool = document.getElementById('featureLibraryTool');
 const moreTool = document.getElementById('moreTool');
 const moreMenu = document.getElementById('moreMenu');
 const clearBtn = document.getElementById('clear');
@@ -42,6 +44,36 @@ const exitTool = document.getElementById('exitTool');
 // initialize pen and eraser UI modules
 initPenUI();
 initEraserUI();
+
+function registerCoreToolbarButtons(){
+  const items = [
+    { id: 'core:pointer', el: pointerTool },
+    { id: 'core:pen', el: colorTool },
+    { id: 'core:eraser', el: eraserTool },
+    { id: 'core:mode-toggle', el: exitTool },
+    { id: 'core:more', el: moreTool },
+    { id: 'core:collapse', el: collapseTool },
+    { id: 'core:undo', el: undoBtn },
+    { id: 'core:redo', el: redoBtn }
+  ];
+  for (const item of items) {
+    const el = item.el;
+    if (!el) continue;
+    const title = String(el.getAttribute('aria-label') || el.getAttribute('title') || '');
+    const iconSvg = String(el.innerHTML || '');
+    const def = ButtonBox.registerButton({
+      id: item.id,
+      title,
+      iconSvg,
+      kind: 'toolbar',
+      source: 'core'
+    });
+    if (!def) continue;
+    ButtonBox.registerInstance(def.id, el, 'toolbar');
+  }
+}
+
+registerCoreToolbarButtons();
 
 function storeDefaultIcon(el){
   if (!el) return;
@@ -107,6 +139,17 @@ let _lastMouseMoveAt = 0;
 let applyCollapsed = ()=>{};
 let _lastIgnoreMouse = { ignore: false, forward: false, at: 0 };
 let _rectWatchdogTimer = 0;
+let _pdfMode = false;
+
+function setPdfMode(on){
+  _pdfMode = !!on;
+  try{
+    const b = document.body;
+    if (!b) return;
+    if (_pdfMode) b.dataset.pdfMode = '1';
+    else if (b.dataset) delete b.dataset.pdfMode;
+  }catch(e){}
+}
 
 /**
  * 读取持久化的应用模式（白板/批注）。
@@ -446,7 +489,7 @@ function _setRectWatchdog(on){
 function updateExitToolUI(){
   if (!exitTool) return;
   if (_appMode === APP_MODES.ANNOTATION) {
-    exitTool.title = '进入白板模式';
+    exitTool.title = _pdfMode ? '返回白板（退出 PDF 批注）' : '进入白板模式';
     exitTool.innerHTML = ENTER_WHITEBOARD_ICON_SVG;
   } else {
     exitTool.title = '进入智能批注模式';
@@ -590,6 +633,7 @@ function enterAnnotationMode(opts){
 }
 
 function enterWhiteboardMode(opts){
+  setPdfMode(false);
   switchAppMode(APP_MODES.WHITEBOARD, opts);
 }
 try{
@@ -685,6 +729,22 @@ if (eraserTool) {
   };
   eraserTool.addEventListener('click', openEraser);
   bindTouchTap(eraserTool, openEraser, { delayMs: 20 });
+}
+
+if (featureLibraryTool) {
+  const openFeatureLibrary = ()=>{
+    const btn = document.getElementById('appCaseResourceBtn');
+    if (btn) {
+      btn.click();
+      return;
+    }
+    const menu = document.getElementById('moreMenu');
+    const opener = document.getElementById('moreTool');
+    if (!menu || !opener) return;
+    showSubmenu(menu, opener);
+  };
+  featureLibraryTool.addEventListener('click', openFeatureLibrary);
+  bindTouchTap(featureLibraryTool, openFeatureLibrary, { delayMs: 20 });
 }
 
 if (pointerTool) {
@@ -875,6 +935,56 @@ if (collapseTool && panel) {
   }catch(e){}
 }
 
+function _getToolbarButtonsForLayout(){
+  const p = document.querySelector('.floating-panel');
+  if (!p) return [];
+  const toolsSection = p.querySelector('.panel-section.tools');
+  if (!toolsSection) return [];
+  const tools = Array.from(toolsSection.querySelectorAll('.tool'));
+  const out = [];
+  for (const wrap of tools) {
+    if (!(wrap instanceof HTMLElement)) continue;
+    const btn = wrap.querySelector('button');
+    if (!btn) continue;
+    const meta = ButtonBox.getInstance(btn);
+    const id = meta && meta.id ? meta.id : (btn.dataset && btn.dataset.buttonId ? String(btn.dataset.buttonId || '') : String(btn.id || ''));
+    if (!id) continue;
+    out.push({ id: String(id), wrap, btn });
+  }
+  return out;
+}
+
+function applyToolbarLayout(settingsLike){
+  try{
+    const p = document.querySelector('.floating-panel');
+    if (!p) return;
+    const toolsSection = p.querySelector('.panel-section.tools');
+    if (!toolsSection) return;
+    const items = _getToolbarButtonsForLayout();
+    if (!items.length) return;
+    const byId = new Map();
+    for (const it of items) byId.set(it.id, it);
+    const s = settingsLike && typeof settingsLike === 'object' ? settingsLike : {};
+    const layout = ButtonBox.applyLayoutTemplate('default', items, s);
+    const order = Array.isArray(layout && layout.order) ? layout.order : items.map((it)=>it.id);
+    const hiddenSet = layout && layout.hiddenSet instanceof Set ? layout.hiddenSet : new Set();
+    const frag = document.createDocumentFragment();
+    for (const id of order) {
+      const it = byId.get(id);
+      if (!it) continue;
+      const wrap = it.wrap;
+      if (!wrap) continue;
+      if (hiddenSet.has(id)) {
+        try{ wrap.style.display = 'none'; }catch(e){}
+      } else {
+        try{ wrap.style.display = ''; }catch(e){}
+        frag.appendChild(wrap);
+      }
+    }
+    toolsSection.appendChild(frag);
+  }catch(e){}
+}
+
 // Settings modal wiring
 const settingsModal = document.getElementById('settingsModal');
 const closeSettings = document.getElementById('closeSettings');
@@ -885,6 +995,7 @@ const optCollapsed = document.getElementById('optCollapsed');
 const optTheme = document.getElementById('optTheme');
 const optDesignLanguage = document.getElementById('optDesignLanguage');
 const optTooltips = document.getElementById('optTooltips');
+const optPdfDefaultMode = document.getElementById('optPdfDefaultMode');
 const optMultiTouchPen = document.getElementById('optMultiTouchPen');
 const optAnnotationPenColor = document.getElementById('optAnnotationPenColor');
 const optPenTailEnabled = document.getElementById('optPenTailEnabled');
@@ -919,6 +1030,9 @@ const keyRedo = document.getElementById('keyRedo');
 const previewSettingsBtn = document.getElementById('previewSettings');
 const revertPreviewBtn = document.getElementById('revertPreview');
 const historyStateDisplay = document.getElementById('historyStateDisplay');
+const toolbarLayoutList = document.getElementById('toolbarLayoutList');
+const toolbarLayoutPreview = document.getElementById('toolbarLayoutPreview');
+const toolbarLayoutResetBtn = document.getElementById('toolbarLayoutReset');
 
 const settingsContent = settingsModal ? settingsModal.querySelector('.settings-content') : null;
 const settingsLoading = settingsModal ? settingsModal.querySelector('.settings-loading') : null;
@@ -971,6 +1085,9 @@ function _makeSettingsDraftFromSettings(s){
   const src = (s && typeof s === 'object') ? s : {};
   const undoKey = src.shortcuts && src.shortcuts.undo ? String(src.shortcuts.undo) : '';
   const redoKey = src.shortcuts && src.shortcuts.redo ? String(src.shortcuts.redo) : '';
+  const pluginDisplay = src.pluginButtonDisplay && typeof src.pluginButtonDisplay === 'object' && !Array.isArray(src.pluginButtonDisplay)
+    ? Object.assign({}, src.pluginButtonDisplay)
+    : {};
   return {
     enableAutoResize: !!src.enableAutoResize,
     toolbarCollapsed: !!src.toolbarCollapsed,
@@ -980,12 +1097,16 @@ function _makeSettingsDraftFromSettings(s){
     visualStyle: String(src.visualStyle || 'blur'),
     mica: Object.assign({}, (src.mica && typeof src.mica === 'object') ? src.mica : {}),
     canvasColor: String(src.canvasColor || 'white'),
+    pdfDefaultMode: String(src.pdfDefaultMode || 'window'),
     showTooltips: !!src.showTooltips,
     multiTouchPen: !!src.multiTouchPen,
     annotationPenColor: normalizeHexColor(src.annotationPenColor, '#FF0000'),
     smartInkRecognition: !!src.smartInkRecognition,
     penTail: normalizePenTailSettings(src.penTail),
-    shortcuts: { undo: undoKey, redo: redoKey }
+    shortcuts: { undo: undoKey, redo: redoKey },
+    toolbarButtonOrder: Array.isArray(src.toolbarButtonOrder) ? src.toolbarButtonOrder.slice() : [],
+    toolbarButtonHidden: Array.isArray(src.toolbarButtonHidden) ? src.toolbarButtonHidden.slice() : [],
+    pluginButtonDisplay: pluginDisplay
   };
 }
 
@@ -1060,6 +1181,7 @@ function _validateSettingsDraft(d){
   const designLanguage = String(draft.designLanguage || '');
   const visualStyle = String(draft.visualStyle || '');
   const canvasColor = String(draft.canvasColor || '');
+  const pdfDefaultMode = String(draft.pdfDefaultMode || '');
   const undoKey = draft.shortcuts && typeof draft.shortcuts.undo === 'string' ? draft.shortcuts.undo.trim() : '';
   const redoKey = draft.shortcuts && typeof draft.shortcuts.redo === 'string' ? draft.shortcuts.redo.trim() : '';
 
@@ -1067,6 +1189,7 @@ function _validateSettingsDraft(d){
   if (!['fluent','material3'].includes(designLanguage)) return { ok: false, message: '界面风格值无效', focusId: 'optDesignLanguage' };
   if (!['solid','blur','transparent'].includes(visualStyle)) return { ok: false, message: '视觉效果值无效', focusId: 'optVisualStyle' };
   if (!['white','black','chalkboard'].includes(canvasColor)) return { ok: false, message: '画布颜色值无效', focusId: 'optCanvasColor' };
+  if (!['window','fullscreen'].includes(pdfDefaultMode)) return { ok: false, message: 'PDF默认打开模式值无效', focusId: 'optPdfDefaultMode' };
 
   const mica = (draft.mica && typeof draft.mica === 'object') ? draft.mica : {};
   const intensity = Number(mica.intensity);
@@ -1137,6 +1260,9 @@ function _settingsUiReducer(state, action){
         else if (sub === 'shape') patch.shape = String(a.value || '');
         next.penTail = normalizePenTailSettings(patch);
       }
+    } else if (key === 'pluginButtonDisplay') {
+      const obj = a.value && typeof a.value === 'object' && !Array.isArray(a.value) ? a.value : {};
+      next.pluginButtonDisplay = Object.assign({}, obj);
     } else if (key.startsWith('themeCustom.')) {
       const sub = key.slice('themeCustom.'.length);
       const cur = (next.themeCustom && typeof next.themeCustom === 'object') ? next.themeCustom : {};
@@ -1204,6 +1330,7 @@ function _renderSettingsUi(){
     if (optMultiTouchPen) optMultiTouchPen.checked = !!d.multiTouchPen;
     if (optAnnotationPenColor) optAnnotationPenColor.value = normalizeHexColor(d.annotationPenColor, '#FF0000');
     if (optSmartInk) optSmartInk.checked = !!d.smartInkRecognition;
+    if (optPdfDefaultMode) optPdfDefaultMode.value = d.pdfDefaultMode || 'window';
     const pt = normalizePenTailSettings(d.penTail);
     if (optPenTailEnabled) optPenTailEnabled.checked = !!pt.enabled;
     if (optPenTailProfile) optPenTailProfile.value = String(pt.profile || 'standard');
@@ -1277,13 +1404,206 @@ function _renderPenTailPreview(cfg){
   ctx.restore();
 }
 
+function _cloneToolbarPreviewButton(id, src){
+  const buttonId = String(id || '');
+  if (!buttonId) return null;
+  const srcEl = src && src instanceof HTMLElement ? src : null;
+  const title = srcEl ? String(srcEl.getAttribute('aria-label') || srcEl.getAttribute('title') || '') : '';
+  const meta = srcEl ? ButtonBox.getInstance(srcEl) : null;
+  const existing = ButtonBox.getButton(buttonId);
+  const def = existing || ButtonBox.registerButton({
+    id: buttonId,
+    title,
+    iconSvg: srcEl ? srcEl.innerHTML || '' : '',
+    kind: 'toolbar',
+    source: meta && meta.source ? meta.source : 'core'
+  });
+  if (!def) return null;
+  const btn = ButtonBox.createButtonElement(def, {
+    variant: 'toolbar',
+    disabled: true,
+    preview: true
+  });
+  if (!btn) return null;
+  btn.className = 'tool-btn';
+  return btn;
+}
+
+function _renderToolbarLayoutPreview(orderIds, hiddenSet){
+  if (!toolbarLayoutPreview) return;
+  const items = _getToolbarButtonsForLayout();
+  const byId = new Map();
+  for (const it of items) byId.set(String(it.id || ''), it.btn);
+  toolbarLayoutPreview.innerHTML = '';
+  const frag = document.createDocumentFragment();
+  const ids = Array.isArray(orderIds) ? orderIds : [];
+  for (const rawId of ids) {
+    const id = String(rawId || '');
+    if (!id) continue;
+    const src = byId.get(id);
+    if (!src) continue;
+    const icon = _cloneToolbarPreviewButton(id, src);
+    if (!icon) continue;
+    if (hiddenSet && hiddenSet.has(id)) {
+      try{ icon.style.opacity = '0.35'; }catch(e){}
+    }
+    frag.appendChild(icon);
+  }
+  toolbarLayoutPreview.appendChild(frag);
+}
+
+function _renderToolbarLayoutEditor(){
+  if (!toolbarLayoutList || !toolbarLayoutPreview) return;
+  const items = _getToolbarButtonsForLayout();
+  if (!items.length) {
+    toolbarLayoutList.innerHTML = '';
+    toolbarLayoutPreview.innerHTML = '';
+    return;
+  }
+  const byId = new Map();
+  for (const it of items) byId.set(String(it.id || ''), it);
+  const st = _settingsUiStore.getState();
+  const d = st && st.draft ? st.draft : {};
+  const allIds = items.map((it)=>String(it.id || '')).filter(Boolean);
+  const layout = ButtonBox.applyLayoutTemplate('default', items, d);
+  const order = Array.isArray(layout && layout.order) ? layout.order.filter((id)=>allIds.includes(id)) : allIds;
+  const hiddenSet = layout && layout.hiddenSet instanceof Set
+    ? new Set(Array.from(layout.hiddenSet).filter((id)=>allIds.includes(id)))
+    : new Set();
+  toolbarLayoutList.innerHTML = '';
+  const frag = document.createDocumentFragment();
+  for (const id of order) {
+    const entry = byId.get(id);
+    if (!entry || !entry.btn) continue;
+    const src = entry.btn;
+    const item = document.createElement('div');
+    item.className = 'resource-item';
+    item.setAttribute('role', 'listitem');
+    item.setAttribute('draggable', 'true');
+    item.setAttribute('data-id', id);
+    item.setAttribute('aria-grabbed', 'false');
+    if (hiddenSet.has(id)) item.classList.add('is-hidden');
+
+    const drag = document.createElement('button');
+    drag.className = 'resource-drag';
+    drag.type = 'button';
+    drag.textContent = '⋮';
+    drag.setAttribute('aria-label', '拖动排序');
+
+    const labelEl = document.createElement('div');
+    labelEl.className = 'resource-label';
+    const def = ButtonBox.getButton(id);
+    const title = def && (def.title || def.label)
+      ? String(def.title || def.label || '')
+      : String(src.getAttribute('aria-label') || src.getAttribute('title') || id);
+    labelEl.textContent = title;
+
+    const icon = _cloneToolbarPreviewButton(id, src);
+    if (icon) icon.disabled = true;
+
+    item.appendChild(drag);
+    item.appendChild(labelEl);
+    if (icon) item.appendChild(icon);
+
+    item.addEventListener('click', (e)=>{
+      const t = e && e.target && e.target.closest ? e.target.closest('.resource-drag') : null;
+      if (t) return;
+      const st2 = _settingsUiStore.getState();
+      const d2 = st2 && st2.draft ? st2.draft : {};
+      const rawHidden2 = Array.isArray(d2.toolbarButtonHidden) ? d2.toolbarButtonHidden.map((v)=>String(v || '')) : [];
+      const nextHiddenSet = new Set(rawHidden2.filter((x)=>allIds.includes(x)));
+      if (nextHiddenSet.has(id)) nextHiddenSet.delete(id);
+      else nextHiddenSet.add(id);
+      const nextHidden = Array.from(nextHiddenSet);
+      _settingsUiStore.dispatch({ type: 'UPDATE_FIELD', key: 'toolbarButtonHidden', value: nextHidden });
+      _renderToolbarLayoutEditor();
+    });
+
+    frag.appendChild(item);
+  }
+  toolbarLayoutList.appendChild(frag);
+  _wireToolbarLayoutDnD();
+  _renderToolbarLayoutPreview(order, hiddenSet);
+}
+
+function _persistToolbarLayoutOrderFromDom(){
+  try{
+    if (!toolbarLayoutList) return;
+    const domIds = Array.from(toolbarLayoutList.querySelectorAll('.resource-item')).map((el)=>String(el.getAttribute('data-id') || '')).filter(Boolean);
+    if (!domIds.length) return;
+    const items = _getToolbarButtonsForLayout();
+    const allIds = items.map((it)=>String(it.id || '')).filter(Boolean);
+    const nextOrder = [];
+    for (const id of domIds) {
+      if (!allIds.includes(id)) continue;
+      if (!nextOrder.includes(id)) nextOrder.push(id);
+    }
+    const st = _settingsUiStore.getState();
+    const d = st && st.draft ? st.draft : {};
+    const rawHidden = Array.isArray(d.toolbarButtonHidden) ? d.toolbarButtonHidden.map((v)=>String(v || '')) : [];
+    const hiddenSet = new Set(rawHidden.filter((id)=>allIds.includes(id)));
+    _settingsUiStore.dispatch({ type: 'UPDATE_FIELD', key: 'toolbarButtonOrder', value: nextOrder });
+    _renderToolbarLayoutPreview(nextOrder, hiddenSet);
+    try{
+      const patch = {
+        toolbarButtonOrder: nextOrder.slice(),
+        toolbarButtonHidden: Array.from(hiddenSet)
+      };
+      updateAppSettings(patch);
+    }catch(e){}
+  }catch(e){}
+}
+
+function _wireToolbarLayoutDnD(){
+  if (!toolbarLayoutList) return;
+  if (toolbarLayoutList.dataset.toolbarWired === '1') return;
+  toolbarLayoutList.dataset.toolbarWired = '1';
+  toolbarLayoutList.addEventListener('dragstart', (e)=>{
+    const item = e.target && e.target.closest ? e.target.closest('.resource-item') : null;
+    if (!item) return;
+    _toolbarDragId = String(item.getAttribute('data-id') || '');
+    if (!_toolbarDragId) return;
+    try{
+      if (e.dataTransfer) {
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', _toolbarDragId);
+      }
+    }catch(err){}
+  });
+  toolbarLayoutList.addEventListener('dragover', (e)=>{
+    if (!_toolbarDragId) return;
+    e.preventDefault();
+    const over = e.target && e.target.closest ? e.target.closest('.resource-item') : null;
+    const dragging = toolbarLayoutList.querySelector(`.resource-item[data-id="${_toolbarDragId}"]`);
+    if (!dragging) return;
+    if (!over || over === dragging) return;
+    const rect = over.getBoundingClientRect();
+    const before = e.clientY < rect.top + rect.height / 2;
+    if (before) toolbarLayoutList.insertBefore(dragging, over);
+    else toolbarLayoutList.insertBefore(dragging, over.nextSibling);
+  });
+  toolbarLayoutList.addEventListener('drop', (e)=>{
+    if (!_toolbarDragId) return;
+    e.preventDefault();
+    _toolbarDragId = '';
+    _persistToolbarLayoutOrderFromDom();
+  });
+  toolbarLayoutList.addEventListener('dragend', ()=>{
+    if (!_toolbarDragId) return;
+    _toolbarDragId = '';
+    _persistToolbarLayoutOrderFromDom();
+  });
+}
+
 _settingsUiStore.subscribe(_renderSettingsUi);
 _renderSettingsUi();
 
 function _settingsUiSelectTab(tab, opts){
   const t = _normalizeSettingsTab(tab);
   _settingsUiStore.dispatch({ type: 'SET_TAB', tab: t });
-  _loadSettingsTabAsync(t).then(()=>{}).catch(()=>{});
+  _loadSettingsTabAsync(t).then(()=>{
+    if (t === 'toolbar') _renderToolbarLayoutEditor();
+  }).catch(()=>{});
   try{ scheduleInteractiveRectsUpdate(); }catch(e){}
   const o = opts && typeof opts === 'object' ? opts : {};
   if (o.focus) {
@@ -1357,6 +1677,7 @@ function _wireSettingsUi(){
   bindField(optThemeSecondary, 'themeCustom.secondary', 'input');
   bindField(optThemeBackground, 'themeCustom.background', 'input');
   bindField(optCanvasColor, 'canvasColor');
+  bindField(optPdfDefaultMode, 'pdfDefaultMode');
   bindField(optTooltips, 'showTooltips');
   bindField(optMultiTouchPen, 'multiTouchPen');
   bindField(optAnnotationPenColor, 'annotationPenColor', 'input');
@@ -1370,6 +1691,14 @@ function _wireSettingsUi(){
   bindField(optSmartInk, 'smartInkRecognition');
   bindField(keyUndo, 'shortcuts.undo', 'input');
   bindField(keyRedo, 'shortcuts.redo', 'input');
+
+  if (toolbarLayoutResetBtn) toolbarLayoutResetBtn.addEventListener('click', ()=>{
+    const items = _getToolbarButtonsForLayout();
+    const order = items.map((it)=>String(it.id || '')).filter(Boolean);
+    _settingsUiStore.dispatch({ type: 'UPDATE_FIELD', key: 'toolbarButtonOrder', value: order });
+    _settingsUiStore.dispatch({ type: 'UPDATE_FIELD', key: 'toolbarButtonHidden', value: [] });
+    _renderToolbarLayoutEditor();
+  });
 
   if (optDesignLanguage) optDesignLanguage.addEventListener('change', ()=>{
     try{
@@ -1485,6 +1814,7 @@ function _wireSettingsUi(){
 _wireSettingsUi();
 
 let _previewBackup = null;
+let _toolbarDragId = '';
 let _pluginDragId = '';
 let _pluginInstallRequestId = '';
 
@@ -1569,6 +1899,12 @@ function _renderPluginItem(pl){
   const perms = Array.isArray(m.permissions) ? m.permissions.map(String).filter(Boolean) : [];
   const meta = pl && pl.meta ? pl.meta : null;
   const sig = _sigBadge(meta);
+  const settingsLike = Settings.loadSettings();
+  const displayMap = settingsLike && settingsLike.pluginButtonDisplay && typeof settingsLike.pluginButtonDisplay === 'object' && !Array.isArray(settingsLike.pluginButtonDisplay)
+    ? settingsLike.pluginButtonDisplay
+    : {};
+  const displayRaw = Object.prototype.hasOwnProperty.call(displayMap, id) ? displayMap[id] : '';
+  const display = displayRaw === 'toolbar' || displayRaw === 'more' || displayRaw === 'library' ? displayRaw : 'toolbar';
 
   const item = document.createElement('div');
   item.className = 'plugin-item';
@@ -1650,6 +1986,49 @@ function _renderPluginItem(pl){
     }
   });
   actions.appendChild(toggle);
+
+  const displayWrap = document.createElement('div');
+  displayWrap.className = 'plugin-display';
+  const optToolbar = document.createElement('label');
+  const optMore = document.createElement('label');
+  const optLibrary = document.createElement('label');
+  const rToolbar = document.createElement('input');
+  const rMore = document.createElement('input');
+  const rLibrary = document.createElement('input');
+  rToolbar.type = 'radio';
+  rMore.type = 'radio';
+  rLibrary.type = 'radio';
+  rToolbar.name = `plugin-display-${id}`;
+  rMore.name = `plugin-display-${id}`;
+  rLibrary.name = `plugin-display-${id}`;
+  rToolbar.value = 'toolbar';
+  rMore.value = 'more';
+  rLibrary.value = 'library';
+  rToolbar.checked = display === 'toolbar';
+  rMore.checked = display === 'more';
+  rLibrary.checked = display === 'library';
+  optToolbar.appendChild(rToolbar);
+  optMore.appendChild(rMore);
+  optLibrary.appendChild(rLibrary);
+  optToolbar.appendChild(document.createTextNode('挂到浮动工具栏'));
+  optMore.appendChild(document.createTextNode('仅出现在更多菜单'));
+  optLibrary.appendChild(document.createTextNode('仅在功能库中'));
+  displayWrap.appendChild(optToolbar);
+  displayWrap.appendChild(optMore);
+  displayWrap.appendChild(optLibrary);
+
+  const onDisplayChange = (val)=>{
+    const prevMap = settingsLike && settingsLike.pluginButtonDisplay && typeof settingsLike.pluginButtonDisplay === 'object' && !Array.isArray(settingsLike.pluginButtonDisplay)
+      ? settingsLike.pluginButtonDisplay
+      : {};
+    const nextMap = Object.assign({}, prevMap, { [id]: val });
+    try{ updateAppSettings({ pluginButtonDisplay: nextMap }); }catch(e){}
+  };
+
+  rToolbar.addEventListener('change', ()=>{ if (rToolbar.checked) onDisplayChange('toolbar'); });
+  rMore.addEventListener('change', ()=>{ if (rMore.checked) onDisplayChange('more'); });
+  rLibrary.addEventListener('change', ()=>{ if (rLibrary.checked) onDisplayChange('library'); });
+  actions.appendChild(displayWrap);
 
   item.appendChild(drag);
   item.appendChild(main);
@@ -1778,6 +2157,7 @@ try{
         try{ if (s.theme) applyTheme(s.theme, s); }catch(e){}
         try{ if (typeof s.showTooltips !== 'undefined') applyTooltips(!!s.showTooltips); }catch(e){}
         try{ if (s.visualStyle) applyVisualStyle(s.visualStyle); }catch(e){}
+        try{ if (Array.isArray(s.toolbarButtonOrder) || Array.isArray(s.toolbarButtonHidden)) applyToolbarLayout(s); }catch(e){}
         try{ if (s.canvasColor) applyModeCanvasBackground(_appMode, s.canvasColor, { getToolState, replaceStrokeColors, setBrushColor, updatePenModeLabel, getPreferredPenColor: (mode)=>getPenColorFromSettings(s, mode) }); }catch(e){}
         try{ if (typeof s.multiTouchPen !== 'undefined') setMultiTouchPenEnabled(!!s.multiTouchPen); }catch(e){}
         try{ if (typeof s.smartInkRecognition !== 'undefined') setInkRecognitionEnabled(!!s.smartInkRecognition); }catch(e){}
@@ -1878,7 +2258,9 @@ if (saveSettings) saveSettings.addEventListener('click', ()=>{
     shortcuts: {
       undo: d.shortcuts && typeof d.shortcuts.undo === 'string' ? d.shortcuts.undo.trim() : '',
       redo: d.shortcuts && typeof d.shortcuts.redo === 'string' ? d.shortcuts.redo.trim() : ''
-    }
+    },
+    toolbarButtonOrder: Array.isArray(d.toolbarButtonOrder) ? d.toolbarButtonOrder.slice() : [],
+    toolbarButtonHidden: Array.isArray(d.toolbarButtonHidden) ? d.toolbarButtonHidden.slice() : []
   };
   // persist via cross-module helper which emits SETTINGS_CHANGED
   const merged = updateAppSettings(newS);
@@ -1892,6 +2274,7 @@ if (saveSettings) saveSettings.addEventListener('click', ()=>{
   try{ applyVisualStyle(newS.visualStyle); }catch(e){}
   try{ applyModeCanvasBackground(_appMode, newS.canvasColor, { getToolState, replaceStrokeColors, setBrushColor, updatePenModeLabel, getPreferredPenColor: (mode)=>getPenColorFromSettings(merged, mode) }); }catch(e){}
   applyTooltips(newS.showTooltips);
+  try{ applyToolbarLayout(merged); }catch(e){}
   try{ setMultiTouchPenEnabled(!!newS.multiTouchPen); }catch(e){}
   try{ setInkRecognitionEnabled(!!newS.smartInkRecognition); }catch(e){}
   try{
@@ -2353,7 +2736,23 @@ function bindShortcutsFromSettings(){
 // initial bind
 bindShortcutsFromSettings();
 // rebind on settings change and apply visual style
-Message.on(EVENTS.SETTINGS_CHANGED, (s)=>{ try{ bindShortcutsFromSettings(); if (s && typeof s.designLanguage !== 'undefined') applyDesignLanguage(s.designLanguage); if (s && s.theme) applyTheme(s.theme, s); if (s && s.visualStyle) applyVisualStyle(s.visualStyle); if (s && s.canvasColor) applyModeCanvasBackground(_appMode, s.canvasColor, { getToolState, replaceStrokeColors, setBrushColor, updatePenModeLabel, getPreferredPenColor: (mode)=>getPenColorFromSettings(s, mode) }); if (s && typeof s.multiTouchPen !== 'undefined') setMultiTouchPenEnabled(!!s.multiTouchPen); if (s && typeof s.smartInkRecognition !== 'undefined') setInkRecognitionEnabled(!!s.smartInkRecognition); }catch(e){} });
+Message.on(EVENTS.SETTINGS_CHANGED, (s)=>{
+  try{
+    bindShortcutsFromSettings();
+    if (s && typeof s.designLanguage !== 'undefined') applyDesignLanguage(s.designLanguage);
+    if (s && s.theme) applyTheme(s.theme, s);
+    if (s && s.visualStyle) applyVisualStyle(s.visualStyle);
+    if (s && s.canvasColor) applyModeCanvasBackground(_appMode, s.canvasColor, { getToolState, replaceStrokeColors, setBrushColor, updatePenModeLabel, getPreferredPenColor: (mode)=>getPenColorFromSettings(s, mode) });
+    if (s && typeof s.multiTouchPen !== 'undefined') setMultiTouchPenEnabled(!!s.multiTouchPen);
+    if (s && typeof s.smartInkRecognition !== 'undefined') setInkRecognitionEnabled(!!s.smartInkRecognition);
+    if (s && s.kind === 'pdf_viewer_opened') {
+      setPdfMode(true);
+      enterAnnotationMode({ persist: false });
+      applyWindowInteractivity();
+      scheduleInteractiveRectsUpdate();
+    }
+  }catch(e){}
+});
 
 // initialize undo/redo button states now (renderer may have emitted before listener attached)
 try{ if (undoBtn) undoBtn.disabled = !canUndo(); if (redoBtn) redoBtn.disabled = !canRedo(); if (historyStateDisplay) historyStateDisplay.textContent = `撤销: ${canUndo()? '可' : '—'}  重做: ${canRedo()? '可' : '—'}`; }catch(e){}

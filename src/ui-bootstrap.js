@@ -77,6 +77,20 @@ async function runUnitTests(){
     }
 
     {
+      const PdfMod = await import('./pdf_viewer.js');
+      const { resolvePdfOpenMode } = PdfMod;
+      Settings.resetSettings();
+      let s = Settings.loadSettings();
+      eq(resolvePdfOpenMode(undefined, s), 'window', 'default pdf mode window');
+      updateAppSettings({ pdfDefaultMode: 'fullscreen' });
+      s = Settings.loadSettings();
+      eq(resolvePdfOpenMode(undefined, s), 'fullscreen', 'setting pdfDefaultMode applied');
+      eq(resolvePdfOpenMode('window', s), 'window', 'explicit string param window');
+      eq(resolvePdfOpenMode('fullscreen', s), 'fullscreen', 'explicit string param fullscreen');
+      eq(resolvePdfOpenMode({ mode: 'fullscreen' }, s), 'fullscreen', 'object param fullscreen');
+    }
+
+    {
       const el = document.createElement('div');
       el.className = 'settings-loading';
       el.hidden = true;
@@ -173,6 +187,114 @@ async function runUnitTests(){
       const s3 = Settings.loadSettings();
       applyModeCanvasBackground('whiteboard', 'black', { getToolState: Renderer.getToolState, replaceStrokeColors: Renderer.replaceStrokeColors, setBrushColor: Renderer.setBrushColor, getPreferredPenColor: (mode)=>getPenColorFromSettings(s3, mode) });
       eq(String(Renderer.getToolState().brushColor).toUpperCase(), '#FFFFFF', 'explicit white preserved');
+    }
+
+    {
+      document.body.innerHTML = '';
+      document.body.dataset.appMode = 'whiteboard';
+      const board = document.createElement('canvas');
+      board.id = 'board';
+      document.body.appendChild(board);
+      const panel = document.createElement('div');
+      panel.className = 'floating-panel';
+      document.body.appendChild(panel);
+      const tools = document.createElement('div');
+      tools.className = 'panel-section tools';
+      panel.appendChild(tools);
+      const makeTool = (id)=>{
+        const wrap = document.createElement('div');
+        wrap.className = 'tool';
+        const btn = document.createElement('button');
+        btn.id = id;
+        btn.className = 'tool-btn';
+        wrap.appendChild(btn);
+        tools.appendChild(wrap);
+        return btn;
+      };
+      const pointerTool = makeTool('pointerTool');
+      const colorTool = makeTool('colorTool');
+      const eraserTool = makeTool('eraserTool');
+      const moreTool = makeTool('moreTool');
+      const exitTool = makeTool('exitTool');
+      const collapseTool = makeTool('collapseTool');
+      const undoBtn = makeTool('undoBtn');
+      const redoBtn = makeTool('redoBtn');
+      const colorMenu = document.createElement('div');
+      colorMenu.id = 'colorMenu';
+      colorMenu.className = 'submenu colors';
+      colorMenu.dataset.pinned = 'false';
+      colorMenu.setAttribute('aria-hidden','true');
+      panel.appendChild(colorMenu);
+      const eraserMenu = document.createElement('div');
+      eraserMenu.id = 'eraserMenu';
+      eraserMenu.className = 'submenu actions';
+      eraserMenu.dataset.pinned = 'false';
+      eraserMenu.setAttribute('aria-hidden','true');
+      panel.appendChild(eraserMenu);
+      const moreMenu = document.createElement('div');
+      moreMenu.id = 'moreMenu';
+      moreMenu.className = 'submenu actions';
+      moreMenu.dataset.pinned = 'false';
+      moreMenu.setAttribute('aria-hidden','true');
+      panel.appendChild(moreMenu);
+      const pinBtn = document.createElement('button');
+      pinBtn.className = 'submenu-pin';
+      moreMenu.appendChild(pinBtn);
+      const MainTool = await import('./main_tool.js');
+      let pointerCalls = 0;
+      let applyCalls = 0;
+      let rectCalls = 0;
+      let inst = null;
+      inst = MainTool.initMainTool({
+        onPointerToggle: ()=>{
+          pointerCalls++;
+          throw new Error('simulated-crash');
+        },
+        onApplyInteractivity: ()=>{
+          applyCalls++;
+        },
+        onScheduleRects: ()=>{
+          rectCalls++;
+        },
+        onColorOpen: ({ button, menu })=>{
+          assert(button === colorTool, 'colorOpen button ok');
+          assert(menu === colorMenu, 'colorOpen menu ok');
+        },
+        onEraserOpen: ({ button, menu })=>{
+          assert(button === eraserTool, 'eraserOpen button ok');
+          assert(menu === eraserMenu, 'eraserOpen menu ok');
+        },
+        onMoreOpen: ({ button, menu })=>{
+          assert(button === moreTool, 'moreOpen button ok');
+          assert(menu === moreMenu, 'moreOpen menu ok');
+        },
+        onCollapseChanged: (collapsed)=>{
+          if (collapsed) panel.classList.add('collapsed'); else panel.classList.remove('collapsed');
+        },
+        getInitialCollapsed: ()=>{
+          return false;
+        },
+        onGlobalClickOutside: ()=>{
+          if (inst) inst.closeAllSubmenus();
+        },
+        onEscape: ()=>{
+          if (inst) inst.closeAllSubmenus();
+        }
+      });
+      pointerTool.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      assert(pointerCalls === 1, 'pointer crash isolated');
+      assert(applyCalls >= 1 && rectCalls >= 1, 'apply and rect callbacks invoked');
+      colorTool.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      eraserTool.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      moreTool.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      inst.showSubmenu(moreMenu, moreTool);
+      assert(moreMenu.classList.contains('open'), 'moreMenu opened via showSubmenu');
+      document.body.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      assert(!moreMenu.classList.contains('open'), 'outside click closes moreMenu via main_tool');
+      const perf = MainTool.measureToolbarRenderPerf();
+      assert(perf && typeof perf.totalMs === 'number' && perf.totalMs >= 0, 'measureToolbarRenderPerf totalMs non-negative');
+      assert(perf && typeof perf.count === 'number' && perf.count >= 0, 'measureToolbarRenderPerf count non-negative');
+      MainTool.simulateCrashIsolation();
     }
 
     {
@@ -323,6 +445,12 @@ async function runUnitTests(){
       assert(moreMenu.classList.contains('open'), 'moreMenu opened for outside-close');
       board.dispatchEvent(new MouseEvent('click', { bubbles: true }));
       assert(!moreMenu.classList.contains('open'), 'outside click closes moreMenu');
+
+      document.body.dataset.appMode = 'whiteboard';
+      try{ delete document.body.dataset.pdfMode; }catch(e){}
+      Message.emit(EVENTS.SETTINGS_CHANGED, { kind: 'pdf_viewer_opened', mode: 'window', path: 'file:///dummy.pdf' });
+      eq(document.body.dataset.appMode, 'annotation', 'pdf viewer switches to annotation mode');
+      eq(document.body.dataset.pdfMode, '1', 'pdf viewer sets pdf-mode flag');
     }
 
     {

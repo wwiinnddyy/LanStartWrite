@@ -16,6 +16,24 @@ import Settings from './setting.js';
 export function updateAppSettings(partial){
   const merged = Settings.saveSettings(partial);
   try{ Message.emit(EVENTS.SETTINGS_CHANGED, merged); }catch(e){}
+  try{
+    const p = partial && typeof partial === 'object' ? partial : {};
+    const hasToolbarOrder = Object.prototype.hasOwnProperty.call(p, 'toolbarButtonOrder');
+    const hasToolbarHidden = Object.prototype.hasOwnProperty.call(p, 'toolbarButtonHidden');
+    const hasPluginDisplay = Object.prototype.hasOwnProperty.call(p, 'pluginButtonDisplay');
+    if (hasToolbarOrder || hasToolbarHidden || hasPluginDisplay) {
+      const entry = {
+        ts: Date.now(),
+        kind: 'toolbar_config_change',
+        patch: {
+          toolbarButtonOrder: hasToolbarOrder ? p.toolbarButtonOrder : undefined,
+          toolbarButtonHidden: hasToolbarHidden ? p.toolbarButtonHidden : undefined,
+          pluginButtonDisplay: hasPluginDisplay ? p.pluginButtonDisplay : undefined
+        }
+      };
+      try{ localStorage.setItem('toolbar_config_change_last', JSON.stringify(entry)); }catch(e){}
+    }
+  }catch(e){}
   return merged;
 }
 

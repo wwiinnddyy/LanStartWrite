@@ -243,6 +243,13 @@
       html.dl-md3 .tool-btn.active::after,html.dl-md3 .tool-btn.ink-visible::after{transform:translate(-50%,-50%) scale(1);opacity:1}
       html.dl-md3 .tool-btn.active::after{animation:lsInkSpring 500ms}
       html.dl-switching .floating-panel,html.dl-switching .tool-btn,html.dl-switching .submenu,html.dl-switching .mode-btn{transition-duration:1ms !important}
+      body[data-pdf-mode="1"] .floating-panel{
+        border-color:#e53935;
+        box-shadow:0 12px 28px rgba(229,57,53,0.44);
+      }
+      body[data-pdf-mode="1"] .tool-btn.active{
+        color:#e53935;
+      }
       /* 子菜单为固定排版：固定宽度，自适应高度包含所有控件 */
       .submenu{position:absolute;right:0;top:48px;background:rgba(255,255,255,0.97);padding:0;border-radius:18px;box-shadow:0 8px 22px rgba(0,0,0,0.12);display:none;z-index:2500;width:min(240px,calc(100vw - 40px));max-width:calc(100vw - 40px);box-sizing:border-box;transition:top 0.3s cubic-bezier(0.25,0.46,0.45,0.94),opacity 0.3s ease;flex-direction:column;overflow:hidden}
       .submenu.open{display:flex}

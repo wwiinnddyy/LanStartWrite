@@ -15,7 +15,6 @@ const DEFAULTS = {
   toolbarCollapsed: false,
   enableAutoResize: true,
   toolbarPosition: { right: 20, top: 80 },
-  // new settings
   designLanguage: 'fluent',
   theme: 'system',
   themeCustom: {
@@ -43,7 +42,7 @@ const DEFAULTS = {
   },
   annotationPenColor: '#FF0000',
   whiteboardPenColor: '#000000',
-  visualStyle: 'blur', // 'solid' | 'blur' | 'transparent'
+  visualStyle: 'blur',
   mica: {
     intensity: 60,
     radius: 24,
@@ -51,8 +50,12 @@ const DEFAULTS = {
     overlayOpacity: 0.30,
     saturation: 1.2
   },
-  canvasColor: 'white', // 'white' | 'black' | 'chalkboard'
-  shortcuts: { undo: 'Ctrl+Z', redo: 'Ctrl+Y' }
+  canvasColor: 'white',
+  shortcuts: { undo: 'Ctrl+Z', redo: 'Ctrl+Y' },
+  toolbarButtonOrder: [],
+  toolbarButtonHidden: [],
+  pluginButtonDisplay: {},
+  pdfDefaultMode: 'window'
 };
 
 function _safeGet(key){

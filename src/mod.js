@@ -1,5 +1,7 @@
 import MiniEventEmitter from './mini_eventemitter.js';
 import Message, { EVENTS } from './message.js';
+import ButtonBox from './button_box.js';
+import Settings from './setting.js';
 
 const _hostBus = new MiniEventEmitter();
 const _plugins = new Map();
@@ -14,6 +16,14 @@ let _reloadTimer = 0;
 let _injectSeq = 0;
 let _injectObserver = null;
 const _injectContainers = new WeakMap();
+
+function _toolLogicalId(pluginId, toolId) {
+  return `${pluginId}:tool:${toolId}`;
+}
+
+function _menuLogicalId(pluginId, buttonId) {
+  return `${pluginId}:menu:${buttonId}`;
+}
 
 function _nowId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
@@ -123,51 +133,60 @@ function _moreMenuQuickGrid() {
   return menu.querySelector('.submenu-quick-grid');
 }
 
-function _applyButtonIcon(btn, def) {
-  const iconSvg = def && def.iconSvg ? String(def.iconSvg || '') : '';
-  const iconUrl = def && def.iconUrl ? String(def.iconUrl || '') : '';
-  const iconClass = def && def.iconClass ? String(def.iconClass || '') : '';
-  const label = def && def.label ? String(def.label || '') : '';
-  if (iconSvg && iconSvg.trim()) {
-    btn.innerHTML = iconSvg;
-    return;
-  }
-  if (iconUrl && iconUrl.trim()) {
-    btn.innerHTML = '';
-    const img = document.createElement('img');
-    img.src = iconUrl;
-    img.alt = '';
-    img.draggable = false;
-    try { img.style.width = '22px'; img.style.height = '22px'; } catch (e) {}
-    btn.appendChild(img);
-    return;
-  }
-  if (iconClass && iconClass.trim()) {
-    btn.innerHTML = '';
-    const el = document.createElement('i');
-    el.className = iconClass;
-    btn.appendChild(el);
-    return;
-  }
-  btn.textContent = label || 'Mod';
-}
-
 function _buildIconButton(def) {
-  const btn = document.createElement('button');
-  btn.className = 'tool-btn';
-  btn.id = def.domId;
-  btn.setAttribute('title', def.title || '');
-  btn.setAttribute('aria-label', def.title || '');
-  _applyButtonIcon(btn, def);
+  const logicalId = def.buttonBoxId || _toolLogicalId(def.pluginId, def.toolId || def.buttonId || def.domId || '');
+  const base = {
+    id: logicalId,
+    title: def.title || '',
+    iconSvg: def.iconSvg || '',
+    iconUrl: def.iconUrl || '',
+    iconClass: def.iconClass || '',
+    label: def.label || '',
+    kind: 'toolbar',
+    source: 'plugin',
+    pluginId: def.pluginId,
+    toolId: def.toolId || def.buttonId || ''
+  };
+  const reg = ButtonBox.registerButton(base) || base;
+  const btn = ButtonBox.createButtonElement(reg, {
+    domId: def.domId,
+    variant: 'toolbar'
+  });
+  if (!btn) return null;
+  ButtonBox.registerInstance(reg.id, btn, 'toolbar');
   return btn;
 }
 
 function _createToolButton(def) {
+  try{
+    const s = Settings.loadSettings();
+    const map = s && s.pluginButtonDisplay && typeof s.pluginButtonDisplay === 'object' && !Array.isArray(s.pluginButtonDisplay)
+      ? s.pluginButtonDisplay
+      : {};
+    const key = def.pluginId;
+    const mode = Object.prototype.hasOwnProperty.call(map, key) ? map[key] : '';
+    if (mode === 'library') return null;
+    if (mode === 'more') {
+      const rec = {
+        pluginId: def.pluginId,
+        buttonId: def.toolId,
+        domId: def.domId,
+        title: def.title,
+        iconSvg: def.iconSvg,
+        iconUrl: def.iconUrl,
+        iconClass: def.iconClass,
+        label: def.label
+      };
+      _createMenuButton(rec);
+      return null;
+    }
+  }catch(e){}
   const container = _toolContainer();
   if (!container) return null;
   const wrap = document.createElement('div');
   wrap.className = 'tool';
   const btn = _buildIconButton(def);
+  if (!btn) return null;
   btn.addEventListener('click', () => {
     _sendToPlugin(def.pluginId, { type: 'tool-click', data: { toolId: def.toolId } });
   });
@@ -199,10 +218,29 @@ function _createModeButton(def) {
 function _createMenuButton(def) {
   const grid = _moreMenuQuickGrid();
   if (!grid) return null;
-  const btn = _buildIconButton(def);
+  const logicalId = def.buttonBoxId || _menuLogicalId(def.pluginId, def.buttonId || '');
+  const base = {
+    id: logicalId,
+    title: def.title || '',
+    iconSvg: def.iconSvg || '',
+    iconUrl: def.iconUrl || '',
+    iconClass: def.iconClass || '',
+    label: def.label || '',
+    kind: 'menu',
+    source: 'plugin',
+    pluginId: def.pluginId,
+    buttonId: def.buttonId || ''
+  };
+  const reg = ButtonBox.registerButton(base) || base;
+  const btn = ButtonBox.createButtonElement(reg, {
+    domId: def.domId,
+    variant: 'menu'
+  });
+  if (!btn) return null;
   btn.addEventListener('click', () => {
     _sendToPlugin(def.pluginId, { type: 'menu-click', data: { buttonId: def.buttonId } });
   });
+  ButtonBox.registerInstance(reg.id, btn, 'plugin-menu');
   grid.appendChild(btn);
   return btn;
 }
