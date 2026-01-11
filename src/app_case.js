@@ -74,7 +74,8 @@ const IDS = {
   closeResourceModal: 'closeResourceModal',
   btnResource: 'appCaseResourceBtn',
   btnTheme: 'appCaseThemeBtn',
-  btnPdf: 'appCasePdfBtn'
+  btnPdf: 'appCasePdfBtn',
+  btnVideoBooth: 'appCaseVideoBoothBtn'
 };
 
 const DB = {
@@ -283,7 +284,11 @@ class FeatureHub {
   async setSortConfig(next){
     const merged = _normalizeSortConfig({ ...this._sortConfig, ...(next || {}), weights: { ...(this._sortConfig.weights || {}), ...((next && next.weights) || {}) } });
     this._sortConfig = merged;
-    try{ await _kvSet(DB.keySortConfig, merged); }catch(e){}
+    try{
+      await _kvSet(DB.keySortConfig, merged);
+    }catch(e){
+      console.error('Failed to persist sort config:', e);
+    }
     return this.getSortConfig();
   }
 
@@ -395,7 +400,11 @@ class FeatureHub {
     if (this._usageFlushTimer) return;
     this._usageFlushTimer = window.setTimeout(async ()=>{
       this._usageFlushTimer = 0;
-      try{ await _kvSet(DB.keyUsage, this._usage); }catch(e){}
+      try{
+        await _kvSet(DB.keyUsage, this._usage);
+      }catch(e){
+        console.error('Failed to flush feature usage to DB:', e);
+      }
     }, 240);
   }
 
@@ -527,7 +536,8 @@ const ICONS = {
   library: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><g fill="currentColor"><path d="M5.75 4A2.75 2.75 0 0 0 3 6.75v10.5A2.75 2.75 0 0 0 5.75 20h12.5A2.75 2.75 0 0 0 21 17.25V6.75A2.75 2.75 0 0 0 18.25 4zM4.5 6.75c0-.69.56-1.25 1.25-1.25h12.5c.69 0 1.25.56 1.25 1.25v10.5c0 .69-.56 1.25-1.25 1.25H5.75c-.69 0-1.25-.56-1.25-1.25z"/><path d="M8 8.25c0-.41.34-.75.75-.75h6.5a.75.75 0 0 1 0 1.5h-6.5A.75.75 0 0 1 8 8.25m0 3c0-.41.34-.75.75-.75h6.5a.75.75 0 0 1 0 1.5h-6.5A.75.75 0 0 1 8 11.25m0 3c0-.41.34-.75.75-.75h4.5a.75.75 0 0 1 0 1.5h-4.5A.75.75 0 0 1 8 14.25"/></g></svg>`,
   sun: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><g fill="currentColor"><path d="M12 18.5a6.5 6.5 0 1 0 0-13a6.5 6.5 0 0 0 0 13m0-11.5a5 5 0 1 1 0 10a5 5 0 0 1 0-10"/><path d="M12 2.75c.41 0 .75.34.75.75v1.25a.75.75 0 0 1-1.5 0V3.5c0-.41.34-.75.75-.75m0 16.5c.41 0 .75.34.75.75v1.25a.75.75 0 0 1-1.5 0V20c0-.41.34-.75.75-.75M3.5 11.25h1.25a.75.75 0 0 1 0 1.5H3.5a.75.75 0 0 1 0-1.5m15.75 0h1.25a.75.75 0 0 1 0 1.5h-1.25a.75.75 0 0 1 0-1.5M5.22 5.22c.3-.3.77-.3 1.06 0l.88.88a.75.75 0 0 1-1.06 1.06l-.88-.88a.75.75 0 0 1 0-1.06m11.62 11.62c.3-.3.77-.3 1.06 0l.88.88a.75.75 0 1 1-1.06 1.06l-.88-.88a.75.75 0 0 1 0-1.06M18.78 5.22c.3.3.3.77 0 1.06l-.88.88a.75.75 0 1 1-1.06-1.06l.88-.88c.3-.3.77-.3 1.06 0M7.16 16.84c.3.3.3.77 0 1.06l-.88.88a.75.75 0 1 1-1.06-1.06l.88-.88c.3-.3.77-.3 1.06 0"/></g></svg>`,
   moon: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M13.93 2.5a.75.75 0 0 1 .69.98a8.75 8.75 0 0 0 10.9 11.1a.75.75 0 0 1 .96.88A10.25 10.25 0 1 1 13.93 2.5m-.98 2.38A8.75 8.75 0 1 0 24.1 16.97A10.26 10.26 0 0 1 12.95 4.88"/></svg>`,
-  pdf: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><g fill="currentColor"><path d="M6.75 3A2.75 2.75 0 0 0 4 5.75v12.5A2.75 2.75 0 0 0 6.75 21h10.5A2.75 2.75 0 0 0 20 18.25V9.414a2.75 2.75 0 0 0-.805-1.945l-3.664-3.664A2.75 2.75 0 0 0 13.586 3zM5.5 5.75C5.5 4.784 6.284 4 7.25 4h6.086c.464 0 .909.184 1.237.513l3.664 3.664c.329.328.513.773.513 1.237v8.836c0 .966-.784 1.75-1.75 1.75H6.75A1.75 1.75 0 0 1 5.5 18.25z"/><path d="M8.25 11h1.25a1.75 1.75 0 0 1 0 3.5H9v1.25a.75.75 0 0 1-1.5 0v-4.5a.75.75 0 0 1 .75-.75m.75 2a.25.25 0 0 0 0-.5H9v.5zM12 11a.75.75 0 0 1 .75.75v1.25h.75a1.75 1.75 0 0 1 0 3.5H12a.75.75 0 0 1-.75-.75v-4.5A.75.75 0 0 1 12 11m.75 4h.75a.25.25 0 0 0 0-.5h-.75zM16.25 11a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0V15h-.25a.75.75 0 0 1 0-1.5h.25v-.75a.75.75 0 0 1 .75-.75"/></g></svg>`
+  pdf: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><g fill="currentColor"><path d="M6.75 3A2.75 2.75 0 0 0 4 5.75v12.5A2.75 2.75 0 0 0 6.75 21h10.5A2.75 2.75 0 0 0 20 18.25V9.414a2.75 2.75 0 0 0-.805-1.945l-3.664-3.664A2.75 2.75 0 0 0 13.586 3zM5.5 5.75C5.5 4.784 6.284 4 7.25 4h6.086c.464 0 .909.184 1.237.513l3.664 3.664c.329.328.513.773.513 1.237v8.836c0 .966-.784 1.75-1.75 1.75H6.75A1.75 1.75 0 0 1 5.5 18.25z"/><path d="M8.25 11h1.25a1.75 1.75 0 0 1 0 3.5H9v1.25a.75.75 0 0 1-1.5 0v-4.5a.75.75 0 0 1 .75-.75m.75 2a.25.25 0 0 0 0-.5H9v.5zM12 11a.75.75 0 0 1 .75.75v1.25h.75a1.75 1.75 0 0 1 0 3.5H12a.75.75 0 0 1-.75-.75v-4.5A.75.75 0 0 1 12 11m.75 4h.75a.25.25 0 0 0 0-.5h-.75zM16.25 11a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0V15h-.25a.75.75 0 0 1 0-1.5h.25v-.75a.75.75 0 0 1 .75-.75"/></g></svg>`,
+  videoBooth: `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"><path fill="currentColor" d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11zM10 15l-2.25-3l-1.75 2.26V10h8v4.5z"/></svg>`
 };
 
 function _ensureAppButtons(){
@@ -539,6 +549,7 @@ function _ensureAppButtons(){
     resourceBtn = _buildToolBtn(IDS.btnResource, '编辑资源库', ICONS.library);
     resourceBtn.dataset.appCaseSeq = '0';
     resourceBtn.dataset.featureId = 'core:resource-library';
+    resourceBtn.dataset.featureCategory = 'core';
     g.insertBefore(resourceBtn, g.firstChild);
   }
 
@@ -547,6 +558,7 @@ function _ensureAppButtons(){
     themeBtn = _buildToolBtn(IDS.btnTheme, '日夜模式', ICONS.moon);
     themeBtn.dataset.appCaseSeq = '1';
     themeBtn.dataset.featureId = 'core:theme-toggle';
+    themeBtn.dataset.featureCategory = 'core';
     g.insertBefore(themeBtn, resourceBtn.nextSibling);
   }
 
@@ -555,14 +567,25 @@ function _ensureAppButtons(){
     pdfBtn = _buildToolBtn(IDS.btnPdf, '打开PDF文件', ICONS.pdf);
     pdfBtn.dataset.appCaseSeq = '2';
     pdfBtn.dataset.featureId = 'core:open-pdf';
+    pdfBtn.dataset.featureCategory = 'tool';
     g.insertBefore(pdfBtn, themeBtn.nextSibling);
+  }
+
+  let videoBoothBtn = document.getElementById(IDS.btnVideoBooth);
+  if (!videoBoothBtn) {
+    videoBoothBtn = _buildToolBtn(IDS.btnVideoBooth, '视频展台', ICONS.videoBooth);
+    videoBoothBtn.dataset.appCaseSeq = '3';
+    videoBoothBtn.dataset.featureId = 'core:video-booth';
+    videoBoothBtn.dataset.featureCategory = 'utility'; // Add category identifier
+    g.insertBefore(videoBoothBtn, pdfBtn.nextSibling);
   }
 
   _ensureSeq(resourceBtn);
   _ensureSeq(themeBtn);
   _ensureSeq(pdfBtn);
+  _ensureSeq(videoBoothBtn);
 
-  return { g, resourceBtn, themeBtn, pdfBtn };
+  return { g, resourceBtn, themeBtn, pdfBtn, videoBoothBtn };
 }
 
 function _modalEls(){
@@ -882,7 +905,7 @@ function _wireAppCase(){
   const created = _ensureAppButtons();
   if (!created) return;
 
-  const { resourceBtn, themeBtn, pdfBtn } = created;
+  const { resourceBtn, themeBtn, pdfBtn, videoBoothBtn } = created;
 
   if (!resourceBtn.dataset.wired) {
     resourceBtn.dataset.wired = '1';
@@ -901,10 +924,18 @@ function _wireAppCase(){
     });
   }
 
+  if (videoBoothBtn && !videoBoothBtn.dataset.wired) {
+    videoBoothBtn.dataset.wired = '1';
+    videoBoothBtn.addEventListener('click', () => {
+      Message.emit(EVENTS.TOGGLE_VIDEO_BOOTH);
+    });
+  }
+
   try{
     featureHub.register({ featureId: 'core:resource-library', title: '编辑资源库', version: '1.0.0', weight: 1000, domButton: resourceBtn, invoke: ()=>_openResourceEditor() });
     featureHub.register({ featureId: 'core:theme-toggle', title: '日夜模式', version: '1.0.0', weight: 900, domButton: themeBtn, invoke: ()=>_toggleTheme() });
     if (pdfBtn) featureHub.register({ featureId: 'core:open-pdf', title: '打开PDF文件', version: '1.0.0', weight: 800, domButton: pdfBtn, invoke: (params)=>openPdfFile(params) });
+    if (videoBoothBtn) featureHub.register({ featureId: 'core:video-booth', title: '视频展台', version: '1.0.0', weight: 700, domButton: videoBoothBtn, invoke: () => Message.emit(EVENTS.TOGGLE_VIDEO_BOOTH) });
   }catch(e){}
   _syncFeatureRegistryFromGrid();
 
@@ -967,19 +998,28 @@ export async function initAppCase(){
       const btns = _getGridButtonsForEdit();
       btns.forEach(_ensureSeq);
       const cfg = featureHub.getSortConfig();
-      const saved = await _kvGet(DB.keyOrder).catch(()=>null);
+      const saved = await _kvGet(DB.keyOrder).catch((err)=>{
+        console.error('Failed to get persisted order:', err);
+        return null;
+      });
       if (cfg.mode === 'manual' && Array.isArray(saved)) _applyOrderToGrid(saved);
       if (cfg.mode === 'smart') await _loadAndApplySavedOrder();
       _wireAppCase();
     });
-    try{ _obs.observe(g, { childList: true }); }catch(e){}
+    try{
+      _obs.observe(g, { childList: true });
+    }catch(e){
+      console.error('Failed to observe grid mutations:', e);
+    }
   }
 
   try{
     Message.on(EVENTS.SETTINGS_CHANGED, ()=>{
       _syncThemeBtnUI();
     });
-  }catch(e){}
+  }catch(e){
+    console.error('Failed to bind settings change for theme button:', e);
+  }
 }
 
 export default { initAppCase };

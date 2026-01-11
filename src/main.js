@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, screen, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, screen, dialog, Tray, Menu, nativeImage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
@@ -13,6 +13,7 @@ const _ALLOW_UNSIGNED_PLUGINS = true;
 let _testsTimeout = null;
 
 let mainWindow;
+let tray = null;
 let _overlayInteractiveRects = [];
 let _overlayIgnoreConfig = { ignore: false, forward: false };
 let _overlayLastApplied = null;
@@ -215,6 +216,132 @@ function createWindow(opts) {
   
   // 开发时打开开发者工具
   // mainWindow.webContents.openDevTools();
+}
+
+/**
+ * 创建系统托盘
+ */
+function _createTray() {
+  try {
+    const iconPath = _appIconPath();
+    if (!iconPath) return;
+
+    // 根据平台调整图标尺寸
+    const icon = nativeImage.createFromPath(iconPath).resize({ width: 16, height: 16 });
+    tray = new Tray(icon);
+    
+    // 尝试加载菜单图标
+    const _getIcon = (name, folder = 'flent_icon') => {
+      try {
+        const p = path.join(__dirname, '..', folder, name);
+        if (fs.existsSync(p)) return nativeImage.createFromPath(p).resize({ width: 16, height: 16 });
+      } catch (e) {}
+      return undefined;
+    };
+
+    const restartIcon = _getIcon('rotate-ccw.svg', 'iconpack');
+    const settingsIcon = _getIcon('fluent--settings-20-regular.svg');
+    const aboutIcon = _getIcon('fluent--apps-20-regular.svg');
+    const closeIcon = _getIcon('fluent--picture-in-picture-exit-20-regular.svg');
+
+    const contextMenu = Menu.buildFromTemplate([
+      { 
+        label: '重启白板', 
+        accelerator: 'CmdOrCtrl+R',
+        icon: restartIcon,
+        click: () => { _handleRestart(); } 
+      },
+      { 
+        label: '应用设置', 
+        accelerator: 'CmdOrCtrl+,',
+        icon: settingsIcon,
+        click: () => { _createSettingsWindow(); } 
+      },
+      { 
+        label: '关于应用', 
+        icon: aboutIcon,
+        click: () => { _createAboutWindow(); } 
+      },
+      { type: 'separator' },
+      { 
+        label: '关闭白板', 
+        accelerator: 'CmdOrCtrl+Q',
+        icon: closeIcon,
+        click: () => { _handleClose(); } 
+      }
+    ]);
+
+    tray.setToolTip('LanStartWrite - 白板助手');
+    tray.setContextMenu(contextMenu);
+    
+    tray.on('double-click', () => {
+      if (mainWindow) {
+        if (mainWindow.isMinimized()) mainWindow.restore();
+        mainWindow.show();
+        mainWindow.focus();
+      }
+    });
+  } catch (e) {
+    console.error('Failed to create tray:', e);
+  }
+}
+
+/**
+ * 处理关闭逻辑（带确认和保存）
+ */
+async function _handleClose() {
+  try {
+    const choice = dialog.showMessageBoxSync({
+      type: 'question',
+      buttons: ['确认退出', '取消'],
+      title: '退出确认',
+      message: '确定要完全退出白板应用吗？',
+      detail: '建议在退出前确保您的所有绘图已保存。',
+      defaultId: 1,
+      cancelId: 1
+    });
+
+    if (choice === 0) {
+      // 广播退出前准备消息，触发渲染进程保存
+      _broadcastAll('app:prepare-exit', { restart: false });
+      
+      // 延迟退出，给渲染进程留出保存状态的时间
+      setTimeout(() => {
+        app.quit();
+      }, 500);
+    }
+  } catch (e) {
+    app.quit();
+  }
+}
+
+/**
+ * 处理重启逻辑
+ */
+async function _handleRestart() {
+  try {
+    const choice = dialog.showMessageBoxSync({
+      type: 'question',
+      buttons: ['确认重启', '取消'],
+      title: '重启确认',
+      message: '确定要重启白板应用吗？',
+      detail: '应用将保存当前状态并重新启动。',
+      defaultId: 1,
+      cancelId: 1
+    });
+
+    if (choice === 0) {
+      _broadcastAll('app:prepare-exit', { restart: true });
+      
+      setTimeout(() => {
+        app.relaunch();
+        app.exit(0);
+      }, 500);
+    }
+  } catch (e) {
+    app.relaunch();
+    app.exit(0);
+  }
 }
 
 function _broadcast(channel, data) {
@@ -1001,6 +1128,7 @@ if (_RUN_TESTS) {
 
 app.whenReady().then(async () => {
   createWindow({ runTests: _RUN_TESTS });
+  _createTray();
   try { await _ensureAuditReady(); } catch (e) {}
   _ensureAuditReportTimer();
   if (_RUN_TESTS) {

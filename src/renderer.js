@@ -11,10 +11,13 @@ let eraserSize = 20;
 let brushColor = '#000000';
 let erasing = false;
 let eraserMode = 'pixel'; // 'pixel' | 'rect' | 'stroke'
+let toolMode = 'brush'; // 'brush' | 'highlight' | 'underline' | 'text'
+let textFont = '20px "Segoe UI"';
 
 const _documents = {
-  whiteboard: { ops: [], history: [], historyIndex: -1, brushSize: 4, eraserSize: 20, brushColor: '#000000', erasing: false, eraserMode: 'pixel', view: { scale: 1, offsetX: 0, offsetY: 0 } },
-  annotation: { ops: [], history: [], historyIndex: -1, brushSize: 4, eraserSize: 20, brushColor: '#ff0000', erasing: false, eraserMode: 'pixel', view: { scale: 1, offsetX: 0, offsetY: 0 } }
+  whiteboard: { ops: [], history: [], historyIndex: -1, brushSize: 4, eraserSize: 20, brushColor: '#000000', erasing: false, eraserMode: 'pixel', toolMode: 'brush', view: { scale: 1, offsetX: 0, offsetY: 0 } },
+  annotation: { ops: [], history: [], historyIndex: -1, brushSize: 4, eraserSize: 20, brushColor: '#ff0000', erasing: false, eraserMode: 'pixel', toolMode: 'brush', view: { scale: 1, offsetX: 0, offsetY: 0 } },
+  pdf: { ops: [], history: [], historyIndex: -1, brushSize: 4, eraserSize: 20, brushColor: '#ff0000', erasing: false, eraserMode: 'pixel', toolMode: 'brush', view: { scale: 1, offsetX: 0, offsetY: 0 } }
 };
 let _activeDocKey = 'whiteboard';
 
@@ -266,6 +269,17 @@ function pointerDown(e){
     return;
   }
 
+  if (toolMode === 'text') {
+    const text = prompt('请输入文字:');
+    if (text) {
+      const op = { type: 'text', x, y, text, color: brushColor, font: textFont };
+      ops.push(op);
+      pushHistory();
+      redrawAll();
+    }
+    return;
+  }
+
   drawing = true;
   lastX = x; lastY = y;
   // pointer capture to avoid lost events and reduce touch-related delays
@@ -281,7 +295,7 @@ function pointerDown(e){
   if (erasing && eraserMode === 'pixel') {
     currentOp = { type: 'erase', size: eraserSize, points: [pt] };
   } else {
-    currentOp = { type: 'stroke', color: brushColor, size: brushSize, points: [pt] };
+    currentOp = { type: 'stroke', color: brushColor, size: brushSize, points: [pt], tool: toolMode };
   }
 }
 
@@ -316,6 +330,7 @@ function pointerMove(e){
   const p = typeof e.pressure === 'number' ? e.pressure : NaN;
 
   if (currentOp && currentOp.type === 'rectSelect') { currentOp.x = x; currentOp.y = y; redrawAll(); drawRectOverlay(currentOp.startX, currentOp.startY, x, y); return; }
+  if (currentOp && currentOp.tool === 'underline') { currentOp.points = [currentOp.points[0], { x, y, t, p }]; redrawAll(); drawOp(currentOp); return; }
   if (erasing && eraserMode === 'stroke') { deleteStrokesAtPoint(x, y); return; }
   if (currentOp && (currentOp.type === 'stroke' || currentOp.type === 'erase')) {
     const pt = { x, y, t, p };
@@ -415,6 +430,8 @@ function redrawAll() {
   for (const op of ops) {
     if (op.type === 'stroke') drawOp(op, 'source-over');
     else if (op.type === 'erase') drawOp(op, 'destination-out');
+    else if (op.type === 'text') drawOp(op, 'source-over');
+    else if (op.type === 'image') drawOp(op, 'source-over');
     else if (op.type === 'clearRect') {
       ctx.save();
       ctx.globalCompositeOperation = 'destination-out';
@@ -428,11 +445,45 @@ function redrawAll() {
   }
 }
 
+const _imageCache = new Map();
+
 function drawOp(op, composite) {
   ctx.save();
   ctx.globalCompositeOperation = composite || 'source-over';
+  
+  if (op.type === 'text') {
+    ctx.font = op.font || textFont;
+    ctx.fillStyle = op.color || brushColor;
+    ctx.fillText(op.text || '', op.x, op.y);
+    ctx.restore();
+    return;
+  }
+
+  if (op.type === 'image') {
+    const src = op.src;
+    if (!src) { ctx.restore(); return; }
+    let img = _imageCache.get(src);
+    if (!img) {
+      img = new Image();
+      img.onload = () => redrawAll();
+      img.src = src;
+      _imageCache.set(src, img);
+    }
+    if (img.complete) {
+      ctx.drawImage(img, op.x, op.y, op.w, op.h);
+    }
+    ctx.restore();
+    return;
+  }
+
+  if (op.tool === 'highlight') {
+    ctx.globalAlpha = 0.4;
+    ctx.globalCompositeOperation = 'multiply';
+  }
+
   if (op.type === 'stroke') ctx.strokeStyle = op.color || '#000';
   else ctx.strokeStyle = 'rgba(0,0,0,1)';
+  
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
   const pts = op.points;
@@ -440,6 +491,17 @@ function drawOp(op, composite) {
     ctx.restore();
     return;
   }
+  
+  if (op.tool === 'underline') {
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    ctx.lineTo(pts[pts.length - 1].x, pts[pts.length - 1].y);
+    ctx.stroke();
+    ctx.restore();
+    return;
+  }
+
   let hasWidth = false;
   for (let i = 0; i < pts.length; i++) {
     const p = pts[i];
@@ -505,8 +567,16 @@ export function getOpsInRect(x0,y0,w,h){
     let bminx=Infinity,bminy=Infinity,bmaxx=-Infinity,bmaxy=-Infinity;
     if (op.points && op.points.length){
       for (const p of op.points){ bminx=Math.min(bminx,p.x); bminy=Math.min(bminy,p.y); bmaxx=Math.max(bmaxx,p.x); bmaxy=Math.max(bmaxy,p.y); }
-    } else if (op.type==='clearRect'){
-      bminx = op.x; bminy = op.y; bmaxx = op.x + op.w; bmaxy = op.y + op.h;
+    } else if (op.type==='clearRect' || op.type==='image' || op.type==='text'){
+      bminx = op.x; bminy = op.y; 
+      if (op.type === 'image') {
+        bmaxx = op.x + op.w; bmaxy = op.y + op.h;
+      } else if (op.type === 'clearRect') {
+        bmaxx = op.x + op.w; bmaxy = op.y + op.h;
+      } else {
+        // text bounding box is approximate
+        bmaxx = op.x + 200; bmaxy = op.y + 40;
+      }
     } else continue;
     if (!(bmaxx < rx0 || bmaxy < ry0 || bminx > rx1 || bminy > ry1)) ids.push(i);
   }
@@ -515,15 +585,56 @@ export function getOpsInRect(x0,y0,w,h){
 
 export function moveOpsByIds(ids, dx, dy){
   if (!Array.isArray(ids) || ids.length===0) return;
-  for (const id of ids){ const op=ops[id]; if (!op) continue; if (op.points) { for (const p of op.points){ p.x += dx; p.y += dy; } } else if (op.type==='clearRect'){ op.x += dx; op.y += dy; } }
+  for (const id of ids){ 
+    const op=ops[id]; 
+    if (!op) continue; 
+    if (op.points) { 
+      for (const p of op.points){ p.x += dx; p.y += dy; } 
+    } else if (op.type==='clearRect' || op.type==='image' || op.type==='text'){ 
+      op.x += dx; op.y += dy; 
+    } 
+  }
   redrawAll(); pushHistory();
 }
 
 export function scaleOpsByIds(ids, scaleX, scaleY, originX, originY){
   if (!Array.isArray(ids) || ids.length===0) return;
-  for (const id of ids){ const op=ops[id]; if (!op) continue; if (op.points) { for (const p of op.points){ p.x = originX + (p.x - originX) * scaleX; p.y = originY + (p.y - originY) * scaleY; } } else if (op.type==='clearRect'){ const nw = op.w * scaleX, nh = op.h * scaleY; op.x = originX + (op.x - originX) * scaleX; op.y = originY + (op.y - originY) * scaleY; op.w = nw; op.h = nh; } }
+  for (const id of ids){ 
+    const op=ops[id]; 
+    if (!op) continue; 
+    if (op.points) { 
+      for (const p of op.points){ p.x = originX + (p.x - originX) * scaleX; p.y = originY + (p.y - originY) * scaleY; } 
+    } else if (op.type==='clearRect' || op.type==='image'){ 
+      const nw = op.w * scaleX, nh = op.h * scaleY; 
+      op.x = originX + (op.x - originX) * scaleX; 
+      op.y = originY + (op.y - originY) * scaleY; 
+      op.w = nw; op.h = nh; 
+    } else if (op.type === 'text') {
+      op.x = originX + (op.x - originX) * scaleX; 
+      op.y = originY + (op.y - originY) * scaleY;
+    }
+  }
   redrawAll(); pushHistory();
 }
+
+// Listen for video booth screenshots
+window.addEventListener('video-booth-screenshot', (e) => {
+  const { dataUrl, width, height } = e.detail;
+  // Calculate initial position (center of screen)
+  const targetW = Math.min(width, canvas.width * 0.5);
+  const targetH = height * (targetW / width);
+  const x = (canvas.width - targetW) / 2;
+  const y = (canvas.height - targetH) / 2;
+
+  const op = {
+    type: 'image',
+    src: dataUrl,
+    x, y, w: targetW, h: targetH
+  };
+  ops.push(op);
+  pushHistory();
+  redrawAll();
+});
 
 // Initialize canvas and event handlers
 updateCanvasSize();
@@ -583,6 +694,37 @@ export function getSnapshot(){
   return JSON.parse(JSON.stringify(ops));
 }
 
+/**
+ * 获取当前画布的缩略图 (DataURL)
+ * @param {number} maxWidth 缩略图最大宽度
+ * @returns {string} dataURL
+ */
+export function getCanvasImage(maxWidth = 300) {
+  const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+  const sw = canvas.width;
+  const sh = canvas.height;
+  
+  // 计算缩放比例
+  const scale = maxWidth / (sw / dpr);
+  const dw = maxWidth * dpr;
+  const dh = (sh / sw) * dw;
+
+  const tempCanvas = document.createElement('canvas');
+  tempCanvas.width = dw;
+  tempCanvas.height = dh;
+  const tctx = tempCanvas.getContext('2d');
+  
+  // 绘制背景 (如果是透明的白板，可能需要白色背景)
+  tctx.fillStyle = '#ffffff';
+  tctx.fillRect(0, 0, dw, dh);
+  
+  // 缩放并绘制当前画布内容
+  tctx.scale(scale, scale);
+  tctx.drawImage(canvas, 0, 0);
+  
+  return tempCanvas.toDataURL('image/jpeg', 0.8);
+}
+
 export function loadSnapshot(snap){
   if (_isAnnotationAppMode()) return;
   ops.length = 0;
@@ -603,6 +745,7 @@ export function getCubenoteState(){
     _documents[_activeDocKey].brushColor = brushColor;
     _documents[_activeDocKey].erasing = erasing;
     _documents[_activeDocKey].eraserMode = eraserMode;
+    _documents[_activeDocKey].toolMode = toolMode;
     _documents[_activeDocKey].view = { scale: viewScale, offsetX: viewOffsetX, offsetY: viewOffsetY };
   }catch(e){}
   return {
@@ -612,7 +755,8 @@ export function getCubenoteState(){
     activeDocKey: _activeDocKey,
     documents: {
       whiteboard: JSON.parse(JSON.stringify(_documents.whiteboard)),
-      annotation: JSON.parse(JSON.stringify(_documents.annotation))
+      annotation: JSON.parse(JSON.stringify(_documents.annotation)),
+      pdf: JSON.parse(JSON.stringify(_documents.pdf))
     }
   };
 }
@@ -621,11 +765,11 @@ export function applyCubenoteState(state, opts){
   const s = (state && typeof state === 'object') ? state : null;
   if (!s || s.format !== 'cubenote-state' || Number(s.schemaVersion) !== 1) throw new Error('invalid cubenote state');
   const docs = s.documents && typeof s.documents === 'object' ? s.documents : null;
-  if (!docs || !docs.whiteboard || !docs.annotation) throw new Error('invalid cubenote documents');
-  const conflict = (opts && opts.conflict) ? String(opts.conflict) : 'overwrite';
-  if (conflict === 'merge') {
-    const incomingKey = (s.activeDocKey === 'annotation') ? 'annotation' : 'whiteboard';
-    const incoming = docs[incomingKey];
+  if (!docs || !docs.whiteboard || !docs.annotation || !docs.pdf) throw new Error('invalid cubenote documents');
+    const conflict = (opts && opts.conflict) ? String(opts.conflict) : 'overwrite';
+    if (conflict === 'merge') {
+      const incomingKey = (s.activeDocKey === 'pdf') ? 'pdf' : (s.activeDocKey === 'annotation' ? 'annotation' : 'whiteboard');
+      const incoming = docs[incomingKey];
     const incomingOps = Array.isArray(incoming && incoming.ops) ? incoming.ops : [];
     if (incomingOps.length) {
       const appended = JSON.parse(JSON.stringify(incomingOps));
@@ -647,6 +791,7 @@ export function applyCubenoteState(state, opts){
     _documents.whiteboard.brushColor = String(wb.brushColor || '#000000');
     _documents.whiteboard.erasing = !!wb.erasing;
     _documents.whiteboard.eraserMode = String(wb.eraserMode || 'pixel');
+    _documents.whiteboard.toolMode = String(wb.toolMode || 'brush');
     _documents.whiteboard.view = wb.view && typeof wb.view === 'object'
       ? { scale: Number(wb.view.scale) || 1, offsetX: Number(wb.view.offsetX) || 0, offsetY: Number(wb.view.offsetY) || 0 }
       : { scale: 1, offsetX: 0, offsetY: 0 };
@@ -659,11 +804,26 @@ export function applyCubenoteState(state, opts){
     _documents.annotation.brushColor = String(an.brushColor || '#ff0000');
     _documents.annotation.erasing = !!an.erasing;
     _documents.annotation.eraserMode = String(an.eraserMode || 'pixel');
+    _documents.annotation.toolMode = String(an.toolMode || 'brush');
     _documents.annotation.view = an.view && typeof an.view === 'object'
       ? { scale: Number(an.view.scale) || 1, offsetX: Number(an.view.offsetX) || 0, offsetY: Number(an.view.offsetY) || 0 }
       : { scale: 1, offsetX: 0, offsetY: 0 };
 
-    _activeDocKey = (s.activeDocKey === 'annotation') ? 'annotation' : 'whiteboard';
+    const pdf = JSON.parse(JSON.stringify(docs.pdf));
+    _documents.pdf.ops = Array.isArray(pdf.ops) ? pdf.ops : [];
+    _documents.pdf.history = Array.isArray(pdf.history) ? pdf.history : [];
+    _documents.pdf.historyIndex = Number.isFinite(Number(pdf.historyIndex)) ? Number(pdf.historyIndex) : 0;
+    _documents.pdf.brushSize = Number(pdf.brushSize) || 4;
+    _documents.pdf.eraserSize = Number(pdf.eraserSize) || 20;
+    _documents.pdf.brushColor = String(pdf.brushColor || '#ff0000');
+    _documents.pdf.erasing = !!pdf.erasing;
+    _documents.pdf.eraserMode = String(pdf.eraserMode || 'pixel');
+    _documents.pdf.toolMode = String(pdf.toolMode || 'brush');
+    _documents.pdf.view = pdf.view && typeof pdf.view === 'object'
+      ? { scale: Number(pdf.view.scale) || 1, offsetX: Number(pdf.view.offsetX) || 0, offsetY: Number(pdf.view.offsetY) || 0 }
+      : { scale: 1, offsetX: 0, offsetY: 0 };
+
+    _activeDocKey = (s.activeDocKey === 'pdf') ? 'pdf' : ((s.activeDocKey === 'annotation') ? 'annotation' : 'whiteboard');
     _ensureDocInitialized('whiteboard');
     _ensureDocInitialized('annotation');
     _loadDocState(_activeDocKey);
@@ -1148,6 +1308,7 @@ function _loadDocState(key){
   brushColor = doc.brushColor;
   erasing = doc.erasing;
   eraserMode = doc.eraserMode;
+  toolMode = doc.toolMode || 'brush';
   viewScale = (doc.view && doc.view.scale) || 1;
   viewOffsetX = (doc.view && doc.view.offsetX) || 0;
   viewOffsetY = (doc.view && doc.view.offsetY) || 0;
@@ -1163,8 +1324,49 @@ function _ensureDocInitialized(key){
   doc.historyIndex = 0;
 }
 
+export function setToolMode(mode) {
+  toolMode = mode || 'brush';
+  try { _documents[_activeDocKey].toolMode = toolMode; } catch(e) {}
+}
+
+export function getToolMode() {
+  return toolMode;
+}
+
+export function saveAnnotations() {
+  try {
+    const s = Settings.loadSettings();
+    const annotations = s.annotations || {};
+    annotations[_activeDocKey] = snapshotOps(ops);
+    Settings.updateSettings({ annotations });
+    return true;
+  } catch (e) {
+    console.error('Failed to save annotations:', e);
+    return false;
+  }
+}
+
+export function loadAnnotations() {
+  try {
+    const s = Settings.loadSettings();
+    if (s && s.annotations && s.annotations[_activeDocKey]) {
+      ops = s.annotations[_activeDocKey];
+      _documents[_activeDocKey].ops = ops;
+      redrawAll();
+      pushHistory();
+      return true;
+    }
+  } catch (e) {
+    console.error('Failed to load annotations:', e);
+  }
+  return false;
+}
+
 export function setCanvasMode(mode){
-  const next = mode === 'annotation' ? 'annotation' : 'whiteboard';
+  let next = 'whiteboard';
+  if (mode === 'annotation') next = 'annotation';
+  else if (mode === 'pdf') next = 'pdf';
+  
   if (next === _activeDocKey) return;
   try{ finalizeCurrentOp(); }catch(e){}
   try{ drawing = false; currentOp = null; _strokePoints.length = 0; }catch(e){}
@@ -1176,6 +1378,7 @@ export function setCanvasMode(mode){
     _documents[_activeDocKey].brushColor = brushColor;
     _documents[_activeDocKey].erasing = erasing;
     _documents[_activeDocKey].eraserMode = eraserMode;
+    _documents[_activeDocKey].toolMode = toolMode;
     _documents[_activeDocKey].view = { scale: viewScale, offsetX: viewOffsetX, offsetY: viewOffsetY };
   }catch(e){}
   _activeDocKey = next;
@@ -1187,4 +1390,5 @@ export function setCanvasMode(mode){
 
 _ensureDocInitialized('whiteboard');
 _ensureDocInitialized('annotation');
+_ensureDocInitialized('pdf');
 _loadDocState('whiteboard');

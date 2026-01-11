@@ -1,6 +1,8 @@
-# LanStartWrite 揽星书写
+# LanStartWrite buggy edition
 
 新一代书写体验
+
+注意！该版本为激进式快照版本，允许所有人提交代码，拥有更多的功能，更快的更新，以及更不稳定的体验。
 
 LanStartWrite 基于 Electron 的书写应用 采用vibe coding
 
