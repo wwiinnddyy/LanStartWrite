@@ -24,3 +24,4 @@ dist_electron/
 .env
 .env.local
 .env.*.local
+/.trae

@@ -1,0 +1,239 @@
+/* video_booth.css */
+
+.video-booth-window {
+  position: fixed;
+  top: 100px;
+  left: 100px;
+  width: 640px;
+  height: 480px;
+  background: var(--ls-fluent-btn-bg, #fff);
+  border: 1px solid var(--ls-fluent-btn-border, rgba(0,0,0,0.1));
+  border-radius: var(--ls-radius-md, 8px);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+  display: flex;
+  flex-direction: column;
+  z-index: 2000;
+  overflow: hidden;
+  transition: box-shadow 0.3s ease;
+}
+
+.theme-dark .video-booth-window {
+  background: #2a2a2a;
+  border-color: rgba(255,255,255,0.1);
+}
+
+.video-booth-titlebar {
+  height: 40px;
+  background: var(--ls-drag-handle-bg, #f5f5f5);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  cursor: grab;
+  user-select: none;
+  border-bottom: 1px solid rgba(0,0,0,0.05);
+}
+
+.theme-dark .video-booth-titlebar {
+  background: #333;
+  border-color: rgba(255,255,255,0.05);
+}
+
+.video-booth-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ls-fluent-btn-fg, #333);
+}
+
+.video-booth-window-controls {
+  display: flex;
+  gap: 8px;
+}
+
+.win-btn {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--ls-fluent-btn-fg, #333);
+}
+
+.win-btn:hover {
+  background: rgba(0,0,0,0.05);
+}
+
+.close-btn:hover {
+  background: #e81123;
+  color: #fff;
+}
+
+.video-booth-wrap {
+  flex: 1;
+  background: #000;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.video-booth-wrap video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.recording-status {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  background: rgba(0, 0, 0, 0.6);
+  color: white;
+  padding: 6px 12px;
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: monospace;
+  font-size: 14px;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.recording-dot {
+  width: 10px;
+  height: 10px;
+  background-color: #ff4d4f;
+  border-radius: 50%;
+  animation: blink 1s infinite;
+}
+
+@keyframes blink {
+  0% { opacity: 1; }
+  50% { opacity: 0.3; }
+  100% { opacity: 1; }
+}
+
+.device-select {
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid rgba(0,0,0,0.1);
+  background: var(--ls-fluent-btn-bg, #fff);
+  color: var(--ls-fluent-btn-fg, #333);
+  font-size: 14px;
+  outline: none;
+  max-width: 200px;
+}
+
+.theme-dark .device-select {
+  background: #333;
+  color: #fff;
+  border-color: rgba(255,255,255,0.1);
+}
+
+.record-btn circle {
+  fill: #ff4d4f;
+}
+
+.stop-record-btn {
+  color: #ff4d4f;
+}
+
+/* 响应式调整 */
+@media (max-width: 600px) {
+  .video-booth-controls {
+    flex-direction: column;
+    height: auto;
+    padding: 10px;
+    gap: 10px;
+  }
+  
+  .device-select {
+    max-width: 100%;
+  }
+}
+
+.video-booth-controls {
+  height: 56px;
+  background: var(--ls-fluent-btn-bg, #fff);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  border-top: 1px solid rgba(0,0,0,0.05);
+}
+
+.video-booth-window.minimized {
+  height: 40px !important;
+  min-height: 40px !important;
+}
+
+.video-booth-window.minimized .video-booth-wrap,
+.video-booth-window.minimized .video-booth-controls {
+  display: none !important;
+}
+
+.video-booth-window.minimized .minimize-btn svg {
+  transform: rotate(180deg);
+}
+
+.theme-dark .video-booth-controls {
+  background: #2a2a2a;
+  border-color: rgba(255,255,255,0.05);
+}
+
+.control-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.ctrl-btn {
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--ls-fluent-btn-border, rgba(0,0,0,0.1));
+  background: var(--ls-fluent-btn-bg, #fff);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--ls-fluent-btn-fg, #333);
+  transition: all 0.2s;
+}
+
+.ctrl-btn:hover {
+  background: rgba(0,0,0,0.02);
+  transform: translateY(-1px);
+}
+
+.ctrl-btn:active {
+  transform: translateY(0);
+}
+
+.device-select {
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--ls-fluent-btn-border, rgba(0,0,0,0.1));
+  background: var(--ls-fluent-btn-bg, #fff);
+  color: var(--ls-fluent-btn-fg, #333);
+  font-size: 13px;
+  outline: none;
+  max-width: 150px;
+}
+
+/* Fullscreen adjustments */
+.video-booth-window:fullscreen {
+  width: 100vw;
+  height: 100vh;
+  border-radius: 0;
+}
+
+.video-booth-window:fullscreen .video-booth-titlebar {
+  display: none; /* Hide titlebar in fullscreen if desired, or keep it floating */
+}

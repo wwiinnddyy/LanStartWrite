@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>视频展台</title>
+    <link rel="stylesheet" href="./video_booth/video_booth.css">
+    <style>
+        /* 页面基础样式，确保全屏填充 */
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #000;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        }
+
+        #app {
+            display: flex;
+            flex-direction: column;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        /* 独立页面时不需要原有的 fixed 定位和阴影 */
+        .video-booth-window {
+            position: relative;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            border: none;
+            border-radius: 0;
+            box-shadow: none;
+            display: flex;
+            flex-direction: column;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="video-booth-window">
+            <!-- 标题栏 -->
+            <div class="video-booth-titlebar">
+                <div class="video-booth-title">视频展台</div>
+                <div class="video-booth-window-controls">
+                    <button class="win-btn minimize-btn" title="最小化" id="minimizeBtn">
+                        <svg width="12" height="12" viewBox="0 0 12 12"><path fill="currentColor" d="M2 6h8v1H2z"/></svg>
+                    </button>
+                    <button class="win-btn maximize-btn" title="最大化" id="maximizeBtn">
+                        <svg width="12" height="12" viewBox="0 0 12 12"><path fill="currentColor" d="M3 3h6v6H3V3zm1 1v4h4V4H4z"/></svg>
+                    </button>
+                    <button class="win-btn close-btn" title="关闭" id="closeBtn">
+                        <svg width="12" height="12" viewBox="0 0 12 12"><path fill="currentColor" d="M2.22 2.22a.75.75 0 0 1 1.06 0L6 4.94l2.72-2.72a.75.75 0 1 1 1.06 1.06L7.06 6l2.72 2.72a.75.75 0 1 1-1.06 1.06L6 7.06l-2.72 2.72a.75.75 0 0 1-1.06-1.06L4.94 6 2.22 3.28a.75.75 0 0 1 0-1.06z"/></svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- 视频展示区域 -->
+            <div class="video-booth-wrap" id="videoWrap">
+                <video id="mainVideo" autoplay playsinline muted></video>
+                <div id="recordingStatus" class="recording-status" style="display: none;">
+                    <span class="recording-dot"></span>
+                    <span id="recordingTime">00:00</span>
+                </div>
+            </div>
+
+            <!-- 控制按钮区域 -->
+            <div class="video-booth-controls">
+                <div class="control-group">
+                    <button class="ctrl-btn play-pause-btn" id="playPauseBtn" title="暂停/播放">
+                        <svg class="play-icon" width="20" height="20" viewBox="0 0 20 20"><path fill="currentColor" d="M6 4v12l10-6z"/></svg>
+                        <svg class="pause-icon" width="20" height="20" viewBox="0 0 20 20" style="display:none"><path fill="currentColor" d="M6 4h3v12H6zm5 0h3v12h-3z"/></svg>
+                    </button>
+                    <select class="device-select" id="deviceSelect" title="选择摄像头"></select>
+                </div>
+
+                <div class="control-group">
+                    <button class="ctrl-btn record-btn" id="recordBtn" title="开始录制">
+                        <svg width="20" height="20" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/><circle cx="12" cy="12" r="5" fill="red"/></svg>
+                    </button>
+                    <button class="ctrl-btn stop-record-btn" id="stopRecordBtn" title="停止录制" style="display: none;">
+                        <svg width="20" height="20" viewBox="0 0 24 24"><path fill="currentColor" d="M6 6h12v12H6z"/></svg>
+                    </button>
+                    <button class="ctrl-btn screenshot-btn" id="screenshotBtn" title="截图">
+                        <svg width="20" height="20" viewBox="0 0 20 20"><path fill="currentColor" d="M10 12a2 2 0 1 0 0-4a2 2 0 0 0 0 4m0 1a3 3 0 1 1 0-6a3 3 0 0 1 0 6M5 5h2.5l1-1.5h3l1 1.5H15a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2"/></svg>
+                    </button>
+                    <button class="ctrl-btn fullscreen-btn" id="fullscreenBtn" title="全屏切换">
+                        <svg width="20" height="20" viewBox="0 0 20 20"><path fill="currentColor" d="M3 3h5v1H4v4H3zm14 0h-5v1h4v4h1zm0 14h-5v-1h4v-4h1zM3 17h5v-1H4v-4H3z"/></svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="./video_booth/video_booth_standalone.js"></script>
+</body>
+</html>

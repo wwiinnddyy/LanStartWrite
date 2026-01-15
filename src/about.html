@@ -1,21 +1,198 @@
-<!doctype html>
+<!DOCTYPE html>
 <html>
-  <head>
-    <meta charset="utf-8" />
-    <title>About LanStartWrite</title>
+<head>
+    <meta charset="utf-8">
+    <title>关于 - LanStartWrite</title>
     <style>
-      body{font-family:Arial,Helvetica,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#fafafa}
-      .card{padding:24px;border-radius:12px;background:#fff;box-shadow:0 8px 24px rgba(0,0,0,0.08);text-align:center}
-      h1{margin:0 0 8px 0}
-      p{margin:0;color:#555}
+        :root {
+            --primary-color: #0078d4;
+            --bg-color: #ffffff;
+            --text-color: #323130;
+            --text-secondary: #605e5c;
+            --border-color: #edebe9;
+            --titlebar-height: 32px;
+            --card-bg: #f8f9fa;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg-color: #1a1c1e;
+                --text-color: #e2e2e6;
+                --text-secondary: #909090;
+                --border-color: #333333;
+                --card-bg: #2d2f33;
+            }
+        }
+
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            overflow: hidden;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            border: 1px solid var(--border-color);
+        }
+
+        /* 自定义标题栏 */
+        .titlebar {
+            height: var(--titlebar-height);
+            background: transparent;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 0 0 12px;
+            -webkit-app-region: drag;
+            z-index: 1000;
+        }
+
+        .title {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .window-controls {
+            display: flex;
+            -webkit-app-region: no-drag;
+            height: 100%;
+        }
+
+        .win-btn {
+            width: 46px;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            transition: background 0.2s;
+            color: var(--text-color);
+        }
+
+        .win-btn:hover {
+            background: rgba(0, 0, 0, 0.05);
+        }
+
+        .close-btn:hover {
+            background: #e81123;
+            color: white;
+        }
+
+        /* 内容区域 */
+        .content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            text-align: center;
+            animation: fadeIn 0.4s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .logo {
+            width: 80px;
+            height: 80px;
+            margin-bottom: 20px;
+            filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.1));
+            animation: logo-bounce 1s cubic-bezier(0.175, 0.885, 0.32, 1.275) 0.5s both;
+        }
+
+        @keyframes logo-bounce {
+            0% { transform: scale(0); }
+            60% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+
+        h1 {
+            margin: 0 0 8px 0;
+            font-size: 24px;
+            font-weight: 600;
+            color: var(--primary-color);
+        }
+
+        .subtitle {
+            font-size: 16px;
+            color: var(--text-secondary);
+            margin-bottom: 24px;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: auto auto;
+            gap: 12px 24px;
+            text-align: left;
+            font-size: 14px;
+            margin-top: 20px;
+            padding: 16px;
+            background: var(--card-bg);
+            border-radius: 8px;
+        }
+
+        .info-label {
+            color: var(--text-secondary);
+        }
+
+        .info-value {
+            font-weight: 500;
+        }
+
+        .footer {
+            padding: 16px;
+            font-size: 12px;
+            color: var(--text-secondary);
+            border-top: 1px solid var(--border-color);
+            background: var(--bg-color);
+            opacity: 0.9;
+        }
+
+        .copyright {
+            opacity: 0.8;
+        }
     </style>
-  </head>
-  <body>
-    <div class="card">
-      <h1>LanStartWrite</h1>
-      <p>揽星书写</p>
-      <p style="margin-top: 16px; font-size: 14px; color: #888;">版本 0.3.3</p>
-      <p style="font-size: 14px; color: #888;">Doctor</p>
+</head>
+<body>
+    <div class="titlebar">
+        <div class="title">关于</div>
+        <div class="window-controls">
+            <button class="win-btn close-btn" id="closeBtn" title="关闭">
+                <svg width="10" height="10" viewBox="0 0 12 12"><path fill="currentColor" d="M2.22 2.22a.75.75 0 0 1 1.06 0L6 4.94l2.72-2.72a.75.75 0 1 1 1.06 1.06L7.06 6l2.72 2.72a.75.75 0 1 1-1.06 1.06L6 7.06l-2.72 2.72a.75.75 0 0 1-1.06-1.06L4.94 6 2.22 3.28a.75.75 0 0 1 0-1.06z"/></svg>
+            </button>
+        </div>
     </div>
-  </body>
+
+    <div class="content">
+        <img src="icon.png" class="logo" alt="Logo" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22%230078d4%22><path d=%22M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z%22/></svg>'">
+        <h1>LanStartWrite</h1>
+        <div class="subtitle">揽星书写</div>
+
+        <div class="info-grid">
+            <div class="info-label">当前版本</div>
+            <div class="info-value">be.5.1</div>
+            <div style="info-label">构建版本</div>
+            <div class="info-value">buggy</div>
+        </div>
+    </div>
+
+    <div class="footer">
+        <div class="copyright">© 2026 LanStart. All rights reserved.</div>
+    </div>
+
+    <script src="about_renderer.js"></script>
+</body>
 </html>

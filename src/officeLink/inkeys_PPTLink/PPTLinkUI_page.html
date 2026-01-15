@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="dl-fluent">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PPT 联动控制中心</title>
+    <!-- 
+        与 whiteboard.html 的关联说明：
+        1. 采用与 whiteboard.html 一致的 dl-fluent 风格和交互逻辑。
+        2. 使用相同的 CSS 变量和 UI 组件类名（如 floating-panel, tool-btn）。
+        3. 交互反馈（hover/active）与白板模式保持完全同步。
+    -->
+    <style>
+        /* 核心变量定义，保持与 index.html 一致 */
+        :root {
+            --ls-font-size-base: 15px;
+            --ls-line-height: 1.45;
+            --ls-ease: cubic-bezier(0.2, 0, 0, 1);
+            --ls-theme-dur: 180ms;
+            --ls-press-dur: 100ms;
+            --ls-radius-sm: 10px;
+            --ls-radius-md: 14px;
+            --ls-radius-lg: 18px;
+            
+            --ls-sys-color-primary: #005ac1;
+            --ls-sys-color-on-primary: #ffffff;
+            --ls-sys-color-surface: #fdfbff;
+            --ls-sys-color-on-surface: #1a1c1e;
+            --ls-sys-color-outline: #73777f;
+            
+            --ls-fluent-btn-bg: rgba(255, 255, 255, 0.86);
+            --ls-fluent-btn-fg: var(--ls-sys-color-on-surface);
+            --ls-fluent-btn-border: rgba(0, 0, 0, 0.12);
+            --ls-fluent-btn-hover-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+            --ls-fluent-btn-active-bg: rgba(43, 124, 255, 0.14);
+            --ls-fluent-btn-active-border: rgba(43, 124, 255, 0.45);
+            
+            --ls-tool-size: 3rem;
+        }
+
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", sans-serif;
+            background: transparent;
+            overflow: hidden;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        /* 核心面板布局 */
+        .ppt-link-panel {
+            position: fixed;
+            bottom: 2rem;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            background: var(--ls-fluent-btn-bg);
+            border: 1px solid var(--ls-fluent-btn-border);
+            border-radius: var(--ls-radius-lg);
+            padding: 0.75rem;
+            box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            z-index: 3000;
+            transition: all var(--ls-theme-dur) var(--ls-ease);
+            max-width: 90vw;
+            min-width: 400px;
+        }
+
+        /* 备注信息区域 */
+        .notes-panel {
+            background: rgba(0, 0, 0, 0.03);
+            border-radius: var(--ls-radius-md);
+            padding: 0.75rem 1rem;
+            max-height: 100px;
+            overflow-y: auto;
+            font-size: 0.9rem;
+            line-height: 1.5;
+            color: var(--ls-sys-color-on-surface);
+            border-left: 4px solid var(--ls-sys-color-primary);
+            display: none; /* 默认隐藏，有内容时显示 */
+        }
+
+        .notes-panel.active {
+            display: block;
+        }
+
+        /* 缩略图导航栏 */
+        .thumbnail-nav {
+            display: flex;
+            gap: 0.625rem;
+            overflow-x: auto;
+            padding: 2px 2px 8px 2px;
+            scrollbar-width: thin;
+        }
+
+        .thumbnail-nav::-webkit-scrollbar {
+            height: 4px;
+        }
+        .thumbnail-nav::-webkit-scrollbar-thumb {
+            background: rgba(0,0,0,0.1);
+            border-radius: 2px;
+        }
+
+        .thumbnail-item {
+            flex: 0 0 120px;
+            aspect-ratio: 16/9;
+            background: rgba(0, 0, 0, 0.05);
+            border-radius: var(--ls-radius-sm);
+            border: 2px solid transparent;
+            cursor: pointer;
+            transition: all var(--ls-theme-dur) var(--ls-ease);
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.85rem;
+            font-weight: 500;
+            color: var(--ls-sys-color-outline);
+            position: relative;
+        }
+
+        .thumbnail-item:hover {
+            border-color: rgba(0, 90, 193, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .thumbnail-item.active {
+            border-color: var(--ls-sys-color-primary);
+            background: #fff;
+            color: var(--ls-sys-color-primary);
+            box-shadow: 0 4px 12px rgba(0, 90, 193, 0.15);
+        }
+
+        /* 底部控制栏 */
+        .control-bar {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            justify-content: center;
+            padding: 0 0.5rem;
+        }
+
+        /* 按钮样式 */
+        .tool-btn {
+            width: var(--ls-tool-size);
+            height: var(--ls-tool-size);
+            border-radius: var(--ls-radius-sm);
+            border: 1px solid var(--ls-fluent-btn-border);
+            background: var(--ls-fluent-btn-bg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            color: var(--ls-fluent-btn-fg);
+            transition: all var(--ls-theme-dur) var(--ls-ease);
+            position: relative;
+            outline: none;
+        }
+
+        .tool-btn:hover {
+            box-shadow: var(--ls-fluent-btn-hover-shadow);
+            background: #fff;
+        }
+
+        .tool-btn:active {
+            transform: scale(0.95);
+            background: var(--ls-fluent-btn-active-bg);
+            border-color: var(--ls-fluent-btn-active-border);
+        }
+
+        .tool-btn.primary {
+            background: var(--ls-sys-color-primary);
+            color: #fff;
+            border: none;
+        }
+
+        /* 页码信息区 */
+        .page-info {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0 0.75rem;
+            background: rgba(0, 0, 0, 0.03);
+            border-radius: var(--ls-radius-md);
+            height: var(--ls-tool-size);
+        }
+
+        .page-input-wrap {
+            display: flex;
+            align-items: center;
+            background: #fff;
+            border: 1px solid var(--ls-fluent-btn-border);
+            border-radius: calc(var(--ls-radius-sm) - 2px);
+            padding: 0 0.25rem;
+            height: 2.25rem;
+        }
+
+        .page-input {
+            width: 2.5rem;
+            border: none;
+            outline: none;
+            text-align: center;
+            font-size: 1rem;
+            font-weight: 600;
+            background: transparent;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #ccc;
+            margin-right: 4px;
+        }
+        .status-dot.online { background: #4caf50; }
+        .status-dot.offline { background: #f44336; }
+
+        /* 响应式布局 */
+        @media (max-width: 768px) {
+            .ppt-link-panel { min-width: 95vw; }
+            .thumbnail-nav { display: none; }
+        }
+    </style>
+</head>
+<body>
+    <div class="ppt-link-panel" role="region" aria-label="PPT 控制中心">
+        <!-- 状态指示 -->
+        <div style="display: flex; align-items: center; font-size: 12px; color: #666; margin-bottom: 4px;">
+            <div id="statusDot" class="status-dot"></div>
+            <span id="statusText">正在连接 PPT 服务...</span>
+        </div>
+
+        <!-- 备注内容 -->
+        <div id="notesPanel" class="notes-panel"></div>
+
+        <!-- 缩略图导航 -->
+        <div class="thumbnail-nav" id="thumbnailNav"></div>
+
+        <!-- 控制栏 -->
+        <div class="control-bar">
+            <button id="playBtn" class="tool-btn primary" title="播放/从当前页播放">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+            </button>
+            
+            <button id="prevBtn" class="tool-btn" title="上一页">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"></polyline></svg>
+            </button>
+
+            <div class="page-info">
+                <div class="page-input-wrap">
+                    <input type="number" id="jumpInput" class="page-input" value="1" min="1">
+                </div>
+                <span style="color: #999; font-size: 14px;">/ <span id="totalPages">0</span></span>
+            </div>
+
+            <button id="nextBtn" class="tool-btn" title="下一页">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+            </button>
+
+            <button id="stopBtn" class="tool-btn" title="结束放映">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12"></rect></svg>
+            </button>
+        </div>
+    </div>
+
+    <script>
+        const WS_URL = 'ws://localhost:8081';
+        let ws = null;
+        let heartbeatTimer = null;
+        let reconnectTimer = null;
+
+        const elements = {
+            statusDot: document.getElementById('statusDot'),
+            statusText: document.getElementById('statusText'),
+            notesPanel: document.getElementById('notesPanel'),
+            thumbnailNav: document.getElementById('thumbnailNav'),
+            totalPages: document.getElementById('totalPages'),
+            jumpInput: document.getElementById('jumpInput'),
+            playBtn: document.getElementById('playBtn'),
+            stopBtn: document.getElementById('stopBtn'),
+            prevBtn: document.getElementById('prevBtn'),
+            nextBtn: document.getElementById('nextBtn')
+        };
+
+        function connect() {
+            if (ws) ws.close();
+            
+            ws = new WebSocket(WS_URL);
+            
+            ws.onopen = () => {
+                console.log('Connected to PPT server');
+                elements.statusDot.className = 'status-dot online';
+                elements.statusText.innerText = 'PPT 服务已连接';
+                startHeartbeat();
+                if (reconnectTimer) clearTimeout(reconnectTimer);
+            };
+
+            ws.onmessage = (event) => {
+                const msg = JSON.parse(event.data);
+                if (msg.type === 'status') {
+                    updateUI(msg.data);
+                }
+            };
+
+            ws.onclose = () => {
+                console.log('Disconnected from PPT server');
+                elements.statusDot.className = 'status-dot offline';
+                elements.statusText.innerText = 'PPT 服务连接断开，正在重试...';
+                stopHeartbeat();
+                reconnectTimer = setTimeout(connect, 3000);
+            };
+
+            ws.onerror = (err) => {
+                console.error('WS Error:', err);
+            };
+        }
+
+        function sendAction(action, data = {}) {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ action, ...data }));
+            }
+        }
+
+        function updateUI(data) {
+            const { currentPage, totalPage, notes } = data;
+            
+            // 更新页码
+            elements.totalPages.innerText = totalPage > 0 ? totalPage : '0';
+            elements.jumpInput.value = currentPage > 0 ? currentPage : '1';
+            
+            // 更新备注
+            if (notes && notes.trim()) {
+                elements.notesPanel.innerText = notes;
+                elements.notesPanel.classList.add('active');
+            } else {
+                elements.notesPanel.classList.remove('active');
+            }
+
+            // 更新缩略图（如果总页数变化）
+            const currentThumbCount = elements.thumbnailNav.children.length;
+            if (currentThumbCount !== totalPage && totalPage > 0) {
+                elements.thumbnailNav.innerHTML = '';
+                for (let i = 1; i <= totalPage; i++) {
+                    const thumb = document.createElement('div');
+                    thumb.className = 'thumbnail-item';
+                    thumb.dataset.index = i;
+                    thumb.innerText = 'P' + i;
+                    thumb.onclick = () => sendAction('goto', { page: i });
+                    elements.thumbnailNav.appendChild(thumb);
+                }
+            }
+
+            // 高亮当前页缩略图
+            Array.from(elements.thumbnailNav.children).forEach((thumb, idx) => {
+                if (idx + 1 === currentPage) {
+                    thumb.classList.add('active');
+                    thumb.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+                } else {
+                    thumb.classList.remove('active');
+                }
+            });
+        }
+
+        function startHeartbeat() {
+            heartbeatTimer = setInterval(() => {
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ action: 'ping' }));
+                }
+            }, 10000);
+        }
+
+        function stopHeartbeat() {
+            if (heartbeatTimer) clearInterval(heartbeatTimer);
+        }
+
+        // 事件绑定
+        elements.playBtn.onclick = () => sendAction('play');
+        elements.stopBtn.onclick = () => sendAction('stop');
+        elements.prevBtn.onclick = () => sendAction('prev');
+        elements.nextBtn.onclick = () => sendAction('next');
+        elements.jumpInput.onchange = () => {
+            const page = parseInt(elements.jumpInput.value);
+            if (!isNaN(page)) sendAction('goto', { page });
+        };
+
+        // 初始化连接
+        connect();
+    </script>
+</body>
+</html>

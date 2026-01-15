@@ -705,6 +705,24 @@ export const Mod = {
   install: async (lanmodPath) => await _invokeMain('message', 'mod:install', { path: lanmodPath }),
   uninstall: async (id) => await _invokeMain('message', 'mod:uninstall', { id }),
   enable: async (id, enabled) => await _invokeMain('message', 'mod:enable', { id, enabled: !!enabled }),
+  reorder: async (newOrder) => {
+    try {
+      const s = Settings.loadSettings();
+      // We'll store the plugin order in settings for persistence
+      const updated = {
+        ...s,
+        pluginOrder: newOrder
+      };
+      Settings.saveSettings(updated);
+      // Notify main process if needed
+      if (window.electronAPI && typeof window.electronAPI.invokeMain === 'function') {
+        window.electronAPI.invokeMain('message', EVENTS.SETTINGS_CHANGED, updated);
+      }
+      return { success: true };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  },
   readAsset: async (id, relPath, as) => await _invokeMain('message', 'mod:read-asset', { id, path: relPath, as }),
   publish: (topic, payload) => { _hostBus.emit(String(topic || ''), payload); },
   on: (topic, cb) => _hostBus.on(String(topic || ''), cb),

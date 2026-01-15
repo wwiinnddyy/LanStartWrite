@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>PDF Viewer</title>
+    <link rel="stylesheet" href="pdf_viewer_ui.css">
+</head>
+<body data-state="window">
+    <div id="pdf-backdrop" class="hidden"></div>
+    <div id="pdf-viewer-container">
+        <!-- Title Bar -->
+        <header id="pdf-header">
+            <div class="header-left">
+                <span id="pdf-filename">Loading...</span>
+            </div>
+            <div class="header-right">
+                <button id="btn-toggle-mode" class="header-btn" title="进入全屏批注">
+                    <span class="icon-fullscreen"></span>
+                    <span class="btn-text">进入全屏批注</span>
+                </button>
+                <button id="btn-close" class="header-btn btn-close" title="关闭">
+                    <span class="icon-close">×</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- Content Area -->
+        <main id="pdf-content">
+            <div id="pdf-canvas-wrapper">
+                <canvas id="annotation-canvas"></canvas>
+                <div id="pdf-frame-container">
+                    <!-- PDF will be loaded here via embed or iframe -->
+                </div>
+            </div>
+        </main>
+
+        <!-- Annotation Toolbar (Only visible in fullscreen) -->
+        <div id="annotation-toolbar" class="hidden">
+            <div class="tool-group">
+                <button class="tool-btn pen-style active" data-size="2" data-color="#ff0000" style="--btn-color: #ff0000">细笔</button>
+                <button class="tool-btn pen-style" data-size="5" data-color="#0000ff" style="--btn-color: #0000ff">中笔</button>
+                <button class="tool-btn pen-style" data-size="10" data-color="#00ff00" style="--btn-color: #00ff00">粗笔</button>
+            </div>
+            <div class="tool-divider"></div>
+            <button id="btn-clear-ink" class="tool-btn">清除</button>
+        </div>
+    </div>
+
+    <script src="pdf_viewer_ui.js" type="module"></script>
+</body>
+</html>

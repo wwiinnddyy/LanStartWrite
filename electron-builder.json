@@ -11,14 +11,32 @@
     "iconpack/**/*",
     "package.json"
   ],
+  "asar": true,
   "win": {
     "target": [
+      {
+        "target": "nsis",
+        "arch": "x64"
+      },
       {
         "target": "portable",
         "arch": "x64"
       }
     ],
-    "icon": "iconpack/1000120004.png"
+    "icon": "iconpack/1000122705.png"
+  },
+  "nsis": {
+    "oneClick": false,
+    "allowElevation": true,
+    "allowToChangeInstallationDirectory": true,
+    "installerIcon": "iconpack/1000122705.png",
+    "uninstallerIcon": "iconpack/1000122705.png",
+    "installerHeaderIcon": "iconpack/1000122705.png",
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true,
+    "shortcutName": "LanStartWrite",
+    "artifactName": "LanStartWrite-Setup-${version}-x64.exe",
+    "deleteAppDataOnUninstall": false
   },
   "portable": {
     "artifactName": "LanStartWrite-${version}-win64.exe"

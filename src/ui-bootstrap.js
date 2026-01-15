@@ -387,9 +387,9 @@ async function runUnitTests(){
       const aboutBtn = document.createElement('button');
       aboutBtn.id = 'aboutBtn';
       moreMenu.appendChild(aboutBtn);
-      const closeWhiteboardBtn = document.createElement('button');
-      closeWhiteboardBtn.id = 'closeWhiteboardBtn';
-      moreMenu.appendChild(closeWhiteboardBtn);
+      const restartWhiteboardBtn = document.createElement('button');
+      restartWhiteboardBtn.id = 'restartWhiteboardBtn';
+      moreMenu.appendChild(restartWhiteboardBtn);
       panel.appendChild(moreMenu);
 
       const settingsModal = document.createElement('div');
@@ -401,6 +401,9 @@ async function runUnitTests(){
       const closeSettings = document.createElement('button');
       closeSettings.id = 'closeSettings';
       settingsModal.appendChild(closeSettings);
+      const closeWhiteboardBtnSettings = document.createElement('button');
+      closeWhiteboardBtnSettings.id = 'closeWhiteboardBtnSettings';
+      settingsModal.appendChild(closeWhiteboardBtnSettings);
       document.body.appendChild(settingsModal);
 
       const aboutModal = document.createElement('div');
@@ -597,11 +600,8 @@ async function runUnitTests(){
 
     {
       document.body.innerHTML = '<div class="canvas-wrap"><canvas id="board"></canvas></div>';
-      const toolNodes = await loadFragment('./tool_ui.html');
-      toolNodes.forEach(n => document.body.appendChild(n));
-      const moreNodes = await loadFragment('./more_decide_ui.html');
-      const panel = document.querySelector('.floating-panel');
-      if (panel) moreNodes.forEach(n => panel.appendChild(n)); else moreNodes.forEach(n => document.body.appendChild(n));
+      const whiteboardNodes = await loadFragment('./whiteboard.html');
+      whiteboardNodes.forEach(n => document.body.appendChild(n));
       const settingsNodes = await loadFragment('./setting_ui.html');
       settingsNodes.forEach(n => document.body.appendChild(n));
 
@@ -860,6 +860,7 @@ window.addEventListener('DOMContentLoaded', async ()=>{
       const optAutoResize = document.getElementById('optAutoResize');
       const optCollapsed = document.getElementById('optCollapsed');
       const optTheme = document.getElementById('optTheme');
+      const optVideoBoothEnabled = document.getElementById('optVideoBoothEnabled');
       const optDesignLanguage = document.getElementById('optDesignLanguage');
       const optTooltips = document.getElementById('optTooltips');
       const optMultiTouchPen = document.getElementById('optMultiTouchPen');
@@ -994,6 +995,7 @@ window.addEventListener('DOMContentLoaded', async ()=>{
         if (optVisualStyle) patch.visualStyle = String(optVisualStyle.value || 'blur');
         if (optCanvasColor) patch.canvasColor = String(optCanvasColor.value || 'white');
         if (optTooltips) patch.showTooltips = !!optTooltips.checked;
+        if (optVideoBoothEnabled) patch.videoBoothEnabled = !!optVideoBoothEnabled.checked;
         if (optMultiTouchPen) patch.multiTouchPen = !!optMultiTouchPen.checked;
         if (optSmartInk) patch.smartInkRecognition = !!optSmartInk.checked;
         if (optAnnotationPenColor) patch.annotationPenColor = normalizeHexColor(optAnnotationPenColor.value, '#FF0000');
@@ -1014,6 +1016,7 @@ window.addEventListener('DOMContentLoaded', async ()=>{
           if (optVisualStyle) optVisualStyle.value = s.visualStyle || 'blur';
           if (optCanvasColor) optCanvasColor.value = s.canvasColor || 'white';
           if (optTooltips) optTooltips.checked = typeof s.showTooltips !== 'undefined' ? !!s.showTooltips : true;
+          if (optVideoBoothEnabled) optVideoBoothEnabled.checked = !!s.videoBoothEnabled;
           if (optMultiTouchPen) optMultiTouchPen.checked = !!s.multiTouchPen;
           if (optSmartInk) optSmartInk.checked = !!s.smartInkRecognition;
           if (optAnnotationPenColor) optAnnotationPenColor.value = normalizeHexColor(s.annotationPenColor, '#FF0000');
@@ -1049,7 +1052,7 @@ window.addEventListener('DOMContentLoaded', async ()=>{
         el.addEventListener('input', handler);
       }
 
-      [optAutoResize,optCollapsed,optTheme,optDesignLanguage,optVisualStyle,optCanvasColor,optTooltips,optMultiTouchPen,optSmartInk,optAnnotationPenColor,keyUndo,keyRedo].forEach(_wireRealtime);
+      [optAutoResize,optCollapsed,optTheme,optDesignLanguage,optVisualStyle,optCanvasColor,optTooltips,optVideoBoothEnabled,optMultiTouchPen,optSmartInk,optAnnotationPenColor,keyUndo,keyRedo].forEach(_wireRealtime);
 
       if (settingsTabButtons && settingsTabButtons.length) {
         for (const btn of settingsTabButtons) {
@@ -1116,13 +1119,10 @@ window.addEventListener('DOMContentLoaded', async ()=>{
     }
   }catch(e){}
 
-  // load tool UI first (so .floating-panel exists)
-  const toolNodes = await loadFragment('./tool_ui.html');
-  toolNodes.forEach(n => document.body.appendChild(n));
-  // then load submenus into the floating-panel so parent relations stay intact
-  const moreNodes = await loadFragment('./more_decide_ui.html');
-  const panel = document.querySelector('.floating-panel');
-  if (panel) moreNodes.forEach(n => panel.appendChild(n)); else moreNodes.forEach(n => document.body.appendChild(n));
+  // load whiteboard UI components
+  const whiteboardNodes = await loadFragment('./whiteboard.html');
+  whiteboardNodes.forEach(n => document.body.appendChild(n));
+  
   // settings UI appended to body
   const settingsNodes = await loadFragment('./setting_ui.html');
   settingsNodes.forEach(n => document.body.appendChild(n));

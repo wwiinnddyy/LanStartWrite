@@ -46,6 +46,15 @@
                     <label class="settings-control"><input type="checkbox" id="optTooltips"> <span>显示工具提示</span></label>
                   </div>
                 </section>
+                <section class="settings-card" aria-label="应用控制">
+                  <div class="settings-card-title">应用控制</div>
+                  <div class="settings-card-body">
+                    <div class="settings-row">
+                      <button id="closeWhiteboardBtnSettings" class="mode-btn mode-btn-danger" type="button">关闭白板</button>
+                    </div>
+                    <div class="settings-hint">关闭当前白板应用并退出</div>
+                  </div>
+                </section>
                 <section class="settings-card" aria-label="设置预览">
                   <div class="settings-card-title">预览</div>
                   <div class="settings-card-body">
@@ -253,6 +262,8 @@
                 <section class="settings-card" aria-label="浮动工具栏控件">
                   <div class="settings-card-title">浮动工具栏控件</div>
                   <div class="settings-card-body">
+                    <label class="settings-control"><input type="checkbox" id="optVideoBoothEnabled"> <span>添加到浮动工具栏</span></label>
+                    <div class="settings-divider"></div>
                     <div class="resource-layout">
                       <div class="resource-sort">
                         <div class="resource-hint">拖拽排序，点击隐藏/显示按钮，下方实时预览</div>

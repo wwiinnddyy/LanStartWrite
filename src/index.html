@@ -4,6 +4,7 @@
     <meta charset="utf-8" />
     <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' data:; script-src 'self' 'unsafe-inline' blob: data:; worker-src 'self' blob:;" />
     <title>Electron Starter</title>
+    <link rel="stylesheet" href="video_booth/video_booth.css">
   </head>
   <body>
     <div class="canvas-wrap">
@@ -99,7 +100,14 @@
         --ls-radius-lg: 28px;
       }
       html,body{height:100%;margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans","Helvetica Neue",Arial,"Apple Color Emoji","Segoe UI Emoji";font-size:var(--ls-font-size-base);line-height:var(--ls-line-height);background:transparent;color: var(--text-high);transition: background-color var(--ls-theme-dur) var(--ls-ease), color var(--ls-theme-dur) var(--ls-ease);}
-      body{max-width:75ch}
+      body{
+        transition: opacity 150ms ease-out, transform 150ms ease-out;
+      }
+      body.mode-switching {
+        opacity: 0.8;
+        transform: scale(0.995);
+        pointer-events: none !important;
+      }
       .canvas-wrap{height:100%;background:transparent;display:flex}
       body[data-app-mode="whiteboard"] .canvas-wrap{background:#ffffff}
       
@@ -269,7 +277,22 @@
       .submenu#moreMenu .more-title{font-size:13px;font-weight:800;color:rgba(0,0,0,0.66);padding:10px 12px 8px}
       .submenu#moreMenu .submenu-quick{width:auto;flex:0 0 auto;padding:10px 12px 12px;border-right:none;background:transparent}
       .submenu#moreMenu .submenu-quick-grid{grid-template-columns:repeat(auto-fill,minmax(48px,1fr));grid-auto-rows:48px;justify-items:stretch}
-      .submenu#moreMenu .submenu-quick-grid .tool-btn{width:48px;height:48px}
+      .submenu#moreMenu .submenu-quick-grid .tool-btn{width:48px;height:48px;position:relative}
+      .submenu#moreMenu .submenu-quick-grid .tool-btn[data-feature-category]::after {
+        content: '';
+        position: absolute;
+        top: 4px;
+        right: 4px;
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: #2b7cff;
+        border: 1px solid #fff;
+      }
+      .submenu#moreMenu .submenu-quick-grid .tool-btn[data-feature-category="utility"]::after { background: #34c759; }
+      .submenu#moreMenu .submenu-quick-grid .tool-btn[data-feature-category="core"]::after { background: #ff9500; }
+      .submenu#moreMenu .submenu-quick-grid .tool-btn[data-feature-category="tool"]::after { background: #007aff; }
+      .theme-dark .submenu#moreMenu .submenu-quick-grid .tool-btn[data-feature-category]::after { border-color: #222; }
       .submenu#moreMenu .more-divider{width:1px;background:#e5e5e5;margin:0 24px}
       .submenu#moreMenu .submenu-body{padding:10px 12px 12px}
       /* 折叠支持：将带有 .foldable 的项在折叠时隐藏 */
@@ -333,6 +356,12 @@
       .settings-divider{height:1px;background:rgba(0,0,0,0.08)}
       .settings-row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
       .settings-hint{font-size:14px;color:#555;max-width:75ch}
+      
+      .settings-menu-item{display:flex;align-items:center;justify-content:space-between;padding:12px 0;font-size:16px;color:#222;transition:opacity 0.2s ease}
+      .settings-menu-item.disabled{opacity:0.6;cursor:not-allowed;pointer-events:none}
+      .settings-menu-label{font-weight:600}
+      .coming-soon-badge{font-size:11px;padding:2px 8px;border-radius:999px;border:1px solid rgba(43,124,255,0.3);background:rgba(43,124,255,0.08);color:#2b7cff;font-weight:700;text-transform:uppercase;letter-spacing:0.5px}
+
       .theme-preview{border:1px solid rgba(0,0,0,0.10);border-radius:var(--ls-radius-md);padding:12px;background:rgba(255,255,255,0.72);backdrop-filter:blur(6px) saturate(var(--ls-mica-saturation));-webkit-backdrop-filter:blur(6px) saturate(var(--ls-mica-saturation));min-height:120px}
       .theme-preview-card{border-radius:var(--ls-radius-md);background:var(--ls-sys-color-surface);color:var(--ls-sys-color-on-surface);border:1px solid rgba(0,0,0,0.10);padding:14px;box-shadow:0 10px 22px rgba(0,0,0,0.06)}
       .theme-preview-title{font-size:20px;font-weight:800;line-height:1.2}
@@ -442,6 +471,8 @@
       .theme-dark .settings-loading{background:rgba(12,12,12,0.55)}
       .theme-dark .settings-spinner{border-color:rgba(255,255,255,0.14);border-top-color:var(--accent)}
       .theme-dark .settings-loading-text{color:rgba(230,230,230,0.9)}
+      .theme-dark .settings-menu-item{color:var(--text)}
+      .theme-dark .coming-soon-badge{border-color:rgba(90,160,255,0.34);background:rgba(90,160,255,0.14);color:#5aa0ff}
 
       @media (max-width: 560px){
         .settings-panel{width:min(520px,92vw);max-height:92vh}
@@ -581,6 +612,110 @@
       .visual-transparent .floating-panel{background:rgba(255,255,255,0.7);backdrop-filter:none;-webkit-backdrop-filter:none;box-shadow:0 8px 30px rgba(0,0,0,0.12);border:1px solid rgba(255,255,255,0.04)}
       .visual-transparent .submenu{background:rgba(255,255,255,0.9);backdrop-filter:none;box-shadow:0 8px 22px rgba(0,0,0,0.12)}
       .visual-transparent #pageToolbar{background:rgba(255,255,255,0.9);box-shadow:0 8px 22px rgba(0,0,0,0.12)}
+
+      /* Page Preview Sidebar */
+      #pagePreviewSidebar {
+        position: fixed;
+        left: -25%;
+        top: 0;
+        bottom: 0;
+        width: 18%;
+        min-width: 160px;
+        max-width: 300px;
+        background: var(--ls-fluent-btn-bg, rgba(255, 255, 255, 0.95));
+        backdrop-filter: blur(15px);
+        -webkit-backdrop-filter: blur(15px);
+        box-shadow: 4px 0 20px rgba(0,0,0,0.1);
+        z-index: 1250;
+        transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        display: flex;
+        flex-direction: column;
+        border-right: 1px solid rgba(0,0,0,0.05);
+      }
+      #pagePreviewSidebar.open {
+        left: 0;
+      }
+      .theme-dark #pagePreviewSidebar {
+        background: rgba(28, 28, 28, 0.9);
+        border-right-color: rgba(255,255,255,0.05);
+      }
+      .page-preview-header {
+        padding: 16px;
+        font-size: 16px;
+        font-weight: 600;
+        border-bottom: 1px solid rgba(0,0,0,0.05);
+        color: var(--ls-fluent-btn-fg, #333);
+      }
+      .page-preview-list {
+        flex: 1;
+        overflow-y: auto;
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        scrollbar-width: thin;
+        -webkit-overflow-scrolling: touch;
+        scroll-behavior: smooth;
+      }
+      .page-preview-item {
+        position: relative;
+        cursor: pointer;
+        border-radius: 8px;
+        overflow: hidden;
+        border: 2px solid transparent;
+        transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), border-color 0.2s, box-shadow 0.2s;
+        background: #fff;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        flex-shrink: 0;
+        animation: previewFadeIn 0.3s ease-out;
+      }
+      @keyframes previewFadeIn {
+        from { opacity: 0; transform: translateX(-10px); }
+        to { opacity: 1; transform: translateX(0); }
+      }
+      .page-preview-item:hover {
+        transform: scale(1.02);
+        box-shadow: 0 6px 16px rgba(0,0,0,0.1);
+      }
+      .page-preview-item.active {
+        border-color: #2b7cff;
+        box-shadow: 0 0 0 2px rgba(43, 124, 255, 0.2);
+        transform: scale(1.02);
+      }
+      .page-preview-item img {
+        width: 100%;
+        height: auto;
+        display: block;
+        min-height: 80px;
+        background: #f0f0f0;
+        transition: opacity 0.3s ease;
+      }
+      .page-preview-item img[src=""] {
+        opacity: 0;
+      }
+      .page-preview-num {
+        position: absolute;
+        bottom: 4px;
+        right: 8px;
+        font-size: 11px;
+        background: rgba(0,0,0,0.5);
+        color: #fff;
+        padding: 2px 6px;
+        border-radius: 4px;
+        backdrop-filter: blur(4px);
+      }
+      .page-label {
+        cursor: pointer;
+        padding: 0 8px;
+        border-radius: 6px;
+        transition: background-color 0.2s;
+      }
+      .page-label:hover {
+        background: rgba(0,0,0,0.05);
+      }
+      .theme-dark .page-label:hover {
+        background: rgba(255,255,255,0.05);
+      }
       .visual-transparent .drag-handle{background:linear-gradient(180deg,#f5f5f5,#eee);border:1px solid rgba(0,0,0,0.06);box-shadow:0 4px 12px rgba(0,0,0,0.08);color:#333}
       /* Dark-mode adjustments for visual variants */
       .theme-dark.visual-solid .floating-panel{background:rgba(24,24,24,1);border:1px solid rgba(255,255,255,0.04);box-shadow:0 12px 36px rgba(0,0,0,0.6)}

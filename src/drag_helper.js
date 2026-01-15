@@ -37,6 +37,9 @@ export function attachDragHelper(handle, target, options = {}){
 
   function onMouseDown(ev){
     if (!ev || ev.button !== 0) return;
+    // 如果点击的是按钮或交互元素，不拦截拖动（或者说不干扰其点击）
+    if (ev.target && ev.target.closest && ev.target.closest('button, .ctrl-btn, .win-btn, select, input')) return;
+    
     mouseDown = true;
     touchDown = false;
     touchId = null;
@@ -81,6 +84,10 @@ export function attachDragHelper(handle, target, options = {}){
   function onTouchStart(ev){
     if (!ev) return;
     if (!ev.changedTouches || !ev.changedTouches.length) return;
+    
+    // 如果点击的是按钮或交互元素，不拦截拖动
+    if (ev.target && ev.target.closest && ev.target.closest('button, .ctrl-btn, .win-btn, select, input')) return;
+
     const t = ev.changedTouches[0];
     if (!t) return;
     touchDown = true;

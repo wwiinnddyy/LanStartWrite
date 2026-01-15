@@ -21,6 +21,7 @@ import Message, { EVENTS } from './message.js';
 import { updateAppSettings } from './write_a_change.js';
 import { initPenUI, updatePenModeLabel } from './pen.js';
 import { initEraserUI, updateEraserModeLabel } from './erese.js';
+import VideoBoothUI from './video_booth/video_booth_ui.js';
 import ButtonBox from './button_box.js';
 import { initAppCase } from './app_case.js';
 import { applyModeCanvasBackground } from './mode_background.js';
@@ -35,11 +36,14 @@ const eraserMenu = document.getElementById('eraserMenu');
 const featureLibraryTool = document.getElementById('featureLibraryTool');
 const moreTool = document.getElementById('moreTool');
 const moreMenu = document.getElementById('moreMenu');
+const videoBoothTool = document.getElementById('videoBoothTool');
 const clearBtn = document.getElementById('clear');
 const undoBtn = document.getElementById('undoBtn');
 const redoBtn = document.getElementById('redoBtn');
 const collapseTool = document.getElementById('collapseTool');
 const exitTool = document.getElementById('exitTool');
+
+let _videoBoothInstance = null;
 
 // initialize pen and eraser UI modules
 initPenUI();
@@ -50,7 +54,9 @@ function registerCoreToolbarButtons(){
     { id: 'core:pointer', el: pointerTool },
     { id: 'core:pen', el: colorTool },
     { id: 'core:eraser', el: eraserTool },
+    { id: 'core:video-booth', el: videoBoothTool },
     { id: 'core:mode-toggle', el: exitTool },
+    { id: 'core:feature-library', el: featureLibraryTool },
     { id: 'core:more', el: moreTool },
     { id: 'core:collapse', el: collapseTool },
     { id: 'core:undo', el: undoBtn },
@@ -71,6 +77,23 @@ function registerCoreToolbarButtons(){
     if (!def) continue;
     ButtonBox.registerInstance(def.id, el, 'toolbar');
   }
+
+  // Register default layout template
+  ButtonBox.registerLayoutTemplate('default', {
+    order: [
+      'core:pointer',
+      'core:pen',
+      'core:eraser',
+      'core:video-booth',
+      'core:mode-toggle',
+      'core:feature-library',
+      'core:more',
+      'core:collapse',
+      'core:undo',
+      'core:redo'
+    ],
+    hidden: []
+  });
 }
 
 registerCoreToolbarButtons();
@@ -119,6 +142,14 @@ function syncToolbarIcons(){
     }
   }
 
+  if (videoBoothTool) {
+    if (_videoBoothInstance && _videoBoothInstance.isVisible()) {
+      videoBoothTool.classList.add('active');
+    } else {
+      videoBoothTool.classList.remove('active');
+    }
+  }
+
   if (colorTool) {
     if (!pointerActive && !(s && s.erasing)) colorTool.innerHTML = getColorSwatchIconSvg((s && s.brushColor) || '#000000');
     else restoreDefaultIcon(colorTool);
@@ -149,6 +180,7 @@ function setPdfMode(on){
     if (_pdfMode) b.dataset.pdfMode = '1';
     else if (b.dataset) delete b.dataset.pdfMode;
   }catch(e){}
+  updateExitToolUI();
 }
 
 /**
@@ -388,6 +420,7 @@ function openAboutWindow(){
   return false;
 }
 
+let _lastSentIgnore = null;
 /**
  * 通知主进程切换批注窗口的“鼠标穿透/转发”策略。
  * @param {boolean} ignore - 是否忽略鼠标（穿透到下层窗口）
@@ -397,6 +430,10 @@ function openAboutWindow(){
 function sendIgnoreMouse(ignore, forward){
   try{
     if (!window.electronAPI || typeof window.electronAPI.sendToMain !== 'function') return;
+    const key = `${ignore ? 1 : 0}:${forward ? 1 : 0}`;
+    if (_lastSentIgnore === key) return;
+    _lastSentIgnore = key;
+
     _lastIgnoreMouse = { ignore: !!ignore, forward: !!forward, at: Date.now() };
     _menuDebug('overlay', 'ignore-mouse', { ignore: !!ignore, forward: !!forward, mode: _appMode });
     window.electronAPI.sendToMain('overlay:set-ignore-mouse', { ignore: !!ignore, forward: !!forward });
@@ -408,28 +445,30 @@ function sendIgnoreMouse(ignore, forward){
  * @param {Array<{left:number,top:number,width:number,height:number}>} rects - 可交互矩形
  * @returns {void}
  */
+let _lastSentRectsJson = '';
 function sendInteractiveRects(rects){
   try{
     if (!window.electronAPI || typeof window.electronAPI.sendToMain !== 'function') return;
+    const json = JSON.stringify(rects);
+    if (json === _lastSentRectsJson) return; // Skip if no change
+    _lastSentRectsJson = json;
+    
     _menuDebug('overlay', 'interactive-rects', { count: Array.isArray(rects) ? rects.length : 0 });
     window.electronAPI.sendToMain('overlay:set-interactive-rects', { rects: Array.isArray(rects) ? rects : [] });
   }catch(e){}
 }
 
+let _cachedRects = null;
+let _cachedRectsAt = 0;
+
 /**
  * 收集当前界面中需要“接收鼠标事件”的元素矩形。
  * @returns {Array<{left:number,top:number,width:number,height:number}>}
- *
- * 业务含义：
- * - 批注模式下，画布区域默认允许穿透以便操作底层应用
- * - 工具栏/子菜单/弹窗等 UI 区域应当接收鼠标，否则无法交互
- *
- * 流程图（收集交互矩形）：
- * 1. pushEl：对单个元素做 getBoundingClientRect，并过滤 0 尺寸
- * 2. 将浮动工具栏、已打开子菜单、识别 UI、设置弹窗、页工具栏加入列表
- * 3. 返回矩形数组给主进程
  */
-function collectInteractiveRects(){
+function collectInteractiveRects(force = false){
+  const now = Date.now();
+  if (!force && _cachedRects && (now - _cachedRectsAt < 100)) return _cachedRects;
+
   const rects = [];
   const pushEl = (el)=>{
     if (!el || !el.getBoundingClientRect) return;
@@ -445,6 +484,9 @@ function collectInteractiveRects(){
   document.querySelectorAll('.recognition-ui.open').forEach(pushEl);
   document.querySelectorAll('.settings-modal.open').forEach(pushEl);
   pushEl(document.getElementById('pageToolbar'));
+  
+  _cachedRects = rects;
+  _cachedRectsAt = now;
   return rects;
 }
 
@@ -497,7 +539,16 @@ function updateExitToolUI(){
   }
 }
 
+let _interactivityTimer = 0;
 function applyWindowInteractivity(){
+  if (_interactivityTimer) return;
+  _interactivityTimer = setTimeout(() => {
+    _interactivityTimer = 0;
+    _applyWindowInteractivityNow();
+  }, 16);
+}
+
+function _applyWindowInteractivityNow(){
   const hasOpenUi = !!document.querySelector('.settings-modal.open, .recognition-ui.open, .submenu.open, .mod-overlay.open');
   if (hasOpenUi) {
     _menuDebug('interactivity', 'open-ui');
@@ -547,6 +598,12 @@ function applyWindowInteractivity(){
 
 function setAppMode(nextMode, opts){
   const m = nextMode === APP_MODES.ANNOTATION ? APP_MODES.ANNOTATION : APP_MODES.WHITEBOARD;
+  if (_appMode === m) return;
+  
+  try {
+    document.body.classList.add('mode-switching');
+  } catch (e) {}
+
   _appMode = m;
   if (!opts || opts.persist !== false) persistAppMode(_appMode);
   try{ document.body.dataset.appMode = _appMode; }catch(e){}
@@ -558,6 +615,16 @@ function setAppMode(nextMode, opts){
   applyWindowInteractivity();
   scheduleInteractiveRectsUpdate();
   try{ Message.emit(EVENTS.APP_MODE_CHANGED, { mode: _appMode }); }catch(e){}
+
+  setTimeout(() => {
+    try {
+      document.body.classList.remove('mode-switching');
+      // For automated performance testing: notify when switch is complete
+      if (window.electronAPI && typeof window.electronAPI.sendToMain === 'function') {
+        window.electronAPI.sendToMain('tests:mode-switch-done', { mode: _appMode, ts: Date.now() });
+      }
+    } catch (e) {}
+  }, 160);
 }
 
 class SmartAnnotationController {
@@ -747,6 +814,29 @@ if (featureLibraryTool) {
   bindTouchTap(featureLibraryTool, openFeatureLibrary, { delayMs: 20 });
 }
 
+const toggleVideoBooth = async () => {
+  if (!_videoBoothInstance) {
+    _videoBoothInstance = new VideoBoothUI();
+  }
+  const isVisible = _videoBoothInstance.isVisible();
+  if (isVisible) {
+    _videoBoothInstance.hide();
+  } else {
+    await _videoBoothInstance.show();
+  }
+  syncToolbarIcons();
+  applyWindowInteractivity();
+  scheduleInteractiveRectsUpdate();
+};
+
+// Listen for global toggle event
+Message.on(EVENTS.TOGGLE_VIDEO_BOOTH, toggleVideoBooth);
+
+if (videoBoothTool) {
+  videoBoothTool.addEventListener('click', toggleVideoBooth);
+  bindTouchTap(videoBoothTool, toggleVideoBooth, { delayMs: 20 });
+}
+
 if (pointerTool) {
   const togglePointer = ()=>{
     const next = !pointerTool.classList.contains('active');
@@ -789,7 +879,8 @@ if (moreTool) {
   const settingsBtn = document.getElementById('settingsBtn');
   const pluginManagerBtn = document.getElementById('pluginManagerBtn');
   const aboutBtn = document.getElementById('aboutBtn');
-  const closeWhiteboardBtn = document.getElementById('closeWhiteboardBtn');
+  const restartWhiteboardBtn = document.getElementById('restartWhiteboardBtn');
+  const closeWhiteboardBtnSettings = document.getElementById('closeWhiteboardBtnSettings');
   const onNoteExport = async ()=>{
     closeAllSubmenus();
     syncToolbarIcons();
@@ -807,6 +898,18 @@ if (moreTool) {
   const onSettings = ()=>{ closeAllSubmenus(); syncToolbarIcons(); applyWindowInteractivity(); scheduleInteractiveRectsUpdate(); if (!openSettingsWindow()) Message.emit(EVENTS.OPEN_SETTINGS, {}); };
   const onPluginManager = ()=>{ closeAllSubmenus(); syncToolbarIcons(); applyWindowInteractivity(); scheduleInteractiveRectsUpdate(); try{ openPluginModal(); }catch(e){} };
   const onAbout = ()=>{ closeAllSubmenus(); syncToolbarIcons(); applyWindowInteractivity(); scheduleInteractiveRectsUpdate(); if (!openAboutWindow()) Message.emit(EVENTS.OPEN_ABOUT, {}); };
+  const onRestartWhiteboard = ()=>{
+    closeAllSubmenus();
+    syncToolbarIcons();
+    applyWindowInteractivity();
+    scheduleInteractiveRectsUpdate();
+    try{
+      // Restart usually means reloading the app to a clean state
+      location.reload();
+    }catch(e){
+      console.error('Failed to restart whiteboard:', e);
+    }
+  };
   const onCloseWhiteboard = ()=>{
     closeAllSubmenus();
     syncToolbarIcons();
@@ -825,10 +928,17 @@ if (moreTool) {
   if (settingsBtn) { settingsBtn.addEventListener('click', onSettings); bindTouchTap(settingsBtn, onSettings, { delayMs: 50 }); }
   if (pluginManagerBtn) { pluginManagerBtn.addEventListener('click', onPluginManager); bindTouchTap(pluginManagerBtn, onPluginManager, { delayMs: 50 }); }
   if (aboutBtn) { aboutBtn.addEventListener('click', onAbout); bindTouchTap(aboutBtn, onAbout, { delayMs: 50 }); }
-  if (closeWhiteboardBtn) { closeWhiteboardBtn.addEventListener('click', onCloseWhiteboard); bindTouchTap(closeWhiteboardBtn, onCloseWhiteboard, { delayMs: 50 }); }
+  if (restartWhiteboardBtn) { restartWhiteboardBtn.addEventListener('click', onRestartWhiteboard); bindTouchTap(restartWhiteboardBtn, onRestartWhiteboard, { delayMs: 50 }); }
+  if (closeWhiteboardBtnSettings) { closeWhiteboardBtnSettings.addEventListener('click', onCloseWhiteboard); bindTouchTap(closeWhiteboardBtnSettings, onCloseWhiteboard, { delayMs: 50 }); }
 }
 
-try{ initAppCase(); }catch(e){}
+(async () => {
+  try {
+    await initAppCase();
+  } catch (e) {
+    console.error('Failed to initialize AppCase:', e);
+  }
+})();
 
 if (exitTool) {
   const toggleMode = ()=>{
@@ -968,6 +1078,16 @@ function applyToolbarLayout(settingsLike){
     const layout = ButtonBox.applyLayoutTemplate('default', items, s);
     const order = Array.isArray(layout && layout.order) ? layout.order : items.map((it)=>it.id);
     const hiddenSet = layout && layout.hiddenSet instanceof Set ? layout.hiddenSet : new Set();
+    
+    // Core video booth visibility logic
+    if (s.hasOwnProperty('videoBoothEnabled')) {
+      if (!s.videoBoothEnabled) {
+        hiddenSet.add('core:video-booth');
+      } else {
+        hiddenSet.delete('core:video-booth');
+      }
+    }
+
     const frag = document.createDocumentFragment();
     for (const id of order) {
       const it = byId.get(id);
@@ -982,7 +1102,9 @@ function applyToolbarLayout(settingsLike){
       }
     }
     toolsSection.appendChild(frag);
-  }catch(e){}
+  }catch(e){
+    console.error('Failed to apply toolbar layout:', e);
+  }
 }
 
 // Settings modal wiring
@@ -995,6 +1117,7 @@ const optCollapsed = document.getElementById('optCollapsed');
 const optTheme = document.getElementById('optTheme');
 const optDesignLanguage = document.getElementById('optDesignLanguage');
 const optTooltips = document.getElementById('optTooltips');
+const optVideoBoothEnabled = document.getElementById('optVideoBoothEnabled');
 const optPdfDefaultMode = document.getElementById('optPdfDefaultMode');
 const optMultiTouchPen = document.getElementById('optMultiTouchPen');
 const optAnnotationPenColor = document.getElementById('optAnnotationPenColor');
@@ -1102,6 +1225,7 @@ function _makeSettingsDraftFromSettings(s){
     multiTouchPen: !!src.multiTouchPen,
     annotationPenColor: normalizeHexColor(src.annotationPenColor, '#FF0000'),
     smartInkRecognition: !!src.smartInkRecognition,
+    videoBoothEnabled: !!src.videoBoothEnabled,
     penTail: normalizePenTailSettings(src.penTail),
     shortcuts: { undo: undoKey, redo: redoKey },
     toolbarButtonOrder: Array.isArray(src.toolbarButtonOrder) ? src.toolbarButtonOrder.slice() : [],
@@ -1327,6 +1451,7 @@ function _renderSettingsUi(){
     if (optThemeBackground) optThemeBackground.value = normalizeHexColor(tc.background, '#FFFFFF');
     if (optCanvasColor) optCanvasColor.value = d.canvasColor || 'white';
     if (optTooltips) optTooltips.checked = !!d.showTooltips;
+    if (optVideoBoothEnabled) optVideoBoothEnabled.checked = !!d.videoBoothEnabled;
     if (optMultiTouchPen) optMultiTouchPen.checked = !!d.multiTouchPen;
     if (optAnnotationPenColor) optAnnotationPenColor.value = normalizeHexColor(d.annotationPenColor, '#FF0000');
     if (optSmartInk) optSmartInk.checked = !!d.smartInkRecognition;
@@ -1550,8 +1675,12 @@ function _persistToolbarLayoutOrderFromDom(){
         toolbarButtonHidden: Array.from(hiddenSet)
       };
       updateAppSettings(patch);
-    }catch(e){}
-  }catch(e){}
+    }catch(e){
+      console.error('Failed to update app settings from toolbar custom:', e);
+    }
+  }catch(e){
+    console.error('Failed to persist toolbar layout order from DOM:', e);
+  }
 }
 
 function _wireToolbarLayoutDnD(){
@@ -1679,6 +1808,7 @@ function _wireSettingsUi(){
   bindField(optCanvasColor, 'canvasColor');
   bindField(optPdfDefaultMode, 'pdfDefaultMode');
   bindField(optTooltips, 'showTooltips');
+  bindField(optVideoBoothEnabled, 'videoBoothEnabled');
   bindField(optMultiTouchPen, 'multiTouchPen');
   bindField(optAnnotationPenColor, 'annotationPenColor', 'input');
   bindField(optPenTailEnabled, 'penTail.enabled');
@@ -2157,7 +2287,7 @@ try{
         try{ if (s.theme) applyTheme(s.theme, s); }catch(e){}
         try{ if (typeof s.showTooltips !== 'undefined') applyTooltips(!!s.showTooltips); }catch(e){}
         try{ if (s.visualStyle) applyVisualStyle(s.visualStyle); }catch(e){}
-        try{ if (Array.isArray(s.toolbarButtonOrder) || Array.isArray(s.toolbarButtonHidden)) applyToolbarLayout(s); }catch(e){}
+        try{ if (Array.isArray(s.toolbarButtonOrder) || Array.isArray(s.toolbarButtonHidden) || typeof s.videoBoothEnabled !== 'undefined') applyToolbarLayout(s); }catch(e){}
         try{ if (s.canvasColor) applyModeCanvasBackground(_appMode, s.canvasColor, { getToolState, replaceStrokeColors, setBrushColor, updatePenModeLabel, getPreferredPenColor: (mode)=>getPenColorFromSettings(s, mode) }); }catch(e){}
         try{ if (typeof s.multiTouchPen !== 'undefined') setMultiTouchPenEnabled(!!s.multiTouchPen); }catch(e){}
         try{ if (typeof s.smartInkRecognition !== 'undefined') setInkRecognitionEnabled(!!s.smartInkRecognition); }catch(e){}
@@ -2254,6 +2384,7 @@ if (saveSettings) saveSettings.addEventListener('click', ()=>{
     multiTouchPen: !!d.multiTouchPen,
     annotationPenColor: normalizeHexColor(d.annotationPenColor, '#FF0000'),
     smartInkRecognition: !!d.smartInkRecognition,
+    videoBoothEnabled: !!d.videoBoothEnabled,
     penTail: normalizePenTailSettings(d.penTail),
     shortcuts: {
       undo: d.shortcuts && typeof d.shortcuts.undo === 'string' ? d.shortcuts.undo.trim() : '',
@@ -2266,28 +2397,28 @@ if (saveSettings) saveSettings.addEventListener('click', ()=>{
   const merged = updateAppSettings(newS);
   // apply immediate effects
   if (!newS.enableAutoResize) {
-    try{ const p = document.querySelector('.floating-panel'); if (p) p.style.width = ''; }catch(e){}
+    try{ const p = document.querySelector('.floating-panel'); if (p) p.style.width = ''; }catch(e){ console.error('Failed to reset panel width:', e); }
   } else { window.dispatchEvent(new Event('resize')); }
   applyCollapsed(newS.toolbarCollapsed);
   applyDesignLanguage(newS.designLanguage);
   applyTheme(newS.theme, newS);
-  try{ applyVisualStyle(newS.visualStyle); }catch(e){}
-  try{ applyModeCanvasBackground(_appMode, newS.canvasColor, { getToolState, replaceStrokeColors, setBrushColor, updatePenModeLabel, getPreferredPenColor: (mode)=>getPenColorFromSettings(merged, mode) }); }catch(e){}
+  try{ applyVisualStyle(newS.visualStyle); }catch(e){ console.error('Failed to apply visual style:', e); }
+  try{ applyModeCanvasBackground(_appMode, newS.canvasColor, { getToolState, replaceStrokeColors, setBrushColor, updatePenModeLabel, getPreferredPenColor: (mode)=>getPenColorFromSettings(merged, mode) }); }catch(e){ console.error('Failed to apply canvas background:', e); }
   applyTooltips(newS.showTooltips);
-  try{ applyToolbarLayout(merged); }catch(e){}
-  try{ setMultiTouchPenEnabled(!!newS.multiTouchPen); }catch(e){}
-  try{ setInkRecognitionEnabled(!!newS.smartInkRecognition); }catch(e){}
+  try{ applyToolbarLayout(merged); }catch(e){ console.error('Failed to apply toolbar layout:', e); }
+  try{ setMultiTouchPenEnabled(!!newS.multiTouchPen); }catch(e){ console.error('Failed to set multi-touch pen:', e); }
+  try{ setInkRecognitionEnabled(!!newS.smartInkRecognition); }catch(e){ console.error('Failed to set ink recognition:', e); }
   try{
     if (_appMode === APP_MODES.ANNOTATION) {
       setBrushColor(newS.annotationPenColor);
       updatePenModeLabel();
       syncToolbarIcons();
     }
-  }catch(e){}
+  }catch(e){ console.error('Failed to sync annotation state:', e); }
   closeSettingsModal();
 });
 
-if (resetSettingsBtn) resetSettingsBtn.addEventListener('click', ()=>{ Settings.resetSettings(); const s = Settings.loadSettings(); if (optAutoResize) optAutoResize.checked = !!s.enableAutoResize; if (optCollapsed) optCollapsed.checked = !!s.toolbarCollapsed; if (optTheme) optTheme.value = s.theme || 'light'; if (optDesignLanguage) optDesignLanguage.value = s.designLanguage || 'fluent'; if (optVisualStyle) optVisualStyle.value = s.visualStyle || 'blur'; if (optCanvasColor) optCanvasColor.value = s.canvasColor || 'white'; if (optTooltips) optTooltips.checked = !!s.showTooltips; if (optMultiTouchPen) optMultiTouchPen.checked = !!s.multiTouchPen; if (optAnnotationPenColor) optAnnotationPenColor.value = String(s.annotationPenColor || '#FF0000'); if (optSmartInk) optSmartInk.checked = !!s.smartInkRecognition; if (keyUndo) keyUndo.value = (s.shortcuts && s.shortcuts.undo) || ''; if (keyRedo) keyRedo.value = (s.shortcuts && s.shortcuts.redo) || ''; try{ applyDesignLanguage(s.designLanguage); }catch(e){} try{ applyTheme(s.theme, s); }catch(e){} try{ setMultiTouchPenEnabled(!!s.multiTouchPen); }catch(e){} try{ setInkRecognitionEnabled(!!s.smartInkRecognition); }catch(e){} try{ if (_appMode === APP_MODES.ANNOTATION) { setBrushColor(String(s.annotationPenColor || '#FF0000').toUpperCase()); updatePenModeLabel(); syncToolbarIcons(); } }catch(e){} });
+if (resetSettingsBtn) resetSettingsBtn.addEventListener('click', ()=>{ Settings.resetSettings(); const s = Settings.loadSettings(); if (optAutoResize) optAutoResize.checked = !!s.enableAutoResize; if (optCollapsed) optCollapsed.checked = !!s.toolbarCollapsed; if (optTheme) optTheme.value = s.theme || 'light'; if (optDesignLanguage) optDesignLanguage.value = s.designLanguage || 'fluent'; if (optVisualStyle) optVisualStyle.value = s.visualStyle || 'blur'; if (optCanvasColor) optCanvasColor.value = s.canvasColor || 'white'; if (optTooltips) optTooltips.checked = !!s.showTooltips; if (optMultiTouchPen) optMultiTouchPen.checked = !!s.multiTouchPen; if (optAnnotationPenColor) optAnnotationPenColor.value = String(s.annotationPenColor || '#FF0000'); if (optSmartInk) optSmartInk.checked = !!s.smartInkRecognition; if (keyUndo) keyUndo.value = (s.shortcuts && s.shortcuts.undo) || ''; if (keyRedo) keyRedo.value = (s.shortcuts && s.shortcuts.redo) || ''; try{ applyDesignLanguage(s.designLanguage); }catch(e){ console.error('Failed to reset design language:', e); } try{ applyTheme(s.theme, s); }catch(e){ console.error('Failed to reset theme:', e); } try{ setMultiTouchPenEnabled(!!s.multiTouchPen); }catch(e){ console.error('Failed to reset multi-touch pen:', e); } try{ setInkRecognitionEnabled(!!s.smartInkRecognition); }catch(e){ console.error('Failed to reset ink recognition:', e); } try{ if (_appMode === APP_MODES.ANNOTATION) { setBrushColor(String(s.annotationPenColor || '#FF0000').toUpperCase()); updatePenModeLabel(); syncToolbarIcons(); } }catch(e){ console.error('Failed to reset annotation state:', e); } });
 
 class DesignStyleController {
   constructor(root){
@@ -2745,6 +2876,7 @@ Message.on(EVENTS.SETTINGS_CHANGED, (s)=>{
     if (s && s.canvasColor) applyModeCanvasBackground(_appMode, s.canvasColor, { getToolState, replaceStrokeColors, setBrushColor, updatePenModeLabel, getPreferredPenColor: (mode)=>getPenColorFromSettings(s, mode) });
     if (s && typeof s.multiTouchPen !== 'undefined') setMultiTouchPenEnabled(!!s.multiTouchPen);
     if (s && typeof s.smartInkRecognition !== 'undefined') setInkRecognitionEnabled(!!s.smartInkRecognition);
+    if (s && (Array.isArray(s.toolbarButtonOrder) || Array.isArray(s.toolbarButtonHidden))) applyToolbarLayout(s);
     if (s && s.kind === 'pdf_viewer_opened') {
       setPdfMode(true);
       enterAnnotationMode({ persist: false });
@@ -2754,13 +2886,51 @@ Message.on(EVENTS.SETTINGS_CHANGED, (s)=>{
   }catch(e){}
 });
 
+// 处理主进程发来的退出/重启准备信号
+if (window.electronAPI && window.electronAPI.onReplyFromMain) {
+  window.electronAPI.onReplyFromMain('app:prepare-exit', (data) => {
+    console.log('[App] 收到退出准备信号:', data);
+    Message.emit(EVENTS.APP_PREPARE_EXIT, data);
+  });
+
+  window.electronAPI.onReplyFromMain('pdf:state-changed', (data) => {
+    console.log('[App] PDF 状态变更:', data);
+    const count = (data && typeof data.count === 'number') ? data.count : 0;
+    if (count > 0) {
+      if (!_pdfMode) {
+        setPdfMode(true);
+        // 如果当前不在批注模式，可以考虑切过去，但为了不打断用户，这里只改 PDF 标志位
+        updateExitToolUI();
+      }
+    } else {
+      if (_pdfMode) {
+        setPdfMode(false);
+        // 如果当前处于 PDF 关联的批注模式，恢复到白板模式
+        if (_appMode === APP_MODES.ANNOTATION) {
+          enterWhiteboardMode({ persist: true });
+        }
+        applyWindowInteractivity();
+        scheduleInteractiveRectsUpdate();
+      }
+    }
+  });
+}
+
 // initialize undo/redo button states now (renderer may have emitted before listener attached)
 try{ if (undoBtn) undoBtn.disabled = !canUndo(); if (redoBtn) redoBtn.disabled = !canRedo(); if (historyStateDisplay) historyStateDisplay.textContent = `撤销: ${canUndo()? '可' : '—'}  重做: ${canRedo()? '可' : '—'}`; }catch(e){}
 
 // apply persisted theme/tooltips on startup
 try{
-  if (settings) { if (typeof settings.designLanguage !== 'undefined') applyDesignLanguage(settings.designLanguage); if (settings.theme) applyTheme(settings.theme, settings); if (typeof settings.showTooltips !== 'undefined') applyTooltips(!!settings.showTooltips); }
-}catch(e){}
+  if (settings) {
+    if (typeof settings.designLanguage !== 'undefined') applyDesignLanguage(settings.designLanguage);
+    if (settings.theme) applyTheme(settings.theme, settings);
+    if (typeof settings.showTooltips !== 'undefined') applyTooltips(!!settings.showTooltips);
+    // Apply toolbar layout on startup
+    applyToolbarLayout(settings);
+  }
+}catch(e){
+  console.error('Failed to apply startup settings:', e);
+}
 try{ if (settings) { if (settings.visualStyle) applyVisualStyle(settings.visualStyle); else applyVisualStyle('blur'); } }catch(e){}
 try{ if (settings) { applyModeCanvasBackground(_appMode, settings.canvasColor || 'white', { getToolState, replaceStrokeColors, setBrushColor, updatePenModeLabel, getPreferredPenColor: (mode)=>getPenColorFromSettings(settings, mode) }); } }catch(e){}
 try{ if (settings && typeof settings.multiTouchPen !== 'undefined') setMultiTouchPenEnabled(!!settings.multiTouchPen); }catch(e){}

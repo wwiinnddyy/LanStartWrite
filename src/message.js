@@ -38,6 +38,8 @@ export const EVENTS = {
   REQUEST_EXPORT: 'ui:request-export',
   /** 打开关于对话框 */
   OPEN_ABOUT: 'ui:open-about',
+  /** 切换视频展台显示 */
+  TOGGLE_VIDEO_BOOTH: 'ui:toggle-video-booth',
   /** 请求主进程执行文件写入（渲染进程内仅发事件，主进程处理具体 I/O） */
   REQUEST_FILE_WRITE: 'io:request-file-write',
   /** 设置已变更（payload 为合并后的完整设置对象） */
@@ -46,6 +48,9 @@ export const EVENTS = {
   APP_MODE_CHANGED: 'app:mode-changed',
   /** 撤销/重做可用状态变更（绘图引擎 → UI） */
   HISTORY_CHANGED: 'history:changed',
+  
+  /** 应用准备退出/重启（主进程 → 渲染进程） */
+  APP_PREPARE_EXIT: 'app:prepare-exit',
   
   /** 主进程 → 渲染进程（保留字段，当前主要使用 electronAPI 通道） */
   MAIN_PROCESS_MSG: 'main:message',

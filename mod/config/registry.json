@@ -17,6 +17,9 @@
     }
   },
   "order": [
-    "demo.plugin"
+    "ink-enhancer",
+    "demo.plugin",
+    "inkcanvas-comprehensive",
+    "inkcanvas-with-electron-for-write"
   ]
 }

@@ -54,6 +54,7 @@ const DEFAULTS = {
   shortcuts: { undo: 'Ctrl+Z', redo: 'Ctrl+Y' },
   toolbarButtonOrder: [],
   toolbarButtonHidden: [],
+  videoBoothEnabled: false,
   pluginButtonDisplay: {},
   pdfDefaultMode: 'window'
 };
@@ -167,6 +168,13 @@ export function saveSettings(settings){
   }
   if (patch.mica && typeof patch.mica === 'object') {
     merged.mica = Object.assign({}, (base.mica && typeof base.mica === 'object') ? base.mica : {}, patch.mica);
+  }
+  // Validate toolbar layout settings
+  if (patch.hasOwnProperty('toolbarButtonOrder')) {
+    merged.toolbarButtonOrder = Array.isArray(patch.toolbarButtonOrder) ? patch.toolbarButtonOrder.filter(id => typeof id === 'string') : [];
+  }
+  if (patch.hasOwnProperty('toolbarButtonHidden')) {
+    merged.toolbarButtonHidden = Array.isArray(patch.toolbarButtonHidden) ? patch.toolbarButtonHidden.filter(id => typeof id === 'string') : [];
   }
   _safeSet('appSettings', merged);
   return merged;

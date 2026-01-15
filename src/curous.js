@@ -118,6 +118,8 @@ function canvasClientToCanvasInternal(clientX, clientY){
 function _isUiEventTarget(target){
   try{
     if (!target || !target.closest) return false;
+    // 允许通过触控操作视频展台的控制按钮
+    if (target.closest('.video-booth-window')) return false;
     return !!target.closest('.floating-panel, .submenu, .recognition-ui, #settingsModal, .settings-modal, #pageToolbar');
   }catch(e){
     return false;
@@ -349,8 +351,24 @@ export function enableSelectionMode(enable){
     window.removeEventListener('pointerup', onPointerUpGlobal);
     window.removeEventListener('wheel', onWheel);
     window.removeEventListener('keydown', onKeyDown);
+    pointerMap.clear();
+    pinchState = null;
+    selecting = false;
+    draggingHandle = null;
+    draggingSelection = false;
     selectedIds = []; selectionBounds = null; showSelectionBox(null);
   }
+}
+
+/**
+ * 彻底重置选择与触控状态
+ */
+export function resetSelectionState() {
+  enableSelectionMode(false);
+  selectedIds = [];
+  selectionBounds = null;
+  if (selBox) selBox.style.display = 'none';
+  for (const k in handles) handles[k].style.display = 'none';
 }
 
 // auto attach overlay element

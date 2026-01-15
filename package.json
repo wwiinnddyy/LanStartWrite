@@ -1,6 +1,6 @@
 {
   "name": "LanStartWrite",
-  "version": "0.3.3",
+  "version": "0.5.1",
   "description": "Simple Electron starter",
   "main": "src/main.js",
   "scripts": {
@@ -8,10 +8,12 @@
     "dev": "electron .",
     "test": "electron . --run-tests",
     "build": "electron-builder --win --x64",
-    "build:portable": "electron-builder --win portable --x64"
+    "build:portable": "electron-builder --win portable --x64",
+    "build:installer": "electron-builder --win nsis --x64",
+    "build:all": "electron-builder --win --x64"
   },
   "dependencies": {
-    "semver": "^7.6.3",
+    "semver": "^7.5.4",
     "yauzl": "^2.10.0"
   },
   "devDependencies": {

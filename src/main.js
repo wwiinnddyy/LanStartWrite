@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, screen, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, screen, dialog, Tray, Menu, nativeImage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
@@ -6,6 +6,7 @@ const yauzl = require('yauzl');
 const semver = require('semver');
 const zlib = require('zlib');
 const { pathToFileURL } = require('url');
+const { exec, fork } = require('child_process');
 
 const _RUN_TESTS = process.argv.includes('--run-tests');
 const _ALLOW_UNSIGNED_PLUGINS = true;
@@ -13,6 +14,7 @@ const _ALLOW_UNSIGNED_PLUGINS = true;
 let _testsTimeout = null;
 
 let mainWindow;
+let tray = null;
 let _overlayInteractiveRects = [];
 let _overlayIgnoreConfig = { ignore: false, forward: false };
 let _overlayLastApplied = null;
@@ -21,6 +23,34 @@ let _overlayAllowState = null;
 let _overlayAllowDesired = null;
 let _overlayAllowDesiredAt = 0;
 let _overlayAllowLastSwitchAt = 0;
+
+let _pdfWindowCount = 0;
+let _mainWindowBounds = null;
+
+/**
+ * 辅助函数：从主进程环境加载设置
+ * 注意：主进程无法直接访问 localStorage，这里返回默认值或通过其他方式获取的配置
+ */
+function loadSettings() {
+  // 默认配置
+  const DEFAULTS = {
+  };
+  
+  // 在实际应用中，这里应该读取磁盘上的配置文件
+  // 目前先返回默认值以防止 ReferenceError
+  return DEFAULTS;
+}
+
+function _updatePdfModeState() {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('reply-from-main', 'pdf:state-changed', { count: _pdfWindowCount });
+  }
+}
+
+function _updateMainWindowBounds() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  _mainWindowBounds = mainWindow.getBounds();
+}
 
 function _appIconPath() {
   try { return path.join(__dirname, '..', 'iconpack', '1000120004.png'); } catch (e) { return undefined; }
@@ -118,21 +148,30 @@ function _applyIgnoreMouse(ignore, forward) {
 }
 
 function _shouldAllowOverlayInteraction() {
-  if (!mainWindow) return false;
+  if (!mainWindow || mainWindow.isDestroyed()) return false;
   const rects = Array.isArray(_overlayInteractiveRects) ? _overlayInteractiveRects : [];
   if (rects.length === 0) return false;
-  const winBounds = mainWindow.getBounds();
+  
+  if (!_mainWindowBounds) _updateMainWindowBounds();
+  const winBounds = _mainWindowBounds;
+  if (!winBounds) return false;
+
   const p = screen.getCursorScreenPoint();
   const px = p.x;
   const py = p.y;
-  for (const r of rects) {
-    const left = winBounds.x + (Number(r.left) || 0);
-    const top = winBounds.y + (Number(r.top) || 0);
-    const width = Number(r.width) || 0;
-    const height = Number(r.height) || 0;
-    if (width <= 0 || height <= 0) continue;
-    const right = left + width;
-    const bottom = top + height;
+  
+  // Fast check: is the mouse even within the window bounds?
+  if (px < winBounds.x || px > winBounds.x + winBounds.width || 
+      py < winBounds.y || py > winBounds.y + winBounds.height) {
+    return false;
+  }
+
+  for (let i = 0, len = rects.length; i < len; i++) {
+    const r = rects[i];
+    const left = winBounds.x + r.left;
+    const top = winBounds.y + r.top;
+    const right = left + r.width;
+    const bottom = top + r.height;
     if (px >= left && px <= right && py >= top && py <= bottom) return true;
   }
   return false;
@@ -210,11 +249,145 @@ function createWindow(opts) {
 
   if (runTests) mainWindow.loadFile(path.join(__dirname, 'index.html'), { query: { runTests: '1' } });
   else mainWindow.loadFile(path.join(__dirname, 'index.html'));
+  
+  _updateMainWindowBounds();
+  mainWindow.on('move', _updateMainWindowBounds);
+  mainWindow.on('resize', _updateMainWindowBounds);
+
+  mainWindow.webContents.on('did-finish-load', () => {
+    _updatePdfModeState();
+  });
   try{ mainWindow.setAlwaysOnTop(true, 'screen-saver'); }catch(e){}
   try{ mainWindow.maximize(); }catch(e){}
   
   // 开发时打开开发者工具
   // mainWindow.webContents.openDevTools();
+}
+
+/**
+ * 创建系统托盘
+ */
+function _createTray() {
+  try {
+    const iconPath = _appIconPath();
+    if (!iconPath) return;
+
+    // 根据平台调整图标尺寸
+    const icon = nativeImage.createFromPath(iconPath).resize({ width: 16, height: 16 });
+    tray = new Tray(icon);
+    
+    // 尝试加载菜单图标
+    const _getIcon = (name, folder = 'flent_icon') => {
+      try {
+        const p = path.join(__dirname, '..', folder, name);
+        if (fs.existsSync(p)) return nativeImage.createFromPath(p).resize({ width: 16, height: 16 });
+      } catch (e) {}
+      return undefined;
+    };
+
+    const restartIcon = _getIcon('rotate-ccw.svg', 'iconpack');
+    const settingsIcon = _getIcon('fluent--settings-20-regular.svg');
+    const aboutIcon = _getIcon('fluent--apps-20-regular.svg');
+    const closeIcon = _getIcon('fluent--picture-in-picture-exit-20-regular.svg');
+
+    const contextMenu = Menu.buildFromTemplate([
+      { 
+        label: '重启白板', 
+        accelerator: 'CmdOrCtrl+R',
+        icon: restartIcon,
+        click: () => { _handleRestart(); } 
+      },
+      { 
+        label: '应用设置', 
+        accelerator: 'CmdOrCtrl+,',
+        icon: settingsIcon,
+        click: () => { _createSettingsWindow(); } 
+      },
+      { 
+        label: '关于应用', 
+        icon: aboutIcon,
+        click: () => { _createAboutWindow(); } 
+      },
+      { type: 'separator' },
+      { 
+        label: '关闭白板', 
+        accelerator: 'CmdOrCtrl+Q',
+        icon: closeIcon,
+        click: () => { _handleClose(); } 
+      }
+    ]);
+
+    tray.setToolTip('LanStartWrite - 白板助手');
+    tray.setContextMenu(contextMenu);
+    
+    tray.on('double-click', () => {
+      if (mainWindow) {
+        if (mainWindow.isMinimized()) mainWindow.restore();
+        mainWindow.show();
+        mainWindow.focus();
+      }
+    });
+  } catch (e) {
+    console.error('Failed to create tray:', e);
+  }
+}
+
+/**
+ * 处理关闭逻辑（带确认和保存）
+ */
+async function _handleClose() {
+  try {
+    const choice = dialog.showMessageBoxSync({
+      type: 'question',
+      buttons: ['确认退出', '取消'],
+      title: '退出确认',
+      message: '确定要完全退出白板应用吗？',
+      detail: '建议在退出前确保您的所有绘图已保存。',
+      defaultId: 1,
+      cancelId: 1
+    });
+
+    if (choice === 0) {
+      // 广播退出前准备消息，触发渲染进程保存
+      _broadcastAll('app:prepare-exit', { restart: false });
+      
+      // 延迟退出，给渲染进程留出保存状态的时间
+      setTimeout(() => {
+        app.quit();
+      }, 500);
+    }
+  } catch (e) {
+    app.quit();
+  }
+}
+
+/**
+ * 处理重启逻辑
+ */
+async function _handleRestart() {
+  try {
+    const choice = dialog.showMessageBoxSync({
+      type: 'question',
+      buttons: ['确认重启', '取消'],
+      title: '重启确认',
+      message: '确定要重启白板应用吗？',
+      detail: '应用将保存当前状态并重新启动。',
+      defaultId: 1,
+      cancelId: 1
+    });
+
+    if (choice === 0) {
+      _broadcastAll('app:prepare-exit', { restart: true });
+      
+      setTimeout(() => {
+        app.relaunch();
+        app.exit(0);
+      }, 500);
+    }
+  } catch (e) {
+    app.relaunch();
+    app.exit(0);
+  }
 }
 
 function _broadcast(channel, data) {
@@ -235,11 +408,11 @@ function _createSettingsWindow() {
   const win = new BrowserWindow({
     width: 980,
     height: 720,
-    minWidth: 720,
-    minHeight: 520,
+    minWidth: 800,
+    minHeight: 600,
     backgroundColor: '#ffffff',
-    frame: true,
-    show: true,
+    frame: false,
+    show: false,
     icon: _appIconPath(),
     title: '设置 - LanStartWrite',
     webPreferences: {
@@ -248,7 +421,12 @@ function _createSettingsWindow() {
       nodeIntegration: false
     }
   });
-  win.loadFile(path.join(__dirname, 'index.html'), { query: { standalone: 'settings' } });
+
+  win.once('ready-to-show', () => {
+    win.show();
+  });
+
+  win.loadFile(path.join(__dirname, 'settings.html'));
   return win;
 }
 
@@ -256,12 +434,12 @@ function _createAboutWindow() {
   const win = new BrowserWindow({
     width: 520,
     height: 420,
-    resizable: false,
+    resizable: true,
     minimizable: true,
     maximizable: false,
     backgroundColor: '#ffffff',
-    frame: true,
-    show: true,
+    frame: false,
+    show: false,
     icon: _appIconPath(),
     title: '关于 - LanStartWrite',
     webPreferences: {
@@ -270,6 +448,11 @@ function _createAboutWindow() {
       nodeIntegration: false
     }
   });
+
+  win.once('ready-to-show', () => {
+    win.show();
+  });
+
   win.loadFile(path.join(__dirname, 'about.html'));
   return win;
 }
@@ -650,7 +833,7 @@ function _validateManifest(manifest) {
   if (overrides) {
     if (type !== 'control-replace') throw new Error('overrides require control-replace type');
     if (!permissions.includes('ui:override')) throw new Error('missing ui:override permission');
-    const allow = new Set(['./tool_ui.html', './more_decide_ui.html', './setting_ui.html']);
+    const allow = new Set(['./setting_ui.html', './whiteboard.html']);
     for (const k of Object.keys(overrides)) {
       if (!allow.has(k)) throw new Error('invalid override key');
       const rel = String(overrides[k] || '').trim();
@@ -954,7 +1137,7 @@ async function _readPluginAsset(id, relPath, as) {
 
 async function _getFragmentOverride(fragmentKey) {
   const key = String(fragmentKey || '').trim();
-  const allow = new Set(['./tool_ui.html', './more_decide_ui.html', './setting_ui.html']);
+  const allow = new Set(['./setting_ui.html', './whiteboard.html']);
   if (!allow.has(key)) return null;
   const { installed } = await _listInstalled();
   for (const pl of installed) {
@@ -1001,8 +1184,10 @@ if (_RUN_TESTS) {
 
 app.whenReady().then(async () => {
   createWindow({ runTests: _RUN_TESTS });
+  _createTray();
   try { await _ensureAuditReady(); } catch (e) {}
   _ensureAuditReportTimer();
+
   if (_RUN_TESTS) {
     try{
       _testsTimeout = setTimeout(() => {
@@ -1013,6 +1198,14 @@ app.whenReady().then(async () => {
   }
   try { await _ensureModDirs(); } catch (e) {}
   try { _startModWatchers(); } catch (e) {}
+
+  // 初始化 PPT 联动后端
+  try {
+    const pptBackend = require('./ppt_backend.js');
+    pptBackend.init();
+  } catch (e) {
+    console.error('Failed to load ppt_backend:', e);
+  }
 });
 
 app.on('window-all-closed', () => {
@@ -1080,12 +1273,7 @@ ipcMain.on('overlay:set-interactive-rects', (event, payload) => {
 });
 
 ipcMain.on('app:close', () => {
-  try{
-    if (mainWindow) mainWindow.close();
-    else app.quit();
-  }catch(e){
-    try{ app.quit(); }catch(err){}
-  }
+  _handleClose();
 });
 
 /**
@@ -1097,6 +1285,10 @@ ipcMain.handle('message', async (event, channel, data) => {
   
   // 根据不同的消息通道进行处理
   switch(channel) {
+    case 'app:quit': {
+      _handleClose();
+      return { success: true };
+    }
     case 'ui:open-settings-window': {
       try {
         _createSettingsWindow();
@@ -1216,6 +1408,11 @@ ipcMain.handle('message', async (event, channel, data) => {
         return { success: false, error: String(e && e.message || e) };
       }
     }
+    case 'tests:stress-test-mode-switch': {
+      if (!_RUN_TESTS) return { success: false, error: 'not allowed' };
+      // This is a placeholder for stress test logic that can be triggered via IPC
+      return { success: true, started: true };
+    }
     case 'get-info':
       return {
         appVersion: app.getVersion(),
@@ -1276,30 +1473,147 @@ ipcMain.handle('message', async (event, channel, data) => {
         const rawPath = payload.path ? String(payload.path) : '';
         if (!rawPath) return { success: false, reason: 'no_path' };
         const mode = payload.mode === 'fullscreen' ? 'fullscreen' : 'window';
-        const fileUrl = pathToFileURL(rawPath).toString();
+        
+        // Load our custom UI instead of the raw PDF
+        const uiPath = path.join(__dirname, 'pdf_viewer_ui.html');
+        const fileUrl = pathToFileURL(uiPath).toString() + `?path=${encodeURIComponent(rawPath)}&mode=${mode}`;
+        
         const win = new BrowserWindow({
-          width: 980,
-          height: 720,
-          minWidth: 720,
-          minHeight: 520,
+          width: 1024,
+          height: 768,
+          minWidth: 800,
+          minHeight: 600,
           backgroundColor: '#ffffff',
-          frame: true,
-          show: true,
+          frame: false, // Use custom title bar for better control
+          show: false,
           icon: _appIconPath(),
-          title: 'PDF 预览',
+          title: 'PDF 浏览与批注',
           webPreferences: {
             contextIsolation: true,
-            nodeIntegration: false
+            nodeIntegration: false,
+            preload: path.join(__dirname, 'preload.js'),
+            webSecurity: false
           }
         });
-        if (mode === 'fullscreen') {
-          try { win.setFullScreen(true); } catch (e) {}
-        }
+
+        _pdfWindowCount++;
+        _updatePdfModeState();
+
+        win.once('ready-to-show', () => {
+          win.show();
+          if (mode === 'fullscreen') {
+            win.setFullScreen(true);
+          }
+        });
+
         await win.loadURL(fileUrl);
-        try { win.setMenuBarVisibility(true); } catch (e) {}
+        win.setMenuBarVisibility(false);
+
+        win.on('closed', () => {
+          _pdfWindowCount = Math.max(0, _pdfWindowCount - 1);
+          _updatePdfModeState();
+        });
+        
         return { success: true };
       } catch (e) {
         return { success: false, error: String(e && e.message || e) };
+      }
+    }
+
+    case 'pdf:set-fullscreen': {
+      try {
+        const win = BrowserWindow.fromWebContents(event.sender);
+        if (win) {
+          const val = !!data;
+          win.setFullScreen(val);
+        }
+        return { success: true };
+      } catch (e) {
+        return { success: false, error: String(e && e.message || e) };
+      }
+    }
+
+    case 'pdf:close-window': {
+      try {
+        const win = BrowserWindow.fromWebContents(event.sender);
+        if (win) {
+          // Safety check: don't close the main window via this specific PDF channel
+          if (win === mainWindow) {
+             return { success: false, error: 'cannot_close_main_window_via_pdf_channel' };
+          }
+          win.close();
+        }
+        return { success: true };
+      } catch (e) {
+        return { success: false, error: String(e && e.message || e) };
+      }
+    }
+
+    case 'video-booth:open-window': {
+      try {
+        const uiPath = path.join(__dirname, 'video_booth.html');
+        const fileUrl = pathToFileURL(uiPath).toString();
+        
+        const win = new BrowserWindow({
+          width: 1366,
+          height: 768,
+          minWidth: 1280,
+          minHeight: 720,
+          backgroundColor: '#000000',
+          frame: false,
+          show: false,
+          icon: _appIconPath(),
+          title: '视频展台',
+          webPreferences: {
+            contextIsolation: true,
+            nodeIntegration: false,
+            preload: path.join(__dirname, 'preload.js'),
+            webSecurity: false
+          }
+        });
+
+        win.once('ready-to-show', () => {
+          win.show();
+        });
+
+        await win.loadURL(fileUrl);
+        win.setMenuBarVisibility(false);
+        return { success: true };
+      } catch (e) {
+        return { success: false, error: String(e && e.message || e) };
+      }
+    }
+
+    case 'window:minimize': {
+      try {
+        const win = BrowserWindow.fromWebContents(event.sender);
+        if (win) win.minimize();
+        return { success: true };
+      } catch (e) {
+        return { success: false, error: String(e) };
+      }
+    }
+
+    case 'window:maximize': {
+      try {
+        const win = BrowserWindow.fromWebContents(event.sender);
+        if (win) {
+          if (win.isMaximized()) win.unmaximize();
+          else win.maximize();
+        }
+        return { success: true };
+      } catch (e) {
+        return { success: false, error: String(e) };
+      }
+    }
+
+    case 'window:close': {
+      try {
+        const win = BrowserWindow.fromWebContents(event.sender);
+        if (win) win.close();
+        return { success: true };
+      } catch (e) {
+        return { success: false, error: String(e) };
       }
     }
 
@@ -1407,7 +1721,7 @@ ipcMain.on('sync-message', (event, channel, data) => {
  * @param {*} data - 消息数据
  */
 function broadcastMessage(channel, data) {
-  if (mainWindow && mainWindow.webContents) {
-    mainWindow.webContents.send(channel, data);
-  }
+  _broadcastAll('reply-from-main', { channel, data });
+  // 为了兼容现有代码，同时也发送直接通道
+  _broadcastAll(channel, data);
 }
