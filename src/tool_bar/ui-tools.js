@@ -56,10 +56,10 @@ function setPointerSelectedInUse(on){
     if (pointerTool) {
       if (_pointerSelectedInUse) {
         pointerTool.dataset.selectedInUse = '1';
-        pointerTool.classList.add('selected-in-use');
+        if (!pointerTool.classList.contains('active')) pointerTool.classList.add('active');
       } else {
         if (pointerTool.dataset) delete pointerTool.dataset.selectedInUse;
-        pointerTool.classList.remove('selected-in-use');
+        pointerTool.classList.remove('active');
       }
     }
   }catch(e){}
@@ -81,7 +81,7 @@ function _readPenetrationButtonState(){
   const btn = _getPointerBtn();
   const exists = !!btn;
   const active = !!(btn && btn.classList && btn.classList.contains('active'));
-  const selectedInUse = !!(btn && btn.classList && btn.classList.contains('selected-in-use'));
+  const selectedInUse = active;
   let disabled = false;
   let ariaDisabled = false;
   let hover = false;
@@ -658,7 +658,7 @@ try{
   Message.on(EVENTS.SUBMENU_CLOSE, ()=>{ applyWindowInteractivity(); scheduleInteractiveRectsUpdate(); });
   Message.on(EVENTS.SUBMENU_PIN, ()=>{ applyWindowInteractivity(); scheduleInteractiveRectsUpdate(); });
   Message.on(EVENTS.SUBMENU_MOVE, ()=>{ applyWindowInteractivity(); scheduleInteractiveRectsUpdate(); });
-  Message.on(EVENTS.TOOLBAR_MOVE, ()=>{ scheduleInteractiveRectsUpdate(); });
+  Message.on(EVENTS.TOOLBAR_MOVE, ()=>{ applyWindowInteractivity(); scheduleInteractiveRectsUpdate(); });
 }catch(e){}
 
 if (colorTool) {
@@ -680,11 +680,12 @@ if (colorTool) {
     setErasing(false);
     // when using pen, disable selection mode and enable canvas input
     try{ Curous.enableSelectionMode(false); setInputEnabled(true); }catch(e){}
-      if (pointerTool) pointerTool.classList.remove('active');
-      setPointerSelectedInUse(false);
+    if (pointerTool) pointerTool.classList.remove('active');
+    setPointerSelectedInUse(false);
     if (eraserTool) eraserTool.classList.remove('active');
-    applyWindowInteractivity();
-    flushInteractiveRects();
+    _forceReleaseTouchUiBlock();
+    applyWindowInteractivityNow(true);
+    try{ flushInteractiveRects(); }catch(e){}
     showSubmenu(colorMenu, colorTool);
     const wantOpen = !wasOpen;
     if (wantOpen && !colorMenu.classList.contains('open')) {
@@ -705,7 +706,8 @@ if (colorTool) {
     }
     updatePenModeLabel();
     syncToolbarIcons();
-    applyWindowInteractivity();
+    _forceReleaseTouchUiBlock();
+    applyWindowInteractivityNow(true);
     scheduleInteractiveRectsUpdate();
   };
   colorTool.addEventListener('click', openPen);
@@ -722,19 +724,21 @@ if (eraserTool) {
       setErasing(false);
       updateEraserModeLabel();
       syncToolbarIcons();
-      applyWindowInteractivity();
+      _forceReleaseTouchUiBlock();
+      applyWindowInteractivityNow(true);
       scheduleInteractiveRectsUpdate();
       return;
     }
     setErasing(true);
     try{ Curous.enableSelectionMode(false); setInputEnabled(true); }catch(e){}
-      if (pointerTool) pointerTool.classList.remove('active');
-      setPointerSelectedInUse(false);
+    if (pointerTool) pointerTool.classList.remove('active');
+    setPointerSelectedInUse(false);
     if (colorTool) colorTool.classList.remove('active');
     showSubmenu(eraserMenu, eraserTool);
     updateEraserModeLabel();
     syncToolbarIcons();
-    applyWindowInteractivity();
+    _forceReleaseTouchUiBlock();
+    applyWindowInteractivityNow(true);
     scheduleInteractiveRectsUpdate();
   };
   eraserTool.addEventListener('click', openEraser);
@@ -815,7 +819,8 @@ if (moreTool) {
     if (eraserTool) eraserTool.classList.remove('active');
     showSubmenu(moreMenu, moreTool);
     syncToolbarIcons();
-    applyWindowInteractivity();
+    _forceReleaseTouchUiBlock();
+    applyWindowInteractivityNow(true);
     scheduleInteractiveRectsUpdate();
   };
   moreTool.addEventListener('click', openMore);
@@ -1125,24 +1130,25 @@ if (dragHandle && panel) {
       }catch(e){}
       _toolbarDragPrevTransition = null;
       try{ Message.emit(EVENTS.TOOLBAR_MOVE, { left: rect.left, top: rect.top }); }catch(e){}
+      applyWindowInteractivity();
       scheduleInteractiveRectsUpdate();
     }
   });
 }
 
 if (clearBtn) {
-  const onClear = ()=>{ clearAll(); setErasing(false); if (eraserTool) eraserTool.classList.remove('active'); updatePenModeLabel(); updateEraserModeLabel(); syncToolbarIcons(); applyWindowInteractivity(); scheduleInteractiveRectsUpdate(); };
+  const onClear = ()=>{ clearAll(); setErasing(false); if (eraserTool) eraserTool.classList.remove('active'); updatePenModeLabel(); updateEraserModeLabel(); syncToolbarIcons(); _forceReleaseTouchUiBlock(); applyWindowInteractivityNow(true); scheduleInteractiveRectsUpdate(); };
   clearBtn.addEventListener('click', onClear);
   bindTouchTap(clearBtn, onClear, { delayMs: 0 });
 }
 
 if (undoBtn) {
-  const onUndo = ()=>{ undo(); };
+  const onUndo = ()=>{ undo(); _forceReleaseTouchUiBlock(); applyWindowInteractivityNow(true); scheduleInteractiveRectsUpdate(); };
   undoBtn.addEventListener('click', onUndo);
   bindTouchTap(undoBtn, onUndo, { delayMs: 0 });
 }
 if (redoBtn) {
-  const onRedo = ()=>{ redo(); };
+  const onRedo = ()=>{ redo(); _forceReleaseTouchUiBlock(); applyWindowInteractivityNow(true); scheduleInteractiveRectsUpdate(); };
   redoBtn.addEventListener('click', onRedo);
   bindTouchTap(redoBtn, onRedo, { delayMs: 0 });
 }

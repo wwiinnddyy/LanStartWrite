@@ -172,7 +172,8 @@ export default class OperarPenetration {
     if (this.touchBlockActive) return;
     this.touchBlockActive = true;
     try { this.sendIgnoreMouse(false, false); } catch (err) {}
-    this.setTouchShieldActive(true);
+    const isFullScreenUi = !!document.querySelector('.settings-modal.open, .recognition-ui.open, .mod-overlay.open');
+    this.setTouchShieldActive(!!isFullScreenUi);
     try { this.scheduleInteractiveRectsUpdate(); } catch (err) {}
   }
 
@@ -305,7 +306,8 @@ export default class OperarPenetration {
 
   applyWindowInteractivityNow(forceIgnore) {
     const appMode = this.getAppMode();
-    const hasOpenUi = !!document.querySelector(this.selectors.openUi);
+    const hasFullScreenUi = !!document.querySelector('.settings-modal.open, .recognition-ui.open, .mod-overlay.open');
+    const hasSubmenuOpen = !!document.querySelector('.submenu.open');
     const pointerActive = !!this.isPointerActive();
     const featureActive = appMode === this.appModes.ANNOTATION && pointerActive;
 
@@ -318,7 +320,7 @@ export default class OperarPenetration {
     }
     this.featureActive = featureActive;
 
-    if (hasOpenUi) {
+    if (hasFullScreenUi) {
       this.debug('interactivity', 'open-ui');
       try { this.forceReleaseTouchUiBlock(); } catch (e) {}
       this.sendIgnoreMouse(false, false);
