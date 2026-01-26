@@ -12,6 +12,7 @@ export function attachDragHelper(handle, target, options = {}){
   let pointerDown = false;
   let dragging = false;
   let startX = 0, startY = 0;
+  let startScreenX = 0, startScreenY = 0;
   let startLeft = 0, startTop = 0;
   let touchId = null;
   let pointerId = null;
@@ -69,7 +70,9 @@ export function attachDragHelper(handle, target, options = {}){
     }catch(e){}
     target.style.left = left + 'px';
     target.style.top = top + 'px';
-    if (options.onMove) options.onMove({ left, top, ev });
+    const screenDx = (ev && typeof ev.screenX === 'number') ? (ev.screenX - startScreenX) : 0;
+    const screenDy = (ev && typeof ev.screenY === 'number') ? (ev.screenY - startScreenY) : 0;
+    if (options.onMove) options.onMove({ left, top, ev, screenDx, screenDy });
   }
 
   function _scheduleApply(dx, dy, ev){
@@ -91,6 +94,8 @@ export function attachDragHelper(handle, target, options = {}){
   function _startDrag(clientX, clientY, ev){
     startX = clientX;
     startY = clientY;
+    startScreenX = ev ? ev.screenX : 0;
+    startScreenY = ev ? ev.screenY : 0;
     const r = target.getBoundingClientRect();
     basis = getBasis();
     if (basis === 'offsetParent') {

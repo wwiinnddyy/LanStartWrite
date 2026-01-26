@@ -47,8 +47,8 @@ function wirePanelDrag(onMove, onEnd) {
       right: window.innerWidth,
       bottom: window.innerHeight
     }),
-    onMove: ({ left, top }) => {
-      safeCall(() => Message.emit(EVENTS.TOOLBAR_MOVE, { left, top }));
+    onMove: ({ left, top, screenDx, screenDy }) => {
+      safeCall(() => Message.emit(EVENTS.TOOLBAR_MOVE, { left, top, screenDx, screenDy }));
       if (onMove) safeCall(() => onMove({ left, top }));
     },
     onEnd: (ev, rect) => {

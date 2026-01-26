@@ -2,12 +2,13 @@ export default class OperarPenetration {
   static get UI_SELECTORS() {
     return {
       floatingPanel: '.floating-panel',
+      dragHandle: '.drag-handle, #dragHandle',
       submenu: '.submenu.open',
       recognition: '.recognition-ui.open',
       settings: '.settings-modal.open',
       pageToolbar: '#pageToolbar',
       openUi: '.settings-modal.open, .recognition-ui.open, .submenu.open, .mod-overlay.open',
-      touchBlockTargets: '.floating-panel, .submenu, .settings-modal, .recognition-ui, .mod-overlay, #settingsModal, #pluginModal, #aboutModal, #pageToolbar, .video-booth-window'
+      touchBlockTargets: '.floating-panel, .drag-handle, .submenu, .settings-modal, .recognition-ui, .mod-overlay, #settingsModal, #pluginModal, #aboutModal, #pageToolbar, .video-booth-window'
     };
   }
 
@@ -209,7 +210,11 @@ export default class OperarPenetration {
       this.lastSentIgnore = key;
       this.lastIgnoreMouse = { ignore: !!ignore, forward: !!forward, at: Date.now() };
       this.debug('overlay', 'ignore-mouse', { ignore: !!ignore, forward: !!forward, mode: this.getAppMode() });
-      this.sendToMain('overlay:set-ignore-mouse', { ignore: !!ignore, forward: !!forward });
+      this.sendToMain('overlay:set-ignore-mouse', { 
+        ignore: !!ignore, 
+        forward: !!forward,
+        disablePoll: (this.activeInputType === 'touch' || this.activeInputType === 'pen')
+      });
     } catch (e) {}
   }
 
@@ -237,6 +242,7 @@ export default class OperarPenetration {
       rects.push({ left: r.left, top: r.top, width: w, height: h });
     };
     if (this.selectors.floatingPanel) pushEl(document.querySelector(this.selectors.floatingPanel));
+    if (this.selectors.dragHandle) document.querySelectorAll(this.selectors.dragHandle).forEach(pushEl);
     if (this.selectors.submenu) document.querySelectorAll(this.selectors.submenu).forEach(pushEl);
     if (this.selectors.recognition) document.querySelectorAll(this.selectors.recognition).forEach(pushEl);
     if (this.selectors.settings) document.querySelectorAll(this.selectors.settings).forEach(pushEl);
@@ -265,13 +271,13 @@ export default class OperarPenetration {
     if (this.interactiveRectsRaf) return;
     this.interactiveRectsRaf = requestAnimationFrame(() => {
       this.interactiveRectsRaf = 0;
-      this.sendInteractiveRects(this.collectInteractiveRects());
+      this.sendInteractiveRects(this.collectInteractiveRects(true));
     });
   }
 
   flushInteractiveRects() {
     if (this.getAppMode() !== this.appModes.ANNOTATION) return;
-    try { this.sendInteractiveRects(this.collectInteractiveRects()); } catch (e) {}
+    try { this.sendInteractiveRects(this.collectInteractiveRects(true)); } catch (e) {}
   }
 
   setRectWatchdog(on) {
@@ -321,7 +327,7 @@ export default class OperarPenetration {
     this.featureActive = featureActive;
 
     if (hasFullScreenUi) {
-      this.debug('interactivity', 'open-ui');
+      this.debug('interactivity', 'open-ui', { selectors: this.selectors.openUi });
       try { this.forceReleaseTouchUiBlock(); } catch (e) {}
       this.sendIgnoreMouse(false, false);
       try { this.sendInteractiveRects(this.collectInteractiveRects()); } catch (e) {}

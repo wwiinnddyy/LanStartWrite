@@ -58,7 +58,7 @@ const DEFAULTS = {
   pluginButtonDisplay: {},
   pdfDefaultMode: 'window',
   pageSwitchDraggable: false,
-  overlayShapeEnabled: false,
+  overlayShapeEnabled: true,
   separateToolbarWindow: false
 };
 

@@ -679,9 +679,9 @@
       .mica-surface{position:relative;overflow:hidden}
       .mica-surface::before{content:'';position:absolute;inset:0;background:linear-gradient(45deg, rgba(255,255,255,var(--ls-mica-overlay)), rgba(255,255,255,0));mix-blend-mode:soft-light;pointer-events:none}
       .mica-surface{backdrop-filter:blur(var(--ls-mica-blur)) saturate(var(--ls-mica-saturation));-webkit-backdrop-filter:blur(var(--ls-mica-blur)) saturate(var(--ls-mica-saturation))}
-      .mica-surface{mask-image:radial-gradient(closest-side, rgba(0,0,0,1) calc(100% - var(--ls-mica-feather)), rgba(0,0,0,0) 100%)}
+      /* .mica-surface{mask-image:radial-gradient(closest-side, rgba(0,0,0,1) calc(100% - var(--ls-mica-feather)), rgba(0,0,0,0) 100%)} */
       .visual-blur .floating-panel,.visual-blur .submenu,.visual-blur #pageToolbar,.visual-blur .settings-panel,.visual-blur .recognition-ui,.visual-blur .settings-card,.visual-blur .plugin-item{backdrop-filter:blur(var(--ls-mica-blur)) saturate(var(--ls-mica-saturation));-webkit-backdrop-filter:blur(var(--ls-mica-blur)) saturate(var(--ls-mica-saturation))}
-      .visual-blur .floating-panel,.visual-blur .submenu,.visual-blur #pageToolbar,.visual-blur .settings-panel,.visual-blur .recognition-ui,.visual-blur .settings-card,.visual-blur .plugin-item{mask-image:radial-gradient(closest-side, rgba(0,0,0,1) calc(100% - var(--ls-mica-feather)), rgba(0,0,0,0) 100%)}
+      /* .visual-blur .floating-panel,.visual-blur .submenu,.visual-blur #pageToolbar,.visual-blur .settings-panel,.visual-blur .recognition-ui,.visual-blur .settings-card,.visual-blur .plugin-item{mask-image:radial-gradient(closest-side, rgba(0,0,0,1) calc(100% - var(--ls-mica-feather)), rgba(0,0,0,0) 100%)} */
       .visual-blur .floating-panel::before,.visual-blur .submenu::before,.visual-blur #pageToolbar::before,.visual-blur .settings-panel::before,.visual-blur .recognition-ui::before,.visual-blur .settings-card::before,.visual-blur .plugin-item::before{content:'';position:absolute;inset:0;background:linear-gradient(45deg, rgba(255,255,255,var(--ls-mica-overlay)), rgba(255,255,255,0));mix-blend-mode:soft-light;pointer-events:none}
 
       .ripple{position:absolute;border-radius:999px;transform:translate(-50%,-50%) scale(0);background:rgba(255,255,255,0.35);pointer-events:none;animation:rippleAnim 300ms ease-out}

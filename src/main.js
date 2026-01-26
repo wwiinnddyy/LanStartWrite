@@ -150,14 +150,21 @@ async function _writeAuditReport() {
   }
 }
 
-let _overlayShapeEnabled = false;
+let _overlayShapeEnabled = true;
 let _overlayShapeSupported = null;
 let _overlayShapeActive = false;
+
+function _getOverlayShapeSetter() {
+  if (!mainWindow || mainWindow.isDestroyed()) return null;
+  if (mainWindow.setShape && typeof mainWindow.setShape === 'function') return mainWindow.setShape.bind(mainWindow);
+  if (mainWindow.setShapeRects && typeof mainWindow.setShapeRects === 'function') return mainWindow.setShapeRects.bind(mainWindow);
+  return null;
+}
 
 function _canUseOverlayShape() {
   if (!_overlayShapeEnabled) return false;
   if (!mainWindow || mainWindow.isDestroyed()) return false;
-  if (!mainWindow.setShapeRects || typeof mainWindow.setShapeRects !== 'function') return false;
+  if (!_getOverlayShapeSetter()) return false;
   if (_overlayShapeSupported === false) return false;
   return true;
 }
@@ -165,6 +172,8 @@ function _canUseOverlayShape() {
 function _applyOverlayShape(rects) {
   if (!_canUseOverlayShape()) return false;
   try {
+    const setShape = _getOverlayShapeSetter();
+    if (!setShape) return false;
     const list = Array.isArray(rects) ? rects : [];
     const shapeRects = list.map((r) => {
       const left = Number(r && r.left) || 0;
@@ -178,7 +187,10 @@ function _applyOverlayShape(rects) {
       if (w <= 0 || h <= 0) return null;
       return { x, y, width: w, height: h };
     }).filter(Boolean);
-    mainWindow.setShapeRects(shapeRects);
+    setShape(shapeRects);
+    try {
+      mainWindow.setIgnoreMouseEvents(false);
+    } catch (e) {}
     _overlayShapeSupported = true;
     _overlayShapeActive = shapeRects.length > 0;
     _overlayDebug('shape-apply', { count: shapeRects.length });
@@ -197,6 +209,14 @@ function _applyOverlayShapeFromState() {
   const cfg = _overlayIgnoreConfig && typeof _overlayIgnoreConfig === 'object' ? _overlayIgnoreConfig : { ignore: false, forward: false };
   const useRects = !!cfg.ignore && !!cfg.forward;
   if (useRects) return _applyOverlayShape(rects);
+  try {
+    const b = mainWindow && !mainWindow.isDestroyed() && typeof mainWindow.getBounds === 'function' ? mainWindow.getBounds() : null;
+    const w = b && typeof b.width === 'number' ? Math.round(b.width) : 0;
+    const h = b && typeof b.height === 'number' ? Math.round(b.height) : 0;
+    if (w > 0 && h > 0) {
+      return _applyOverlayShape([{ left: 0, top: 0, width: w, height: h }]);
+    }
+  } catch (e) {}
   return _applyOverlayShape([]);
 }
 
@@ -211,7 +231,7 @@ function _applyIgnoreMouse(ignore, forward) {
   if (_overlayLastApplied === key) return;
   _overlayLastApplied = key;
   _overlayDebug('apply', { ignore: !!ignore, forward: !!forward });
-  if (_overlayShapeEnabled && _overlayShapeSupported !== false && mainWindow.setShapeRects && typeof mainWindow.setShapeRects === 'function') {
+  if (_overlayShapeEnabled && _overlayShapeSupported !== false && _getOverlayShapeSetter()) {
     return;
   }
   if (ignore) mainWindow.setIgnoreMouseEvents(true, { forward: !!forward });
@@ -373,6 +393,13 @@ function _createToolbarWindow() {
 function _createOrUpdateSubmenuWindow(kind, opts) {
   if (_RUN_TESTS) return null;
   const menuKind = (kind === 'color' || kind === 'eraser' || kind === 'more') ? kind : 'color';
+  
+  // Ensure we close old one if it exists to avoid ghosts
+  if (submenuWindow && !submenuWindow.isDestroyed()) {
+    try { submenuWindow.close(); } catch(e) {}
+    submenuWindow = null;
+  }
+  
   let win = submenuWindow;
   try {
     if (win && win.isDestroyed && win.isDestroyed()) win = null;
@@ -389,7 +416,8 @@ function _createOrUpdateSubmenuWindow(kind, opts) {
       transparent: true,
       backgroundColor: '#00000000',
       frame: false,
-      hasShadow: true,
+      hasShadow: false,
+      roundedCorners: false,
       skipTaskbar: true,
       resizable: false,
       minimizable: false,
@@ -1825,7 +1853,7 @@ ipcMain.on('overlay:set-ignore-mouse', (event, payload) => {
     if (!mainWindow) return;
     const ignore = !!(payload && payload.ignore);
     const forward = !!(payload && payload.forward);
-    _overlayDebug('ipc-ignore', { ignore, forward });
+    _overlayDebug('ipc-ignore', { ignore, forward, from: 'renderer' });
     _overlayIgnoreConfig = { ignore, forward };
     _applyIgnoreMouse(ignore, forward);
     if (_overlayShapeEnabled) {
@@ -1839,7 +1867,7 @@ ipcMain.on('overlay:set-ignore-mouse', (event, payload) => {
       if (allow) _applyIgnoreMouse(false, false);
       else _applyIgnoreMouse(true, true);
     }
-    if (ignore && forward) _ensureOverlayPoll();
+    if (ignore && forward && !payload.disablePoll) _ensureOverlayPoll();
     else _stopOverlayPoll();
   }catch(err){
     console.warn('overlay:set-ignore-mouse failed', err);
@@ -1928,8 +1956,11 @@ ipcMain.handle('message', async (event, channel, data) => {
         const s = data && typeof data === 'object' ? data : {};
         _overlayShapeEnabled = !!s.overlayShapeEnabled;
         _overlayShapeSupported = null;
-        if (!_overlayShapeEnabled && mainWindow && !mainWindow.isDestroyed() && mainWindow.setShapeRects && typeof mainWindow.setShapeRects === 'function') {
-          try { mainWindow.setShapeRects([]); } catch (e) {}
+        if (!_overlayShapeEnabled) {
+          const setShape = _getOverlayShapeSetter();
+          if (setShape) {
+            try { setShape([]); } catch (e) {}
+          }
           _overlayShapeActive = false;
         }
         if (_overlayShapeEnabled) {

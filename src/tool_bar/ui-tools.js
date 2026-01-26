@@ -1182,8 +1182,9 @@ if (_PIN_TOOLBAR_TO_TASKBAR && panel) {
 if (dragHandle && panel) {
   dragHandle.style.touchAction = 'none';
   attachDragHelper(dragHandle, panel, {
-    threshold: 2,
-    touchThreshold: 5,
+    threshold: 1,
+    touchThreshold: 2,
+    useRaf: false,
     clampRect: _getViewportClampRect,
     onStart: () => {
       _toolbarUserMoved = true;

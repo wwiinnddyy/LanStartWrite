@@ -28,6 +28,19 @@ Message.on(EVENTS.REQUEST_FILE_WRITE, async (payload)=>{
   }catch(e){ console.warn('ipc_bridge forward failed', e); }
 });
 
+Message.on(EVENTS.TOOLBAR_MOVE, (payload) => {
+  try {
+    const isToolbarWindow = window.location.search.includes('toolbarWindow=1');
+    if (isToolbarWindow && window.electronAPI && window.electronAPI.invokeMain) {
+      // Use fire-and-forget for move events to avoid lag
+      window.electronAPI.invokeMain('message', 'toolbar:move', { 
+        screenDx: payload.screenDx || 0, 
+        screenDy: payload.screenDy || 0 
+      }).catch(() => {});
+    }
+  } catch (e) {}
+});
+
 /**
  * 说明：
  * - SETTINGS_CHANGED 事件不在此处转发，渲染进程内模块已直接订阅处理
