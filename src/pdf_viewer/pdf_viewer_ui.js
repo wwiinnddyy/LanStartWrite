@@ -6,19 +6,19 @@ let currentPath = '';
 let currentMode = 'window'; // 'window' | 'fullscreen'
 let canvas, ctx;
 let isDrawing = false;
-let strokes = []; // { points: [], size: 2, color: '#ff0000' }
+let strokes = []; // { points: [], size: 2, color: '#C50F1F' }
 let currentStroke = null;
 
 const state = {
     penSize: 2,
-    penColor: '#ff0000',
+    penColor: '#C50F1F',
     penOpacity: 1
 };
 
 const PEN_STYLES = [
-    { id: 'thin', name: '细笔', size: 2, color: '#ff0000', opacity: 1 },
-    { id: 'medium', name: '中笔', size: 5, color: '#0000ff', opacity: 1 },
-    { id: 'highlighter', name: '荧光笔', size: 12, color: '#ffff00', opacity: 0.4 }
+    { id: 'thin', name: '细笔', size: 2, color: '#C50F1F', opacity: 1 },
+    { id: 'medium', name: '中笔', size: 5, color: '#005A9E', opacity: 1 },
+    { id: 'highlighter', name: '荧光笔', size: 12, color: '#FFC83D', opacity: 0.4 }
 ];
 
 async function init() {

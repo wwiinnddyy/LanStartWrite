@@ -57,7 +57,7 @@ export function initPenUI(){
   const applyColorFromBtn = (btn)=>{
     if (!btn) return;
     const appMode = (document && document.body && document.body.dataset && document.body.dataset.appMode === 'annotation') ? 'annotation' : 'whiteboard';
-    const nextColor = normalizeHexColor(btn.dataset && btn.dataset.color, appMode === 'annotation' ? '#FF0000' : '#000000');
+    const nextColor = normalizeHexColor(btn.dataset && btn.dataset.color, appMode === 'annotation' ? '#C50F1F' : '#000000');
     setBrushColor(nextColor);
     try{ updateAppSettings(buildPenColorSettingsPatch(appMode, nextColor)); }catch(e){}
     setErasing(false);

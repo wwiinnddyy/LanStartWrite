@@ -156,7 +156,7 @@ async function runUnitTests(){
       size.max = '50';
       size.value = '4';
       menu.appendChild(size);
-      const colors = ['#ffffff','#000000','#FF0000','#0000FF','#ff3b30','#ff9500','#ffcc00','#34c759','#007aff','#5856d6'];
+      const colors = ['#000000','#C50F1F','#FF8C00','#FFC83D','#107C10','#00B7C3','#005A9E','#5C2E91'];
       const buttons = colors.map((c)=>{
         const b = document.createElement('button');
         b.className = 'color';
@@ -174,7 +174,7 @@ async function runUnitTests(){
       for (const btn of buttons) {
         const raw = String(btn.dataset.color || '');
         btn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-        const expected = normalizeHexColor(raw, '#FF0000');
+        const expected = normalizeHexColor(raw, '#C50F1F');
         eq(String(Renderer.getToolState().brushColor).toUpperCase(), expected, `annotation brushColor ${raw}`);
         const s = Settings.loadSettings();
         eq(getPenColorFromSettings(s, 'annotation'), expected, `annotation persisted ${raw}`);
@@ -199,7 +199,7 @@ async function runUnitTests(){
       document.body.dataset.appMode = 'whiteboard';
       buttons[7].dispatchEvent(new MouseEvent('click', { bubbles: true }));
       const sFinal = Settings.loadSettings();
-      eq(getPenColorFromSettings(sFinal, 'annotation'), normalizeHexColor(colors[5], '#FF0000'), 'mode color isolated (annotation)');
+      eq(getPenColorFromSettings(sFinal, 'annotation'), normalizeHexColor(colors[5], '#C50F1F'), 'mode color isolated (annotation)');
       eq(getPenColorFromSettings(sFinal, 'whiteboard'), normalizeHexColor(colors[7], '#000000'), 'mode color isolated (whiteboard)');
 
       toolBtn.remove();
@@ -592,7 +592,7 @@ async function runUnitTests(){
             historyIndex: 0,
             brushSize: 4,
             eraserSize: 20,
-            brushColor: '#FF0000',
+            brushColor: '#C50F1F',
             erasing: false,
             eraserMode: 'pixel',
             view: { scale: 1, offsetX: 0, offsetY: 0 }
@@ -1191,7 +1191,7 @@ window.addEventListener('DOMContentLoaded', async ()=>{
         if (optVideoBoothEnabled) patch.videoBoothEnabled = !!optVideoBoothEnabled.checked;
         if (optMultiTouchPen) patch.multiTouchPen = !!optMultiTouchPen.checked;
         if (optSmartInk) patch.smartInkRecognition = !!optSmartInk.checked;
-        if (optAnnotationPenColor) patch.annotationPenColor = normalizeHexColor(optAnnotationPenColor.value, '#FF0000');
+        if (optAnnotationPenColor) patch.annotationPenColor = normalizeHexColor(optAnnotationPenColor.value, '#C50F1F');
         patch.shortcuts = {
           undo: keyUndo && typeof keyUndo.value === 'string' ? keyUndo.value.trim() : '',
           redo: keyRedo && typeof keyRedo.value === 'string' ? keyRedo.value.trim() : ''
@@ -1212,7 +1212,7 @@ window.addEventListener('DOMContentLoaded', async ()=>{
           if (optVideoBoothEnabled) optVideoBoothEnabled.checked = !!s.videoBoothEnabled;
           if (optMultiTouchPen) optMultiTouchPen.checked = !!s.multiTouchPen;
           if (optSmartInk) optSmartInk.checked = !!s.smartInkRecognition;
-          if (optAnnotationPenColor) optAnnotationPenColor.value = normalizeHexColor(s.annotationPenColor, '#FF0000');
+          if (optAnnotationPenColor) optAnnotationPenColor.value = normalizeHexColor(s.annotationPenColor, '#C50F1F');
           if (keyUndo) keyUndo.value = s.shortcuts && typeof s.shortcuts.undo === 'string' ? s.shortcuts.undo : '';
           if (keyRedo) keyRedo.value = s.shortcuts && typeof s.shortcuts.redo === 'string' ? s.shortcuts.redo : '';
         }catch(e){}

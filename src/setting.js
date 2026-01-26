@@ -40,7 +40,7 @@ const DEFAULTS = {
     shape: 'natural',
     profile: 'standard'
   },
-  annotationPenColor: '#FF0000',
+  annotationPenColor: '#C50F1F',
   whiteboardPenColor: '#000000',
   visualStyle: 'blur',
   mica: {

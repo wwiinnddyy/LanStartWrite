@@ -16,8 +16,8 @@ let textFont = '20px "Segoe UI"';
 
 const _documents = {
   whiteboard: { ops: [], history: [], historyIndex: -1, brushSize: 4, eraserSize: 20, brushColor: '#000000', erasing: false, eraserMode: 'pixel', toolMode: 'brush', view: { scale: 1, offsetX: 0, offsetY: 0 } },
-  annotation: { ops: [], history: [], historyIndex: -1, brushSize: 4, eraserSize: 20, brushColor: '#ff0000', erasing: false, eraserMode: 'pixel', toolMode: 'brush', view: { scale: 1, offsetX: 0, offsetY: 0 } },
-  pdf: { ops: [], history: [], historyIndex: -1, brushSize: 4, eraserSize: 20, brushColor: '#ff0000', erasing: false, eraserMode: 'pixel', toolMode: 'brush', view: { scale: 1, offsetX: 0, offsetY: 0 } }
+  annotation: { ops: [], history: [], historyIndex: -1, brushSize: 4, eraserSize: 20, brushColor: '#C50F1F', erasing: false, eraserMode: 'pixel', toolMode: 'brush', view: { scale: 1, offsetX: 0, offsetY: 0 } },
+  pdf: { ops: [], history: [], historyIndex: -1, brushSize: 4, eraserSize: 20, brushColor: '#C50F1F', erasing: false, eraserMode: 'pixel', toolMode: 'brush', view: { scale: 1, offsetX: 0, offsetY: 0 } }
 };
 let _activeDocKey = 'whiteboard';
 
@@ -853,7 +853,7 @@ export function applyCubenoteState(state, opts){
     _documents.annotation.historyIndex = Number.isFinite(Number(an.historyIndex)) ? Number(an.historyIndex) : 0;
     _documents.annotation.brushSize = Number(an.brushSize) || 4;
     _documents.annotation.eraserSize = Number(an.eraserSize) || 20;
-    _documents.annotation.brushColor = String(an.brushColor || '#ff0000');
+    _documents.annotation.brushColor = String(an.brushColor || '#C50F1F');
     _documents.annotation.erasing = !!an.erasing;
     _documents.annotation.eraserMode = String(an.eraserMode || 'pixel');
     _documents.annotation.toolMode = String(an.toolMode || 'brush');
@@ -867,7 +867,7 @@ export function applyCubenoteState(state, opts){
     _documents.pdf.historyIndex = Number.isFinite(Number(pdf.historyIndex)) ? Number(pdf.historyIndex) : 0;
     _documents.pdf.brushSize = Number(pdf.brushSize) || 4;
     _documents.pdf.eraserSize = Number(pdf.eraserSize) || 20;
-    _documents.pdf.brushColor = String(pdf.brushColor || '#ff0000');
+    _documents.pdf.brushColor = String(pdf.brushColor || '#C50F1F');
     _documents.pdf.erasing = !!pdf.erasing;
     _documents.pdf.eraserMode = String(pdf.eraserMode || 'pixel');
     _documents.pdf.toolMode = String(pdf.toolMode || 'brush');

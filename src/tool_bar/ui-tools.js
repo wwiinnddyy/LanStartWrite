@@ -28,6 +28,7 @@ import { applyModeCanvasBackground } from '../mode_background.js';
 import { buildPenTailSegment, normalizePenTailSettings } from '../pen_tail.js';
 import { applyThemeMode, initThemeAutoSync, buildContrastReport, measureApplyCost, serializeLanTheme, parseLanTheme } from '../colors_features.js';
 import OperarPenetration from '../smart_screenik/Operar_Penetration.js';
+import Status from '../status.js';
 
 let _isToolbarWindow = false;
 let _submenuWindowKind = '';
@@ -57,6 +58,21 @@ const exitTool = document.getElementById('exitTool');
 let _pointerSelectedInUse = false;
 let _penetrationMonitorTimer = 0;
 let _penetrationPrevStateJson = '';
+
+function _setActiveToolState(tool){
+  const name = String(tool || '');
+  if (!name) return;
+  try{
+    Status.transition('ui', 'SET_ACTIVE_TOOL', { context: { activeTool: name } });
+  }catch(e){}
+}
+
+function _setOverlayState(name){
+  const v = name ? String(name) : '';
+  try{
+    Status.transition('ui', 'SET_OVERLAY', { context: { overlayState: v } });
+  }catch(e){}
+}
 
 function setPointerSelectedInUse(on){
   _pointerSelectedInUse = !!on;
@@ -252,8 +268,16 @@ const APP_MODES = { WHITEBOARD: 'whiteboard', ANNOTATION: 'annotation' };
 const ENTER_WHITEBOARD_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><g fill="currentColor"><path d="M2 6.75A2.75 2.75 0 0 1 4.75 4h14.5A2.75 2.75 0 0 1 22 6.75v5.786l-.8-.801a2.5 2.5 0 0 0-.7-.493V6.75c0-.69-.56-1.25-1.25-1.25H4.75c-.69 0-1.25.56-1.25 1.25v10.5c0 .69.56 1.25 1.25 1.25h7.265a2.5 2.5 0 0 0 .561 1.5H4.75A2.75 2.75 0 0 1 2 17.25z"/><path d="M20.492 12.442a1.5 1.5 0 0 0-2.121 0l-3.111 3.11l4.207 4.208l3.11-3.111a1.5 1.5 0 0 0 0-2.122zm-7.039 4.918l1.1-1.1l4.207 4.207l-1.1 1.1a1.5 1.5 0 0 1-2.121 0l-2.086-2.086a1.5 1.5 0 0 1 0-2.122"/></g></svg>`;
 
 let _appMode = APP_MODES.WHITEBOARD;
+try{
+  const st = Status.getMachineState('mode');
+  if (st && st.value === APP_MODES.ANNOTATION) _appMode = APP_MODES.ANNOTATION;
+}catch(e){}
 let applyCollapsed = ()=>{};
 let _pdfMode = false;
+try{
+  const viewerState = Status.getMachineState('viewer');
+  if (viewerState && viewerState.value === 'enabled') _pdfMode = true;
+}catch(e){}
 
 let _penetration = null;
 if (_isToolbarWindow) {
@@ -299,7 +323,12 @@ if (_isToolbarWindow) {
 }
 
 function setPdfMode(on){
-  _pdfMode = !!on;
+  const next = !!on;
+  _pdfMode = next;
+  try{
+    const ev = next ? 'ENABLED' : 'DISABLED';
+    Status.transition('viewer', ev);
+  }catch(e){}
   try{
     const b = document.body;
     if (!b) return;
@@ -315,8 +344,8 @@ function setPdfMode(on){
  */
 function readPersistedAppMode(){
   try{
-    const v = localStorage.getItem('appMode');
-    if (v === APP_MODES.ANNOTATION) return APP_MODES.ANNOTATION;
+    const st = Status.getMachineState('mode');
+    if (st && st.value === APP_MODES.ANNOTATION) return APP_MODES.ANNOTATION;
   }catch(e){}
   return APP_MODES.WHITEBOARD;
 }
@@ -327,7 +356,10 @@ function readPersistedAppMode(){
  * @returns {void}
  */
 function persistAppMode(mode){
-  try{ localStorage.setItem('appMode', mode); }catch(e){}
+  const m = mode === APP_MODES.ANNOTATION ? APP_MODES.ANNOTATION : APP_MODES.WHITEBOARD;
+  let ev = 'SWITCH_TO_WHITEBOARD';
+  if (m === APP_MODES.ANNOTATION) ev = 'SWITCH_TO_ANNOTATION';
+  try{ Status.transition('mode', ev); }catch(e){}
 }
 
 /**
@@ -561,7 +593,7 @@ function setAppMode(nextMode, opts){
   const m = nextMode === APP_MODES.ANNOTATION ? APP_MODES.ANNOTATION : APP_MODES.WHITEBOARD;
   const domMode = (()=>{ try{ return String(document.body && document.body.dataset ? (document.body.dataset.appMode || '') : ''); }catch(e){ return ''; } })();
   if (_appMode === m && domMode === m) return;
-  
+
   try {
     document.body.classList.add('mode-switching');
   } catch (e) {}
@@ -584,7 +616,6 @@ function setAppMode(nextMode, opts){
   setTimeout(() => {
     try {
       document.body.classList.remove('mode-switching');
-      // For automated performance testing: notify when switch is complete
       if (window.electronAPI && typeof window.electronAPI.sendToMain === 'function') {
         window.electronAPI.sendToMain('tests:mode-switch-done', { mode: _appMode, ts: Date.now() });
       }
@@ -714,6 +745,7 @@ if (colorTool) {
     if (pointerTool) pointerTool.classList.remove('active');
     setPointerSelectedInUse(false);
     if (eraserTool) eraserTool.classList.remove('active');
+    _setActiveToolState('pen');
     _forceReleaseTouchUiBlock();
     applyWindowInteractivityNow(true);
     try{ flushInteractiveRects(); }catch(e){}
@@ -795,6 +827,7 @@ if (eraserTool) {
     _forceReleaseTouchUiBlock();
     applyWindowInteractivityNow(true);
     scheduleInteractiveRectsUpdate();
+    _setActiveToolState('eraser');
   };
   eraserTool.addEventListener('click', openEraser);
   bindTouchTap(eraserTool, openEraser, { delayMs: 0 });
@@ -823,8 +856,10 @@ const toggleVideoBooth = async () => {
   const isVisible = _videoBoothInstance.isVisible();
   if (isVisible) {
     _videoBoothInstance.hide();
+    _setOverlayState('');
   } else {
     await _videoBoothInstance.show();
+    _setOverlayState('video-booth');
   }
   syncToolbarIcons();
   applyWindowInteractivity();
@@ -850,11 +885,13 @@ if (pointerTool) {
       setErasing(false);
       try{ setInputEnabled(false); }catch(e){}
       Curous.enableSelectionMode(true);
+      _setActiveToolState('pointer');
     } else {
       pointerTool.classList.remove('active');
       setPointerSelectedInUse(false);
       Curous.enableSelectionMode(false);
       try{ setInputEnabled(true); }catch(e){}
+      _setActiveToolState('pen');
     }
     syncToolbarIcons();
     _forceReleaseTouchUiBlock();
@@ -1476,7 +1513,7 @@ function _makeSettingsDraftFromSettings(s){
     showTooltips: !!src.showTooltips,
     multiTouchPen: !!src.multiTouchPen,
     overlayShapeEnabled: !!src.overlayShapeEnabled,
-    annotationPenColor: normalizeHexColor(src.annotationPenColor, '#FF0000'),
+    annotationPenColor: normalizeHexColor(src.annotationPenColor, '#C50F1F'),
     smartInkRecognition: !!src.smartInkRecognition,
     separateToolbarWindow: !!src.separateToolbarWindow,
     videoBoothEnabled: !!src.videoBoothEnabled,
@@ -1581,7 +1618,7 @@ function _validateSettingsDraft(d){
   const p3 = normalizeHexColor(tc.background, '#FFFFFF');
   if (tc.background && p3 !== String(tc.background || '').toUpperCase()) return { ok: false, message: '背景颜色无效', focusId: 'optThemeBackground' };
 
-  const pen = normalizeHexColor(draft.annotationPenColor, '#FF0000');
+  const pen = normalizeHexColor(draft.annotationPenColor, '#C50F1F');
   if (pen !== String(draft.annotationPenColor || '').toUpperCase()) return { ok: false, message: '批注默认笔颜色无效', focusId: 'optAnnotationPenColor' };
 
   if (undoKey && undoKey.length > 20) return { ok: false, message: '撤销快捷键过长', focusId: 'keyUndo' };
@@ -1708,7 +1745,7 @@ function _renderSettingsUi(){
     if (optSeparateToolbarWindow) optSeparateToolbarWindow.checked = !!d.separateToolbarWindow;
     if (optVideoBoothEnabled) optVideoBoothEnabled.checked = !!d.videoBoothEnabled;
     if (optMultiTouchPen) optMultiTouchPen.checked = !!d.multiTouchPen;
-    if (optAnnotationPenColor) optAnnotationPenColor.value = normalizeHexColor(d.annotationPenColor, '#FF0000');
+    if (optAnnotationPenColor) optAnnotationPenColor.value = normalizeHexColor(d.annotationPenColor, '#C50F1F');
     if (optSmartInk) optSmartInk.checked = !!d.smartInkRecognition;
     if (optPdfDefaultMode) optPdfDefaultMode.value = d.pdfDefaultMode || 'window';
     const pt = normalizePenTailSettings(d.penTail);
@@ -2667,6 +2704,7 @@ function openSettings(){
     const btn = settingsModal.querySelector(`.settings-tab[data-tab="${String(tab)}"]`);
     if (btn) btn.focus();
   }catch(e){}
+  _setOverlayState('settings');
 }
 
 function closeSettingsModal(){
@@ -2677,6 +2715,7 @@ function closeSettingsModal(){
   _menuDebug('modal', 'close', 'settings');
   applyWindowInteractivity();
   scheduleInteractiveRectsUpdate();
+  _setOverlayState('');
 }
 
 function openAbout(){
@@ -2685,6 +2724,7 @@ function openAbout(){
   _menuDebug('modal', 'open', 'about');
   applyWindowInteractivity();
   scheduleInteractiveRectsUpdate();
+  _setOverlayState('about');
 }
 
 function closeAboutModal(){
@@ -2692,6 +2732,7 @@ function closeAboutModal(){
   _menuDebug('modal', 'close', 'about');
   applyWindowInteractivity();
   scheduleInteractiveRectsUpdate();
+  _setOverlayState('');
 }
 
 function _invokeMainMessage(channel, data){
@@ -2994,7 +3035,7 @@ try{
         try{ if (s.canvasColor) applyModeCanvasBackground(_appMode, s.canvasColor, { getToolState, replaceStrokeColors, setBrushColor, updatePenModeLabel, getPreferredPenColor: (mode)=>getPenColorFromSettings(s, mode) }); }catch(e){}
         try{ if (typeof s.multiTouchPen !== 'undefined') setMultiTouchPenEnabled(!!s.multiTouchPen); }catch(e){}
         try{ if (typeof s.smartInkRecognition !== 'undefined') setInkRecognitionEnabled(!!s.smartInkRecognition); }catch(e){}
-        try{ if (_appMode === APP_MODES.ANNOTATION && s.annotationPenColor) { setBrushColor(normalizeHexColor(s.annotationPenColor, '#FF0000')); updatePenModeLabel(); syncToolbarIcons(); } }catch(e){}
+        try{ if (_appMode === APP_MODES.ANNOTATION && s.annotationPenColor) { setBrushColor(normalizeHexColor(s.annotationPenColor, '#C50F1F')); updatePenModeLabel(); syncToolbarIcons(); } }catch(e){}
       }catch(e){}
     });
   }
@@ -3086,7 +3127,7 @@ if (saveSettings) saveSettings.addEventListener('click', ()=>{
     showTooltips: !!d.showTooltips,
     multiTouchPen: !!d.multiTouchPen,
     overlayShapeEnabled: !!d.overlayShapeEnabled,
-    annotationPenColor: normalizeHexColor(d.annotationPenColor, '#FF0000'),
+    annotationPenColor: normalizeHexColor(d.annotationPenColor, '#C50F1F'),
     smartInkRecognition: !!d.smartInkRecognition,
     videoBoothEnabled: !!d.videoBoothEnabled,
     penTail: normalizePenTailSettings(d.penTail),
@@ -3126,7 +3167,7 @@ if (saveSettings) saveSettings.addEventListener('click', ()=>{
   closeSettingsModal();
 });
 
-if (resetSettingsBtn) resetSettingsBtn.addEventListener('click', ()=>{ Settings.resetSettings(); const s = Settings.loadSettings(); if (optAutoResize) optAutoResize.checked = !!s.enableAutoResize; if (optCollapsed) optCollapsed.checked = !!s.toolbarCollapsed; if (optTheme) optTheme.value = s.theme || 'light'; if (optDesignLanguage) optDesignLanguage.value = s.designLanguage || 'fluent'; if (optVisualStyle) optVisualStyle.value = s.visualStyle || 'blur'; if (optCanvasColor) optCanvasColor.value = s.canvasColor || 'white'; if (optTooltips) optTooltips.checked = !!s.showTooltips; if (optMultiTouchPen) optMultiTouchPen.checked = !!s.multiTouchPen; if (optAnnotationPenColor) optAnnotationPenColor.value = String(s.annotationPenColor || '#FF0000'); if (optSmartInk) optSmartInk.checked = !!s.smartInkRecognition; if (keyUndo) keyUndo.value = (s.shortcuts && s.shortcuts.undo) || ''; if (keyRedo) keyRedo.value = (s.shortcuts && s.shortcuts.redo) || ''; try{ applyDesignLanguage(s.designLanguage); }catch(e){ console.error('Failed to reset design language:', e); } try{ applyTheme(s.theme, s); }catch(e){ console.error('Failed to reset theme:', e); } try{ setMultiTouchPenEnabled(!!s.multiTouchPen); }catch(e){ console.error('Failed to reset multi-touch pen:', e); } try{ setInkRecognitionEnabled(!!s.smartInkRecognition); }catch(e){ console.error('Failed to reset ink recognition:', e); } try{ if (_appMode === APP_MODES.ANNOTATION) { setBrushColor(String(s.annotationPenColor || '#FF0000').toUpperCase()); updatePenModeLabel(); syncToolbarIcons(); } }catch(e){ console.error('Failed to reset annotation state:', e); } });
+if (resetSettingsBtn) resetSettingsBtn.addEventListener('click', ()=>{ Settings.resetSettings(); const s = Settings.loadSettings(); if (optAutoResize) optAutoResize.checked = !!s.enableAutoResize; if (optCollapsed) optCollapsed.checked = !!s.toolbarCollapsed; if (optTheme) optTheme.value = s.theme || 'light'; if (optDesignLanguage) optDesignLanguage.value = s.designLanguage || 'fluent'; if (optVisualStyle) optVisualStyle.value = s.visualStyle || 'blur'; if (optCanvasColor) optCanvasColor.value = s.canvasColor || 'white'; if (optTooltips) optTooltips.checked = !!s.showTooltips; if (optMultiTouchPen) optMultiTouchPen.checked = !!s.multiTouchPen; if (optAnnotationPenColor) optAnnotationPenColor.value = String(s.annotationPenColor || '#C50F1F'); if (optSmartInk) optSmartInk.checked = !!s.smartInkRecognition; if (keyUndo) keyUndo.value = (s.shortcuts && s.shortcuts.undo) || ''; if (keyRedo) keyRedo.value = (s.shortcuts && s.shortcuts.redo) || ''; try{ applyDesignLanguage(s.designLanguage); }catch(e){ console.error('Failed to reset design language:', e); } try{ applyTheme(s.theme, s); }catch(e){ console.error('Failed to reset theme:', e); } try{ setMultiTouchPenEnabled(!!s.multiTouchPen); }catch(e){ console.error('Failed to reset multi-touch pen:', e); } try{ setInkRecognitionEnabled(!!s.smartInkRecognition); }catch(e){ console.error('Failed to reset ink recognition:', e); } try{ if (_appMode === APP_MODES.ANNOTATION) { setBrushColor(String(s.annotationPenColor || '#C50F1F').toUpperCase()); updatePenModeLabel(); syncToolbarIcons(); } }catch(e){ console.error('Failed to reset annotation state:', e); } });
 
 class DesignStyleController {
   constructor(root){

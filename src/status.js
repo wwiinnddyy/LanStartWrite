@@ -16,6 +16,42 @@ const MACHINES = {
       whiteboard: { on: { SWITCH_TO_ANNOTATION: 'annotation' } },
       annotation: { on: { SWITCH_TO_WHITEBOARD: 'whiteboard' } }
     }
+  },
+  viewer: {
+    initial: 'disabled',
+    states: {
+      disabled: { on: { ENABLED: 'enabled' } },
+      enabled: { on: { DISABLED: 'disabled' } }
+    }
+  },
+  pages: {
+    initial: 'idle',
+    states: {
+      idle: {
+        on: {
+          INIT: 'active',
+          UPDATE: 'active'
+        }
+      },
+      active: {
+        on: {
+          INIT: 'active',
+          UPDATE: 'active',
+          RESET: 'idle'
+        }
+      }
+    }
+  },
+  ui: {
+    initial: 'ready',
+    states: {
+      ready: {
+        on: {
+          SET_ACTIVE_TOOL: 'ready',
+          SET_OVERLAY: 'ready'
+        }
+      }
+    }
   }
 };
 
@@ -347,4 +383,3 @@ const Status = {
 };
 
 export default Status;
-

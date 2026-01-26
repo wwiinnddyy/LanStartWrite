@@ -2,11 +2,67 @@
 import { getSnapshot, loadSnapshot, getCanvasImage } from './renderer.js';
 import Message, { EVENTS } from './message.js';
 import Settings, { loadSettings } from './setting.js';
+import Status from './status.js';
 
 let _pageToolbarInitialized = false;
 let _pageToolbarPending = false;
 
+function _readPagesStateFromStatus(){
+  try{
+    const st = Status.getMachineState('pages');
+    if (!st || !st.context || typeof st.context !== 'object') return null;
+    const ctx = st.context;
+    const rawPages = Array.isArray(ctx.pages) ? ctx.pages : [];
+    if (!rawPages.length) return null;
+    const ts = Number(ctx.timestamp || 0);
+    if (!Number.isFinite(ts)) return null;
+    const maxAge = 10 * 60 * 1000;
+    if (Date.now() - ts > maxAge) return null;
+    const curRaw = Number(ctx.current);
+    const current = Number.isFinite(curRaw) ? curRaw : 0;
+    return {
+      pages: rawPages,
+      current: current
+    };
+  }catch(e){
+    return null;
+  }
+}
+
+function _persistPagesState(pages, current){
+  try{
+    const list = Array.isArray(pages) ? pages : [];
+    if (!list.length) return;
+    const curRaw = Number(current);
+    const cur = Number.isFinite(curRaw) ? curRaw : 0;
+    const ts = Date.now();
+    Status.transition('pages', 'UPDATE', {
+      context: {
+        pages: list,
+        current: cur,
+        timestamp: ts
+      }
+    });
+  }catch(e){}
+}
+
+function _hasGlobalOverlay(){
+  try{
+    const st = Status.getMachineState('ui');
+    if (!st || !st.context || typeof st.context !== 'object') return false;
+    const ctx = st.context;
+    const ov = ctx && typeof ctx.overlayState === 'string' ? ctx.overlayState : '';
+    return !!ov;
+  }catch(e){
+    return false;
+  }
+}
+
 function _readAppMode(){
+  try{
+    const st = Status.getMachineState('mode');
+    if (st && typeof st.value === 'string') return String(st.value || '');
+  }catch(e){}
   try{
     return String(document.body && document.body.dataset ? (document.body.dataset.appMode || '') : '');
   }catch(e){
@@ -43,21 +99,40 @@ function initPageToolbar(opts){
   const POSITION_KEY = 'whiteboard_page_toolbar_position';
   let allowDrag = false;
 
-  // 尝试恢复上一次 Session（用于重启等场景）
-  try {
-    const savedSession = localStorage.getItem('whiteboard_pages_session');
-    if (savedSession) {
-      const { pages: savedPages, current: savedCurrentIdx, timestamp } = JSON.parse(savedSession);
-      // Session 有效期 10 分钟
-      if (Date.now() - timestamp < 10 * 60 * 1000 && Array.isArray(savedPages) && savedPages.length > 0) {
-        pages = savedPages;
-        current = Math.min(savedCurrentIdx, pages.length - 1);
-        loadSnapshot(pages[current].ops || []);
-        localStorage.removeItem('whiteboard_pages_session');
-      }
+  let restored = false;
+
+  try{
+    const fromStatus = _readPagesStateFromStatus();
+    if (fromStatus && Array.isArray(fromStatus.pages) && fromStatus.pages.length > 0) {
+      pages = fromStatus.pages;
+      current = Math.min(fromStatus.current, pages.length - 1);
+      try{ loadSnapshot(pages[current].ops || []); }catch(e){}
+      restored = true;
+      try{ localStorage.removeItem('whiteboard_pages_session'); }catch(e){}
     }
-  } catch (e) {
-    console.warn('Failed to restore session:', e);
+  }catch(e){}
+
+  if (!restored) {
+    try {
+      const savedSession = localStorage.getItem('whiteboard_pages_session');
+      if (savedSession) {
+        const parsed = JSON.parse(savedSession);
+        const savedPages = parsed && Array.isArray(parsed.pages) ? parsed.pages : [];
+        const savedCurrentIdx = parsed && Number.isFinite(parsed.current) ? parsed.current : 0;
+        const timestamp = parsed && Number.isFinite(parsed.timestamp) ? parsed.timestamp : 0;
+        if (Date.now() - timestamp < 10 * 60 * 1000 && savedPages.length > 0) {
+          pages = savedPages;
+          current = Math.min(savedCurrentIdx, pages.length - 1);
+          loadSnapshot(pages[current].ops || []);
+          restored = true;
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to restore session:', e);
+    }
+    if (restored) {
+      try{ localStorage.removeItem('whiteboard_pages_session'); }catch(e){}
+    }
   }
 
   // 如果没有恢复成功，则初始化第一页
@@ -70,6 +145,9 @@ function initPageToolbar(opts){
     } catch (e) { 
       pages.push({ ops: [], thumbnail: '' }); 
     }
+    _persistPagesState(pages, current);
+  } else {
+    _persistPagesState(pages, current);
   }
 
   let toolbar = document.getElementById('pageToolbar');
@@ -182,7 +260,7 @@ function initPageToolbar(opts){
         loadSnapshot(pages[current].ops || []);
         updateUI();
         renderThumbnails();
-        // 如果是点击切换，可以考虑是否关闭侧边栏，根据需求通常保持开启以便连续操作
+        _persistPagesState(pages, current);
       });
       previewList.appendChild(item);
       
@@ -373,6 +451,7 @@ function initPageToolbar(opts){
     loadSnapshot(pages[current].ops || []);
     updateUI();
     if (sidebar.classList.contains('open')) renderThumbnails();
+    _persistPagesState(pages, current);
   });
 
   nextBtn.addEventListener('click', ()=>{
@@ -389,6 +468,7 @@ function initPageToolbar(opts){
     }
     updateUI();
     if (sidebar.classList.contains('open')) renderThumbnails();
+    _persistPagesState(pages, current);
   });
 
   newBtn.addEventListener('click', ()=>{
@@ -399,6 +479,7 @@ function initPageToolbar(opts){
     loadSnapshot([]);
     updateUI();
     if (sidebar.classList.contains('open')) renderThumbnails();
+    _persistPagesState(pages, current);
   });
 
   updateUI();
@@ -439,13 +520,29 @@ function initPageToolbar(opts){
 
   try{
     const bootMode = document && document.body && document.body.dataset ? document.body.dataset.appMode : '';
-    applyEnabled(bootMode !== 'annotation');
+    const hasOverlay = _hasGlobalOverlay();
+    applyEnabled(!hasOverlay && bootMode !== 'annotation');
   }catch(e){}
 
   try{
     Message.on(EVENTS.APP_MODE_CHANGED, (st)=>{
       const m = st && st.mode;
-      applyEnabled(m !== 'annotation');
+      const hasOverlay = _hasGlobalOverlay();
+      applyEnabled(!hasOverlay && m !== 'annotation');
+    });
+  }catch(e){}
+
+  try{
+    Status.subscribe((state, meta)=>{
+      try{
+        if (!state || !state.machines || !state.machines.ui) return;
+        const uiMachine = state.machines.ui;
+        const ctx = uiMachine && uiMachine.context ? uiMachine.context : null;
+        const ov = ctx && typeof ctx.overlayState === 'string' ? ctx.overlayState : '';
+        const hasOverlay = !!ov;
+        const mode = _readAppMode();
+        applyEnabled(!hasOverlay && mode !== 'annotation');
+      }catch(e){}
     });
   }catch(e){}
 
@@ -453,11 +550,7 @@ function initPageToolbar(opts){
   Message.on(EVENTS.APP_PREPARE_EXIT, () => {
     try {
       saveCurrent();
-      localStorage.setItem('whiteboard_pages_session', JSON.stringify({
-        pages,
-        current,
-        timestamp: Date.now()
-      }));
+      _persistPagesState(pages, current);
     } catch (e) {
       console.error('Failed to save pages session on exit:', e);
     }

@@ -1,5 +1,23 @@
 export type LifecycleState = 'initializing' | 'ready' | 'busy' | 'error' | 'shutting-down';
 export type ModeState = 'whiteboard' | 'annotation';
+export type ViewerState = 'disabled' | 'enabled';
+
+export interface PagesContextPage {
+  ops: any[];
+  thumbnail: string;
+}
+
+export interface PagesContext {
+  pages: PagesContextPage[];
+  current: number;
+  timestamp: number;
+}
+
+export interface UiContext {
+  activeTool?: string;
+  overlayState?: string;
+  [key: string]: any;
+}
 
 export interface MachineState<T extends string = string, C = any> {
   value: T;
@@ -11,6 +29,9 @@ export interface AppStatusState {
   machines: {
     lifecycle: MachineState<LifecycleState, any>;
     mode: MachineState<ModeState, any>;
+    viewer: MachineState<ViewerState, any>;
+    pages: MachineState<string, PagesContext>;
+    ui: MachineState<string, UiContext>;
     [key: string]: MachineState;
   };
   context: any;
@@ -67,4 +88,3 @@ export interface StatusApi {
 declare const Status: StatusApi;
 
 export default Status;
-
