@@ -156,7 +156,7 @@ async function runUnitTests(){
       size.max = '50';
       size.value = '4';
       menu.appendChild(size);
-      const colors = ['#000000','#C50F1F','#FF8C00','#FFC83D','#107C10','#00B7C3','#005A9E','#5C2E91'];
+      const colors = ['#FFFFFF','#000000','#C50F1F','#FFB6C1','#FF8C00','#FFC83D','#107C10','#00B7C3','#005A9E','#5C2E91'];
       const buttons = colors.map((c)=>{
         const b = document.createElement('button');
         b.className = 'color';

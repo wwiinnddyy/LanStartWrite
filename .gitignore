@@ -31,3 +31,4 @@ dist_electron/
 
 #log
 .log
+/src/task_watch_os/data
