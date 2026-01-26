@@ -150,6 +150,56 @@ async function _writeAuditReport() {
   }
 }
 
+let _overlayShapeEnabled = false;
+let _overlayShapeSupported = null;
+let _overlayShapeActive = false;
+
+function _canUseOverlayShape() {
+  if (!_overlayShapeEnabled) return false;
+  if (!mainWindow || mainWindow.isDestroyed()) return false;
+  if (!mainWindow.setShapeRects || typeof mainWindow.setShapeRects !== 'function') return false;
+  if (_overlayShapeSupported === false) return false;
+  return true;
+}
+
+function _applyOverlayShape(rects) {
+  if (!_canUseOverlayShape()) return false;
+  try {
+    const list = Array.isArray(rects) ? rects : [];
+    const shapeRects = list.map((r) => {
+      const left = Number(r && r.left) || 0;
+      const top = Number(r && r.top) || 0;
+      const width = Number(r && r.width) || 0;
+      const height = Number(r && r.height) || 0;
+      const w = Math.max(0, Math.round(width));
+      const h = Math.max(0, Math.round(height));
+      const x = Math.round(left);
+      const y = Math.round(top);
+      if (w <= 0 || h <= 0) return null;
+      return { x, y, width: w, height: h };
+    }).filter(Boolean);
+    mainWindow.setShapeRects(shapeRects);
+    _overlayShapeSupported = true;
+    _overlayShapeActive = shapeRects.length > 0;
+    _overlayDebug('shape-apply', { count: shapeRects.length });
+    return true;
+  } catch (e) {
+    _overlayShapeSupported = false;
+    _overlayShapeActive = false;
+    _overlayDebug('shape-error', { error: String(e && e.message || e) });
+    return false;
+  }
+}
+
+function _applyOverlayShapeFromState() {
+  if (!_canUseOverlayShape()) return false;
+  const rects = Array.isArray(_overlayInteractiveRects) ? _overlayInteractiveRects : [];
+  const cfg = _overlayIgnoreConfig && typeof _overlayIgnoreConfig === 'object' ? _overlayIgnoreConfig : { ignore: false, forward: false };
+  const useRects = !!cfg.ignore && !!cfg.forward;
+  if (useRects) return _applyOverlayShape(rects);
+  return _applyOverlayShape([]);
+}
+
 function _ensureAuditReportTimer() {
   if (_auditReportTimer) return;
   _auditReportTimer = setInterval(() => { _writeAuditReport(); }, 30 * 60 * 1000);
@@ -161,6 +211,9 @@ function _applyIgnoreMouse(ignore, forward) {
   if (_overlayLastApplied === key) return;
   _overlayLastApplied = key;
   _overlayDebug('apply', { ignore: !!ignore, forward: !!forward });
+  if (_overlayShapeEnabled && _overlayShapeSupported !== false && mainWindow.setShapeRects && typeof mainWindow.setShapeRects === 'function') {
+    return;
+  }
   if (ignore) mainWindow.setIgnoreMouseEvents(true, { forward: !!forward });
   else mainWindow.setIgnoreMouseEvents(false);
 }
@@ -1775,6 +1828,12 @@ ipcMain.on('overlay:set-ignore-mouse', (event, payload) => {
     _overlayDebug('ipc-ignore', { ignore, forward });
     _overlayIgnoreConfig = { ignore, forward };
     _applyIgnoreMouse(ignore, forward);
+    if (_overlayShapeEnabled) {
+      const ok = _applyOverlayShapeFromState();
+      if (ok && ignore && forward) {
+        return;
+      }
+    }
     if (ignore && forward) {
       const allow = _shouldAllowOverlayInteraction();
       if (allow) _applyIgnoreMouse(false, false);
@@ -1799,6 +1858,12 @@ ipcMain.on('overlay:set-interactive-rects', (event, payload) => {
       }))
       .filter((r) => r.width > 0 && r.height > 0);
     _overlayDebug('ipc-rects', { count: _overlayInteractiveRects.length });
+    if (_overlayShapeEnabled) {
+      const ok = _applyOverlayShapeFromState();
+      if (ok && _overlayIgnoreConfig && _overlayIgnoreConfig.ignore && _overlayIgnoreConfig.forward) {
+        return;
+      }
+    }
     if (_overlayIgnoreConfig && _overlayIgnoreConfig.ignore && _overlayIgnoreConfig.forward) {
       const allow = _shouldAllowOverlayInteraction();
       if (allow) _applyIgnoreMouse(false, false);
@@ -1845,6 +1910,39 @@ ipcMain.handle('message', async (event, channel, data) => {
     case 'ui:open-settings-window': {
       try {
         _createSettingsWindow();
+        return { success: true };
+      } catch (e) {
+        return { success: false, error: String(e && e.message || e) };
+      }
+    }
+    case 'ui:ensure-toolbar-window-open': {
+      try {
+        _createToolbarWindow();
+        return { success: true };
+      } catch (e) {
+        return { success: false, error: String(e && e.message || e) };
+      }
+    }
+    case 'settings:changed': {
+      try {
+        const s = data && typeof data === 'object' ? data : {};
+        _overlayShapeEnabled = !!s.overlayShapeEnabled;
+        _overlayShapeSupported = null;
+        if (!_overlayShapeEnabled && mainWindow && !mainWindow.isDestroyed() && mainWindow.setShapeRects && typeof mainWindow.setShapeRects === 'function') {
+          try { mainWindow.setShapeRects([]); } catch (e) {}
+          _overlayShapeActive = false;
+        }
+        if (_overlayShapeEnabled) {
+          _applyOverlayShapeFromState();
+        }
+        const separate = !!s.separateToolbarWindow;
+        try {
+          if (separate) {
+            _createToolbarWindow();
+          } else if (toolbarWindow && !toolbarWindow.isDestroyed()) {
+            toolbarWindow.close();
+          }
+        } catch (e) {}
         return { success: true };
       } catch (e) {
         return { success: false, error: String(e && e.message || e) };

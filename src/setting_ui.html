@@ -395,6 +395,10 @@
             <svg class="md-icon" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M7 24c-1.1 0-2-.9-2-2V11c0-1.1.9-2 2-2s2 .9 2 2v11c0 1.1-.9 2-2 2Zm10-11c1.1 0 2-.9 2-2V2c0-1.1-.9-2-2-2s-2 .9-2 2v9c0 1.1.9 2 2 2Zm-5 7c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2s-2 .9-2 2v12c0 1.1.9 2 2 2Z"/></svg>
             <span class="settings-tab-text">输入</span>
           </button>
+          <button class="settings-tab" type="button" role="tab" id="settingsTab-window" data-tab="window" aria-controls="settingsPanel-window" aria-selected="false" tabindex="-1">
+            <svg class="md-icon" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M4 5.75A1.75 1.75 0 0 1 5.75 4h12.5A1.75 1.75 0 0 1 20 5.75v12.5A1.75 1.75 0 0 1 18.25 20H5.75A1.75 1.75 0 0 1 4 18.25ZM5.75 5.5a.25.25 0 0 0-.25.25V9h13V5.75a.25.25 0 0 0-.25-.25Zm-.25 5V18.25a.25.25 0 0 0 .25.25h12.5a.25.25 0 0 0 .25-.25V10.5Z"/></svg>
+            <span class="settings-tab-text">窗口</span>
+          </button>
           <button class="settings-tab" type="button" role="tab" id="settingsTab-shortcuts" data-tab="shortcuts" aria-controls="settingsPanel-shortcuts" aria-selected="false" tabindex="-1">
             <svg class="md-icon" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M20 5H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2ZM7 17H5v-2h2v2Zm0-4H5v-2h2v2Zm0-4H5V7h2v2Zm4 8H9v-2h2v2Zm0-4H9v-2h2v2Zm0-4H9V7h2v2Zm4 8h-2v-2h2v2Zm0-4h-2v-2h2v2Zm0-4h-2V7h2v2Zm4 8h-2v-2h2v2Zm0-4h-2v-2h2v2Zm0-4h-2V7h2v2Z"/></svg>
             <span class="settings-tab-text">快捷键</span>
@@ -555,6 +559,7 @@
                   <div class="settings-card-body">
                     <label class="settings-control"><input type="checkbox" id="optMultiTouchPen"> <span>触摸多指书写</span></label>
                     <label class="settings-control"><input type="checkbox" id="optPageSwitchDraggable"> <span>允许拖动页面切换控件</span></label>
+                    <label class="settings-control"><input type="checkbox" id="optOverlayShape"> <span>启用窗口裁剪穿透模式（实验性，仅 Windows）</span></label>
                     <div class="settings-divider"></div>
                     <label class="settings-field">
                       <span class="settings-field-label">批注默认笔颜色</span>
@@ -614,6 +619,16 @@
                   <div class="settings-card-title">智能功能</div>
                   <div class="settings-card-body">
                     <label class="settings-control"><input type="checkbox" id="optSmartInk"> <span>图形与直线智能识别</span></label>
+                  </div>
+                </section>
+              </div>
+            </div>
+            <div class="settings-page" id="settingsPanel-window" data-tab="window" role="tabpanel" aria-labelledby="settingsTab-window" hidden>
+              <div class="settings-cards">
+                <section class="settings-card" aria-label="窗口">
+                  <div class="settings-card-title">窗口</div>
+                  <div class="settings-card-body">
+                    <label class="settings-control"><input type="checkbox" id="optSeparateToolbarWindow"> <span>在独立窗口中显示工具栏</span></label>
                   </div>
                 </section>
               </div>

@@ -1367,9 +1367,8 @@ window.addEventListener('DOMContentLoaded', async ()=>{
     const settingsNodes = await loadFragment('./setting_ui.html');
     settingsNodes.forEach(n => document.body.appendChild(n));
 
-    try{ await import('./renderer.js'); }catch(e){ console.warn('import renderer failed', e); }
-    try{ await import('./ipc_bridge.js'); }catch(e){ console.warn('import ipc_bridge failed', e); }
     try{ await import('./tool_bar/ui-tools.js'); }catch(e){ console.warn('import ui-tools failed', e); }
+    try{ await import('./ipc_bridge.js'); }catch(e){ console.warn('import ipc_bridge failed', e); }
     try{ await import('./page.js'); }catch(e){ console.warn('import page failed', e); }
     try{ await import('./mod.js'); }catch(e){ console.warn('import mod failed', e); }
   }

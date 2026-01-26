@@ -3,7 +3,40 @@ import { getSnapshot, loadSnapshot, getCanvasImage } from './renderer.js';
 import Message, { EVENTS } from './message.js';
 import Settings, { loadSettings } from './setting.js';
 
-function initPageToolbar(){
+let _pageToolbarInitialized = false;
+let _pageToolbarPending = false;
+
+function _readAppMode(){
+  try{
+    return String(document.body && document.body.dataset ? (document.body.dataset.appMode || '') : '');
+  }catch(e){
+    return '';
+  }
+}
+
+function _deferPageToolbarInit(){
+  if (_pageToolbarPending) return;
+  _pageToolbarPending = true;
+  try{
+    Message.on(EVENTS.APP_MODE_CHANGED, (st)=>{
+      if (_pageToolbarInitialized) return;
+      const mode = st && st.mode ? String(st.mode) : _readAppMode();
+      if (mode && mode === 'annotation') return;
+      initPageToolbar({ force: true });
+    });
+  }catch(e){}
+}
+
+function initPageToolbar(opts){
+  if (_pageToolbarInitialized) return;
+  const bootMode = _readAppMode();
+  if (!opts || opts.force !== true) {
+    if (bootMode === 'annotation') {
+      _deferPageToolbarInit();
+      return;
+    }
+  }
+  _pageToolbarInitialized = true;
   let pages = [];
   let current = 0;
   let enabled = true;

@@ -343,12 +343,18 @@ export default class OperarPenetration {
       return;
     }
     if (this.touchBlockActive) {
-      this.debug('interactivity', 'touch-block');
-      this.sendIgnoreMouse(false, false);
-      try { this.sendInteractiveRects(this.collectInteractiveRects()); } catch (e) {}
-      this.setRectWatchdog(false);
-      this.scheduleInteractiveRectsUpdate();
-      return;
+      const hasUiBlock = hasFullScreenUi || hasSubmenuOpen;
+      if (!hasUiBlock) {
+        this.touchBlockActive = false;
+        try { this.setTouchShieldActive(false); } catch (e) {}
+      } else {
+        this.debug('interactivity', 'touch-block');
+        this.sendIgnoreMouse(false, false);
+        try { this.sendInteractiveRects(this.collectInteractiveRects()); } catch (e) {}
+        this.setRectWatchdog(false);
+        this.scheduleInteractiveRectsUpdate();
+        return;
+      }
     }
     if (!forceIgnore) {
       const now = Date.now();

@@ -57,7 +57,9 @@ const DEFAULTS = {
   videoBoothEnabled: false,
   pluginButtonDisplay: {},
   pdfDefaultMode: 'window',
-  pageSwitchDraggable: false
+  pageSwitchDraggable: false,
+  overlayShapeEnabled: false,
+  separateToolbarWindow: false
 };
 
 let _lastPersistError = '';

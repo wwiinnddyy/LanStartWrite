@@ -255,20 +255,48 @@ let _appMode = APP_MODES.WHITEBOARD;
 let applyCollapsed = ()=>{};
 let _pdfMode = false;
 
-const _penetration = new OperarPenetration({
-  appModes: APP_MODES,
-  getAppMode: () => _appMode,
-  isPointerActive: () => !!(pointerTool && pointerTool.classList.contains('active')),
-  debug: (...args) => { try { _menuDebug(...args); } catch (e) {} },
-  sendToMain: (channel, payload) => {
-    try {
-      if (window && window.electronAPI && typeof window.electronAPI.sendToMain === 'function') {
-        window.electronAPI.sendToMain(channel, payload);
-      }
-    } catch (e) {}
-  }
-});
-try{ _penetration.bindGlobalListeners(); }catch(e){}
+let _penetration = null;
+if (_isToolbarWindow) {
+  const stub = {
+    _lastTouchActionAt: 0,
+    recordPointerInput(){},
+    markTouchAction(){
+      this._lastTouchActionAt = Date.now();
+    },
+    shouldSuppressClick(){
+      return Date.now() - (this._lastTouchActionAt || 0) < 400;
+    },
+    forceReleaseTouchUiBlock(){},
+    sendIgnoreMouse(){},
+    sendInteractiveRects(){},
+    collectInteractiveRects(){
+      return [];
+    },
+    scheduleInteractiveRectsUpdate(){},
+    flushInteractiveRects(){},
+    applyWindowInteractivity(){},
+    applyWindowInteractivityNow(){},
+    getLastIgnoreMouse(){
+      return { ignore: false, forward: false, at: Date.now() };
+    }
+  };
+  _penetration = stub;
+} else {
+  _penetration = new OperarPenetration({
+    appModes: APP_MODES,
+    getAppMode: () => _appMode,
+    isPointerActive: () => !!(pointerTool && pointerTool.classList.contains('active')),
+    debug: (...args) => { try { _menuDebug(...args); } catch (e) {} },
+    sendToMain: (channel, payload) => {
+      try {
+        if (window && window.electronAPI && typeof window.electronAPI.sendToMain === 'function') {
+          window.electronAPI.sendToMain(channel, payload);
+        }
+      } catch (e) {}
+    }
+  });
+  try{ _penetration.bindGlobalListeners(); }catch(e){}
+}
 
 function setPdfMode(on){
   _pdfMode = !!on;
@@ -1332,10 +1360,12 @@ const optCollapsed = document.getElementById('optCollapsed');
 const optTheme = document.getElementById('optTheme');
 const optDesignLanguage = document.getElementById('optDesignLanguage');
 const optTooltips = document.getElementById('optTooltips');
+const optSeparateToolbarWindow = document.getElementById('optSeparateToolbarWindow');
 const optVideoBoothEnabled = document.getElementById('optVideoBoothEnabled');
 const optPdfDefaultMode = document.getElementById('optPdfDefaultMode');
 const optMultiTouchPen = document.getElementById('optMultiTouchPen');
 const optPageSwitchDraggable = document.getElementById('optPageSwitchDraggable');
+const optOverlayShape = document.getElementById('optOverlayShape');
 const optAnnotationPenColor = document.getElementById('optAnnotationPenColor');
 const optPenTailEnabled = document.getElementById('optPenTailEnabled');
 const optPenTailProfile = document.getElementById('optPenTailProfile');
@@ -1445,8 +1475,10 @@ function _makeSettingsDraftFromSettings(s){
     pdfDefaultMode: String(src.pdfDefaultMode || 'window'),
     showTooltips: !!src.showTooltips,
     multiTouchPen: !!src.multiTouchPen,
+    overlayShapeEnabled: !!src.overlayShapeEnabled,
     annotationPenColor: normalizeHexColor(src.annotationPenColor, '#FF0000'),
     smartInkRecognition: !!src.smartInkRecognition,
+    separateToolbarWindow: !!src.separateToolbarWindow,
     videoBoothEnabled: !!src.videoBoothEnabled,
     penTail: normalizePenTailSettings(src.penTail),
     shortcuts: { undo: undoKey, redo: redoKey },
@@ -1673,6 +1705,7 @@ function _renderSettingsUi(){
     if (optThemeBackground) optThemeBackground.value = normalizeHexColor(tc.background, '#FFFFFF');
     if (optCanvasColor) optCanvasColor.value = d.canvasColor || 'white';
     if (optTooltips) optTooltips.checked = !!d.showTooltips;
+    if (optSeparateToolbarWindow) optSeparateToolbarWindow.checked = !!d.separateToolbarWindow;
     if (optVideoBoothEnabled) optVideoBoothEnabled.checked = !!d.videoBoothEnabled;
     if (optMultiTouchPen) optMultiTouchPen.checked = !!d.multiTouchPen;
     if (optAnnotationPenColor) optAnnotationPenColor.value = normalizeHexColor(d.annotationPenColor, '#FF0000');
@@ -2044,9 +2077,11 @@ function _wireSettingsUi(){
   bindField(optCanvasColor, 'canvasColor');
   bindField(optPdfDefaultMode, 'pdfDefaultMode');
   bindField(optTooltips, 'showTooltips');
+  bindField(optSeparateToolbarWindow, 'separateToolbarWindow');
   bindField(optVideoBoothEnabled, 'videoBoothEnabled');
   bindField(optMultiTouchPen, 'multiTouchPen');
   bindField(optPageSwitchDraggable, 'pageSwitchDraggable');
+   bindField(optOverlayShape, 'overlayShapeEnabled');
   bindField(optAnnotationPenColor, 'annotationPenColor', 'input');
   bindField(optPenTailEnabled, 'penTail.enabled');
   bindField(optPenTailProfile, 'penTail.profile');
@@ -2228,6 +2263,7 @@ function _historyPathToJumpTarget(path){
   }
 
   if (root === 'multiTouchPen') return { tab: 'input', id: 'optMultiTouchPen' };
+  if (root === 'overlayShapeEnabled') return { tab: 'input', id: 'optOverlayShape' };
   if (root === 'annotationPenColor') return { tab: 'input', id: 'optAnnotationPenColor' };
   if (root === 'smartInkRecognition') return { tab: 'input', id: 'optSmartInk' };
   if (root === 'penTail') {
@@ -3049,6 +3085,7 @@ if (saveSettings) saveSettings.addEventListener('click', ()=>{
     canvasColor: String(d.canvasColor || 'white'),
     showTooltips: !!d.showTooltips,
     multiTouchPen: !!d.multiTouchPen,
+    overlayShapeEnabled: !!d.overlayShapeEnabled,
     annotationPenColor: normalizeHexColor(d.annotationPenColor, '#FF0000'),
     smartInkRecognition: !!d.smartInkRecognition,
     videoBoothEnabled: !!d.videoBoothEnabled,
@@ -3060,8 +3097,12 @@ if (saveSettings) saveSettings.addEventListener('click', ()=>{
     toolbarButtonOrder: Array.isArray(d.toolbarButtonOrder) ? d.toolbarButtonOrder.slice() : [],
     toolbarButtonHidden: Array.isArray(d.toolbarButtonHidden) ? d.toolbarButtonHidden.slice() : []
   };
-  // persist via cross-module helper which emits SETTINGS_CHANGED
   const merged = updateAppSettings(newS);
+  try{
+    if (window && window.electronAPI && typeof window.electronAPI.invokeMain === 'function') {
+      window.electronAPI.invokeMain('message', EVENTS.SETTINGS_CHANGED, merged);
+    }
+  }catch(e){}
   // apply immediate effects
   if (!newS.enableAutoResize) {
     try{ const p = document.querySelector('.floating-panel'); if (p) p.style.width = ''; }catch(e){ console.error('Failed to reset panel width:', e); }

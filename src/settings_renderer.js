@@ -1035,6 +1035,7 @@ function _pathToJumpTarget(path) {
     }
 
     if (root === 'multiTouchPen') return { tab: 'input', id: 'optMultiTouchPen' };
+    if (root === 'overlayShapeEnabled') return { tab: 'input', id: 'optOverlayShape' };
     if (root === 'pageSwitchDraggable') return { tab: 'input', id: 'optPageSwitchDraggable' };
     if (root === 'annotationPenColor') return { tab: 'input', id: 'optAnnotationPenColor' };
     if (root === 'whiteboardPenColor') return { tab: 'input', id: 'optWhiteboardPenColor' };
@@ -1587,6 +1588,7 @@ function loadCurrentSettings() {
     // Input
     setCheckbox('optMultiTouchPen', s.multiTouchPen);
     setCheckbox('optPageSwitchDraggable', s.pageSwitchDraggable);
+    setCheckbox('optOverlayShape', s.overlayShapeEnabled);
     setValue('optAnnotationPenColor', s.annotationPenColor);
     setCheckbox('optPenTailEnabled', s.penTail.enabled);
     setValue('optPenTailProfile', s.penTail.profile);
@@ -1602,6 +1604,7 @@ function loadCurrentSettings() {
     setValue('keyRedo', s.shortcuts.redo);
 
     // Toolbar
+    setCheckbox('optSeparateToolbarWindow', s.separateToolbarWindow);
     setCheckbox('optVideoBoothEnabled', s.videoBoothEnabled);
 
     // Update range input labels
@@ -1781,6 +1784,7 @@ function getSettingsFromUI() {
         pdfDefaultMode: getValue('optPdfDefaultMode'),
         multiTouchPen: getCheckbox('optMultiTouchPen'),
         pageSwitchDraggable: getCheckbox('optPageSwitchDraggable'),
+        overlayShapeEnabled: getCheckbox('optOverlayShape'),
         annotationPenColor: getValue('optAnnotationPenColor'),
         penTail: {
             enabled: getCheckbox('optPenTailEnabled'),
@@ -1796,6 +1800,7 @@ function getSettingsFromUI() {
             undo: getValue('keyUndo'),
             redo: getValue('keyRedo')
         },
+        separateToolbarWindow: getCheckbox('optSeparateToolbarWindow'),
         videoBoothEnabled: getCheckbox('optVideoBoothEnabled')
     };
 
