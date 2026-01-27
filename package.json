@@ -1,6 +1,6 @@
 {
   "name": "LanStartWrite",
-  "version": "0.4.0",
+  "version": "0.4.10",
   "description": "Simple Electron starter",
   "main": "src/main.js",
   "scripts": {
