@@ -1,0 +1,178 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '版本号（例如 1.2.3 或 v1.2.3）'
+        required: false
+      build:
+        description: '构建命令标记（build:installer|build:portable|build:all）'
+        required: false
+
+permissions:
+  contents: write
+
+jobs:
+  parse:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.parse.outputs.version }}
+      tag: ${{ steps.parse.outputs.tag }}
+      build_script: ${{ steps.parse.outputs.build_script }}
+      run_win: ${{ steps.parse.outputs.run_win }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 读取提交信息
+        id: msg
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            {
+              echo "message<<__EOF__"
+              echo "${{ github.event.inputs.version }} ${{ github.event.inputs.build }}"
+              echo "__EOF__"
+            } >> "$GITHUB_OUTPUT"
+          else
+            {
+              echo "message<<__EOF__"
+              echo "${{ github.event.head_commit.message }}"
+              echo "__EOF__"
+            } >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: 解析版本与构建命令
+        id: parse
+        env:
+          RELEASE_MESSAGE: ${{ steps.msg.outputs.message }}
+        run: node scripts/ci/parse-commit.mjs
+
+  prepare:
+    needs: parse
+    if: ${{ github.actor != 'github-actions[bot]' && needs.parse.outputs.version != '' }}
+    runs-on: ubuntu-latest
+    outputs:
+      ref: ${{ steps.out.outputs.ref }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: 应用版本号
+        run: node scripts/ci/apply-version.mjs ${{ needs.parse.outputs.version }}
+
+      - name: 提交并打 Tag
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          TAG="${{ needs.parse.outputs.tag }}"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add package.json src/about.html src/settings.html
+          if ! git diff --cached --quiet; then
+            git commit -m "chore(release): ${TAG} [skip ci]"
+            git push origin HEAD:main
+          else
+            git push origin HEAD:main
+          fi
+
+          remote_sha="$(git ls-remote --tags origin "refs/tags/${TAG}" | awk '{print $1}' || true)"
+          local_sha="$(git rev-parse HEAD)"
+          if [ -n "${remote_sha}" ]; then
+            if [ "${remote_sha}" != "${local_sha}" ]; then
+              echo "Remote tag ${TAG} exists but points to ${remote_sha}, expected ${local_sha}" >&2
+              exit 1
+            fi
+          else
+            git tag "${TAG}"
+            git push origin "${TAG}"
+          fi
+
+      - name: 输出构建 ref
+        id: out
+        shell: bash
+        run: |
+          echo "ref=${{ needs.parse.outputs.tag }}" >> "$GITHUB_OUTPUT"
+
+  build_win:
+    needs: [parse, prepare]
+    if: ${{ github.actor != 'github-actions[bot]' && needs.parse.outputs.run_win == 'true' }}
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.ref || github.sha }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: 安装依赖
+        run: pnpm install --frozen-lockfile
+
+      - name: 构建（Windows）
+        run: ${{ needs.parse.outputs.build_script }}
+
+      - name: 清理 unpacked 目录
+        shell: pwsh
+        run: |
+          if (Test-Path dist_build_new) {
+            Get-ChildItem -Path dist_build_new -Directory -Recurse -ErrorAction SilentlyContinue |
+              Where-Object { $_.Name -like '*unpacked*' } |
+              ForEach-Object { Remove-Item -Recurse -Force $_.FullName }
+          }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-win
+          path: |
+            dist_build_new/**
+            !dist_build_new/**/*unpacked*/**
+
+  release:
+    needs: [parse, prepare, build_win]
+    if: ${{ github.actor != 'github-actions[bot]' && needs.parse.outputs.tag != '' && needs.prepare.result == 'success' && needs.build_win.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: 清理 unpacked 目录
+        run: |
+          if [ -d artifacts ]; then
+            find artifacts -type d -name '*unpacked*' -prune -exec rm -rf {} +
+          fi
+
+      - name: 发布 Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.parse.outputs.tag }}
+          name: LanStartWrite ${{ needs.parse.outputs.tag }}
+          draft: true
+          prerelease: ${{ contains(needs.parse.outputs.version, '-') }}
+          files: |
+            artifacts/**/LanStartWrite-Setup-*.exe
+            artifacts/**/LanStartWrite-*-win64.exe
+            artifacts/**/latest*.yml
+            artifacts/**/*.blockmap
