@@ -7,10 +7,10 @@
     "start": "electron .",
     "dev": "electron .",
     "test": "electron . --run-tests",
-    "build": "electron-builder --win --x64",
-    "build:portable": "electron-builder --win portable --x64",
-    "build:installer": "electron-builder --win nsis --x64",
-    "build:all": "electron-builder --win --x64"
+    "build": "electron-builder --win --x64 --publish never",
+    "build:portable": "electron-builder --win portable --x64 --publish never",
+    "build:installer": "electron-builder --win nsis --x64 --publish never",
+    "build:all": "electron-builder --win --x64 --publish never"
   },
   "dependencies": {
     "semver": "^7.5.4",

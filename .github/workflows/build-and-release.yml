@@ -153,6 +153,9 @@ jobs:
     needs: [parse, prepare, build_win]
     if: ${{ github.actor != 'github-actions[bot]' && needs.parse.outputs.tag != '' && needs.prepare.result == 'success' && needs.build_win.result == 'success' }}
     runs-on: ubuntu-latest
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/download-artifact@v4
         with:
