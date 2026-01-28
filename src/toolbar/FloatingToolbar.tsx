@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useEffect, useMemo, useRef } from 'react'
 import { Button, ButtonGroup } from '../button'
-import { useEventsPoll } from './hooks/useEventsPoll'
 import { usePersistedState } from './hooks/usePersistedState'
 import { postCommand } from './hooks/useBackend'
 import { useToolbarWindowAutoResize } from './hooks/useToolbarWindowAutoResize'
@@ -68,33 +67,21 @@ function ToolbarProvider({ children }: { children: React.ReactNode }) {
 
 function FloatingToolbarInner() {
   const { state, setState } = useToolbar()
-  const events = useEventsPoll(800)
-  const rootRef = useRef<HTMLDivElement | null>(null)
-  const uiWidth = typeof state.uiWidth === 'number' ? state.uiWidth : 360
-  const uiButtonSize = state.uiButtonSize === 'md' ? 'md' : 'sm'
+  const dragRef = useRef<HTMLDivElement | null>(null)
+  const uiButtonSize: 'sm' = 'sm'
 
-  useToolbarWindowAutoResize({ root: rootRef.current, width: uiWidth })
-
-  const cycleWidth = () => {
-    const current = uiWidth
-    const next = current <= 320 ? 360 : current <= 360 ? 420 : 320
-    setState({ ...state, uiWidth: next })
-  }
-
-  const toggleButtonSize = () => {
-    const next = uiButtonSize === 'sm' ? 'md' : 'sm'
-    setState({ ...state, uiButtonSize: next })
-  }
+  useToolbarWindowAutoResize({ root: dragRef.current })
 
   return (
-    <div ref={rootRef} className={state.collapsed ? 'toolbarRoot collapsed' : 'toolbarRoot'}>
-      <div className="toolbarDragArea">
-        <div className="toolbarHeader">
-          <div className="toolbarTitle">{WINDOW_TITLE_FLOATING_TOOLBAR}</div>
-          <div className="toolbarMeta">{state.alwaysOnTop ? '置顶' : '未置顶'}</div>
-        </div>
+    <div className="toolbarRoot">
+      <div ref={dragRef} className="toolbarDragArea">
+        <div className="toolbarBarRow">
+          <div className="toolbarLabel">
+            <div className="toolbarTitle">{WINDOW_TITLE_FLOATING_TOOLBAR}</div>
+            <div className="toolbarMeta">{state.alwaysOnTop ? '置顶' : '未置顶'}</div>
+          </div>
 
-        <ButtonGroup>
+          <ButtonGroup>
           <Button
             size={uiButtonSize}
             onClick={() => {
@@ -107,7 +94,16 @@ function FloatingToolbarInner() {
           <Button
             size={uiButtonSize}
             onClick={() => {
-              void postCommand('create-window', { kind: 'settings' })
+              void postCommand('toggle-subwindow', { kind: 'events', placement: 'bottom' })
+            }}
+          >
+            事件
+          </Button>
+
+          <Button
+            size={uiButtonSize}
+            onClick={() => {
+              void postCommand('toggle-subwindow', { kind: 'settings', placement: 'top' })
             }}
           >
             设置
@@ -127,23 +123,6 @@ function FloatingToolbarInner() {
 
           <Button
             size={uiButtonSize}
-            onClick={() => {
-              setState({ ...state, collapsed: !state.collapsed })
-            }}
-          >
-            {state.collapsed ? '展开' : '折叠'}
-          </Button>
-
-          <Button size={uiButtonSize} onClick={cycleWidth} title="切换浮动工具栏窗口宽度">
-            宽度
-          </Button>
-
-          <Button size={uiButtonSize} onClick={toggleButtonSize} title="切换按钮尺寸">
-            大小
-          </Button>
-
-          <Button
-            size={uiButtonSize}
             variant="danger"
             onClick={() => {
               void postCommand('quit')
@@ -151,18 +130,7 @@ function FloatingToolbarInner() {
           >
             退出
           </Button>
-        </ButtonGroup>
-      </div>
-
-      <div className="toolbarEvents">
-        <div className="eventsTitle">事件</div>
-        <div className="eventsList">
-          {events.slice(-5).map((e) => (
-            <div key={e.id} className="eventRow">
-              <span className="eventType">{e.type}</span>
-              <span className="eventId">#{e.id}</span>
-            </div>
-          ))}
+          </ButtonGroup>
         </div>
       </div>
     </div>

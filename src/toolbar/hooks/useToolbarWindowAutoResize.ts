@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { postCommand } from './useBackend'
 
-export function useToolbarWindowAutoResize(options: { root: HTMLElement | null; width: number }) {
+export function useToolbarWindowAutoResize(options: { root: HTMLElement | null }) {
   useEffect(() => {
     const root = options.root
     if (!root) return
@@ -19,8 +19,8 @@ export function useToolbarWindowAutoResize(options: { root: HTMLElement | null; 
     const send = () => {
       rafId = 0
       const rect = root.getBoundingClientRect()
-      const width = clampInt(options.width, 280, 720)
-      const height = clampInt(rect.height, 60, 600)
+      const width = clampInt(Math.max(rect.width, root.scrollWidth), 1, 1200)
+      const height = clampInt(Math.max(rect.height, root.scrollHeight), 1, 600)
 
       if (width === lastWidth && height === lastHeight) return
       lastWidth = width
@@ -41,6 +41,6 @@ export function useToolbarWindowAutoResize(options: { root: HTMLElement | null; 
       ro.disconnect()
       if (rafId) window.cancelAnimationFrame(rafId)
     }
-  }, [options.root, options.width])
+  }, [options.root])
 }
 

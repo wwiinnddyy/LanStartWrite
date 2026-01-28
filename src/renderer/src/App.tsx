@@ -3,12 +3,14 @@ import { FloatingToolbarApp, WINDOW_ID_FLOATING_TOOLBAR } from '../../toolbar'
 import { BACKEND_URL } from '../../toolbar/utils/constants'
 import { useEventsPoll } from '../../toolbar/hooks/useEventsPoll'
 import { Button } from '../../button'
+import { EventsMenu, SettingsMenu } from '../../toolbar-subwindows'
 
-function useWindowType(): typeof WINDOW_ID_FLOATING_TOOLBAR | 'child' {
+function useWindowParams(): { windowId: string; kind?: string } {
   return useMemo(() => {
     const params = new URLSearchParams(window.location.search)
-    const w = params.get('window')
-    return w === 'child' ? 'child' : WINDOW_ID_FLOATING_TOOLBAR
+    const windowId = params.get('window') || WINDOW_ID_FLOATING_TOOLBAR
+    const kind = params.get('kind') || undefined
+    return { windowId, kind }
   }, [])
 }
 
@@ -74,6 +76,16 @@ function ChildWindow() {
 }
 
 export default function App() {
-  const windowType = useWindowType()
-  return windowType === 'child' ? <ChildWindow /> : <FloatingToolbarApp />
+  const { windowId, kind } = useWindowParams()
+
+  if (windowId === 'child') return <ChildWindow />
+  if (windowId === WINDOW_ID_FLOATING_TOOLBAR) return <FloatingToolbarApp />
+
+  if (windowId === 'toolbar-subwindow') {
+    if (kind === 'events') return <EventsMenu kind="events" />
+    if (kind === 'settings') return <SettingsMenu kind="settings" />
+    return <EventsMenu kind="events" />
+  }
+
+  return <FloatingToolbarApp />
 }
