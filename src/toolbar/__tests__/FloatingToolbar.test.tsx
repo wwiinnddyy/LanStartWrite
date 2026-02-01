@@ -56,6 +56,31 @@ describe('FloatingToolbar', () => {
     expect(calls.map((c) => c.command)).toContain('toggle-subwindow')
   })
 
+  it('switches app mode to whiteboard on click', async () => {
+    const user = userEvent.setup()
+    const uiStateCalls: Array<{ windowId: string; key: string; value: unknown }> = []
+    window.lanstart = {
+      postCommand: async () => null,
+      getEvents: async () => ({ items: [], latest: 0 }),
+      getKv: async () => {
+        throw new Error('kv_not_found')
+      },
+      putKv: async () => null,
+      getUiState: async () => ({}),
+      putUiStateKey: async (windowId, key, value) => {
+        uiStateCalls.push({ windowId, key, value })
+        return null
+      },
+      deleteUiStateKey: async () => null,
+      apiRequest: async () => ({ status: 200, body: { ok: true } })
+    }
+
+    render(<FloatingToolbarApp />)
+    await user.click(await screen.findByRole('button', { name: '白板' }))
+
+    expect(uiStateCalls).toContainEqual({ windowId: 'app', key: 'mode', value: 'whiteboard' })
+  })
+
   it('does not raise unhandled rejection on quit', async () => {
     const user = userEvent.setup()
     window.lanstart = {

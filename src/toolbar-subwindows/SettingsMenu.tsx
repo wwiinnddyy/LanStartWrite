@@ -3,7 +3,7 @@ import { Button } from '../button'
 import { motion, useReducedMotion } from '../Framer_Motion'
 import { useHyperGlassRealtimeBlur } from '../hyper_glass'
 import { markQuitting, postCommand } from '../toolbar/hooks/useBackend'
-import { useAppAppearance } from '../toolbar/hooks/useEventsPoll'
+import { useAppAppearance } from '../status'
 import './styles/subwindow.css'
 
 export function SettingsMenu(props: { kind: string }) {

@@ -1,0 +1,83 @@
+.twRow {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.twSection {
+  margin-top: 12px;
+}
+
+.twSectionHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 6px;
+  opacity: 0.92;
+}
+
+.twBox {
+  border: 1px solid var(--ls-surface-border);
+  border-radius: 12px;
+  padding: 10px;
+  background: color-mix(in srgb, var(--ls-surface-bg) 90%, transparent);
+}
+
+.twKeyRow {
+  display: flex;
+  gap: 10px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.twKey {
+  width: 54px;
+  opacity: 0.7;
+}
+
+.twValue {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.twProcessTable {
+  margin-top: 8px;
+  border: 1px solid var(--ls-surface-border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.twProcessHeader,
+.twProcessRow {
+  display: grid;
+  grid-template-columns: 1fr 90px 110px;
+  gap: 8px;
+  padding: 8px 10px;
+  font-size: 12px;
+  align-items: center;
+}
+
+.twProcessHeader {
+  background: color-mix(in srgb, var(--ls-surface-bg) 85%, black 15%);
+  opacity: 0.92;
+}
+
+.twProcessRow {
+  border-top: 1px solid color-mix(in srgb, var(--ls-surface-border) 70%, transparent);
+}
+
+.twProcName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.twProcNum {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.9;
+}
+

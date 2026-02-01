@@ -20,10 +20,12 @@
     "framer-motion": "^12.29.2",
     "jimp": "^1.6.0",
     "jpeg-js": "^0.4.4",
+    "konva": "^10.2.0",
     "level": "^10.0.0",
     "pngjs": "^7.0.0",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "react-konva": "^19.2.1"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.6.3",

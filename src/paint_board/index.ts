@@ -1,0 +1,2 @@
+export { PaintBoardApp } from './PaintBoard'
+

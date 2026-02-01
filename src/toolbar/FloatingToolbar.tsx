@@ -2,10 +2,10 @@ import React, { createContext, useContext, useEffect, useMemo, useRef } from 're
 import { Button, ButtonGroup } from '../button'
 import { motion, useReducedMotion } from '../Framer_Motion'
 import { useHyperGlassRealtimeBlur } from '../hyper_glass'
+import { TOOLBAR_STATE_KEY, useAppMode } from '../status'
 import { usePersistedState } from './hooks/usePersistedState'
 import { markQuitting, postCommand } from './hooks/useBackend'
 import { useToolbarWindowAutoResize } from './hooks/useToolbarWindowAutoResize'
-import { TOOLBAR_STATE_KEY } from './utils/constants'
 import './styles/toolbar.css'
 
 type ToolbarState = {
@@ -78,6 +78,8 @@ function FloatingToolbarInner() {
   const uiButtonSize: 'sm' = 'sm'
   const reduceMotion = useReducedMotion()
   const tool: 'mouse' | 'pen' | 'eraser' = state.tool === 'pen' ? 'pen' : state.tool === 'eraser' ? 'eraser' : 'mouse'
+  const { appMode, setAppMode } = useAppMode()
+  const whiteboardActive = appMode === 'whiteboard'
 
   useToolbarWindowAutoResize({ root: contentRef.current })
   useHyperGlassRealtimeBlur({ root: rootRef.current })
@@ -99,7 +101,7 @@ function FloatingToolbarInner() {
             variant={tool === 'mouse' ? 'light' : 'default'}
             onClick={() => {
               setState({ ...state, tool: 'mouse' })
-              void postCommand('qt.setTool', { tool: 'mouse' })
+              void postCommand('app.setTool', { tool: 'mouse' })
             }}
           >
             鼠标
@@ -110,7 +112,7 @@ function FloatingToolbarInner() {
             variant={tool === 'pen' ? 'light' : 'default'}
             onClick={() => {
               setState({ ...state, tool: 'pen' })
-              void postCommand('qt.setTool', { tool: 'pen' })
+              void postCommand('app.setTool', { tool: 'pen' })
             }}
           >
             笔
@@ -121,10 +123,20 @@ function FloatingToolbarInner() {
             variant={tool === 'eraser' ? 'light' : 'default'}
             onClick={() => {
               setState({ ...state, tool: 'eraser' })
-              void postCommand('qt.setTool', { tool: 'eraser' })
+              void postCommand('app.setTool', { tool: 'eraser' })
             }}
           >
             橡皮
+          </Button>
+
+          <Button
+            size={uiButtonSize}
+            variant={whiteboardActive ? 'light' : 'default'}
+            onClick={() => {
+              setAppMode(whiteboardActive ? 'toolbar' : 'whiteboard')
+            }}
+          >
+            白板
           </Button>
 
           <Button
@@ -143,6 +155,15 @@ function FloatingToolbarInner() {
             }}
           >
             事件
+          </Button>
+
+          <Button
+            size={uiButtonSize}
+            onClick={() => {
+              void postCommand('toggle-subwindow', { kind: 'watcher', placement: 'bottom' })
+            }}
+          >
+            监视
           </Button>
 
           <Button

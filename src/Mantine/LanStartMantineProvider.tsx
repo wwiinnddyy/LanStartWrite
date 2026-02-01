@@ -1,7 +1,7 @@
 import React from 'react'
 import '@mantine/core/styles.css'
 import { MantineProvider, createTheme } from '@mantine/core'
-import { useAppAppearance } from '../toolbar/hooks/useEventsPoll'
+import { useAppAppearance } from '../status'
 
 const theme = createTheme({
   primaryColor: 'blue',

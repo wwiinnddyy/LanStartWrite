@@ -2,6 +2,21 @@ import { Elysia, t } from 'elysia'
 import { node } from '@elysiajs/node'
 import { createInterface } from 'node:readline'
 import { deleteByPrefix, deleteValue, getValue, openLeavelDb, putValue } from '../LeavelDB'
+import {
+  ACTIVE_APP_UI_STATE_KEY,
+  EFFECTIVE_WRITING_BACKEND_UI_STATE_KEY,
+  PPT_FULLSCREEN_UI_STATE_KEY,
+  UI_STATE_APP_WINDOW_ID,
+  WRITING_FRAMEWORK_KV_KEY,
+  WRITING_FRAMEWORK_UI_STATE_KEY,
+  isActiveApp,
+  isWritingFramework,
+  type ActiveApp,
+  type EffectiveWritingBackend,
+  type WritingFramework
+} from '../status/keys'
+import { identifyActiveApp } from '../task_windows_watcher/identify'
+import type { ForegroundWindowSample, ProcessSample, TaskWatcherStatus } from '../task_windows_watcher/types'
 
 type EventItem = {
   id: number
@@ -75,6 +90,25 @@ function coerceAppearance(v: unknown): Appearance | undefined {
   return undefined
 }
 
+async function getPersistedWritingFramework(): Promise<WritingFramework | undefined> {
+  try {
+    const value = await getValue(db, WRITING_FRAMEWORK_KV_KEY)
+    return isWritingFramework(value) ? value : undefined
+  } catch {
+    return undefined
+  }
+}
+
+function resolveEffectiveWritingBackend(input: {
+  writingFramework: WritingFramework
+  activeApp?: ActiveApp
+  pptFullscreen?: boolean
+}): EffectiveWritingBackend {
+  if (input.activeApp === 'word') return 'word'
+  if (input.activeApp === 'ppt' && input.pptFullscreen) return 'ppt'
+  return input.writingFramework
+}
+
 async function handleCommand(command: string, payload: unknown): Promise<CommandResult> {
   emitEvent('COMMAND', { command, payload })
 
@@ -86,6 +120,13 @@ async function handleCommand(command: string, payload: unknown): Promise<Command
     if (scope === 'win') {
       if (action === 'createWindow') {
         requestMain({ type: 'CREATE_WINDOW' })
+        return { ok: true }
+      }
+
+      if (action === 'setAppMode') {
+        const modeRaw = coerceString((payload as any)?.mode)
+        const mode = modeRaw === 'whiteboard' ? 'whiteboard' : 'toolbar'
+        requestMain({ type: 'SET_APP_MODE', mode })
         return { ok: true }
       }
 
@@ -137,10 +178,77 @@ async function handleCommand(command: string, payload: unknown): Promise<Command
       return { ok: false, error: 'UNKNOWN_COMMAND' }
     }
 
+    if (scope === 'app') {
+      if (action === 'setTool') {
+        const toolRaw = coerceString((payload as any)?.tool)
+        const tool = toolRaw === 'pen' ? 'pen' : toolRaw === 'eraser' ? 'eraser' : 'mouse'
+        const state = getOrInitUiState(UI_STATE_APP_WINDOW_ID)
+        state.tool = tool
+        emitEvent('UI_STATE_PUT', { windowId: UI_STATE_APP_WINDOW_ID, key: 'tool', value: tool })
+
+        const uiFrameworkRaw = state[WRITING_FRAMEWORK_UI_STATE_KEY]
+        const uiFramework = isWritingFramework(uiFrameworkRaw) ? uiFrameworkRaw : undefined
+        const writingFramework = uiFramework ?? (await getPersistedWritingFramework()) ?? 'konva'
+
+        if (!uiFramework) {
+          state[WRITING_FRAMEWORK_UI_STATE_KEY] = writingFramework
+          emitEvent('UI_STATE_PUT', {
+            windowId: UI_STATE_APP_WINDOW_ID,
+            key: WRITING_FRAMEWORK_UI_STATE_KEY,
+            value: writingFramework
+          })
+        }
+
+        const activeAppRaw = state[ACTIVE_APP_UI_STATE_KEY]
+        const activeApp = isActiveApp(activeAppRaw) ? activeAppRaw : undefined
+        const pptFullscreen = state[PPT_FULLSCREEN_UI_STATE_KEY] === true
+
+        const effective = resolveEffectiveWritingBackend({ writingFramework, activeApp, pptFullscreen })
+        state[EFFECTIVE_WRITING_BACKEND_UI_STATE_KEY] = effective
+        emitEvent('UI_STATE_PUT', {
+          windowId: UI_STATE_APP_WINDOW_ID,
+          key: EFFECTIVE_WRITING_BACKEND_UI_STATE_KEY,
+          value: effective
+        })
+
+        emitEvent('BACKEND_FORWARD', { target: effective, command: 'setTool', payload: { tool }, reason: { writingFramework, activeApp, pptFullscreen } })
+        return { ok: true }
+      }
+
+      if (action === 'setWritingFramework') {
+        const frameworkRaw = coerceString((payload as any)?.framework)
+        const framework = isWritingFramework(frameworkRaw) ? frameworkRaw : undefined
+        if (!framework) return { ok: false, error: 'BAD_WRITING_FRAMEWORK' }
+        await putValue(db, WRITING_FRAMEWORK_KV_KEY, framework)
+        emitEvent('KV_PUT', { key: WRITING_FRAMEWORK_KV_KEY })
+        const state = getOrInitUiState(UI_STATE_APP_WINDOW_ID)
+        state[WRITING_FRAMEWORK_UI_STATE_KEY] = framework
+        emitEvent('UI_STATE_PUT', { windowId: UI_STATE_APP_WINDOW_ID, key: WRITING_FRAMEWORK_UI_STATE_KEY, value: framework })
+        return { ok: true }
+      }
+
+      return { ok: false, error: 'UNKNOWN_COMMAND' }
+    }
+
     if (scope === 'qt') {
       requestMain({ type: 'QT_COMMAND', action, payload })
       emitEvent('QT_COMMAND', { action, payload })
       return { ok: true }
+    }
+
+    if (scope === 'watcher') {
+      if (action === 'start') {
+        const intervalMs = Number((payload as any)?.intervalMs)
+        requestMain({ type: 'START_TASK_WATCHER', intervalMs: Number.isFinite(intervalMs) ? intervalMs : undefined })
+        return { ok: true }
+      }
+
+      if (action === 'stop') {
+        requestMain({ type: 'STOP_TASK_WATCHER' })
+        return { ok: true }
+      }
+
+      return { ok: false, error: 'UNKNOWN_COMMAND' }
     }
 
     if (scope === 'fs' || scope === 'img') {
@@ -364,6 +472,47 @@ stdin.on('line', (line) => {
       }
     }
 
+    if (type === 'TASK_WATCHER_STATUS') {
+      const status = (msg as any)?.status as TaskWatcherStatus | undefined
+      if (status && typeof status === 'object') {
+        runtimeProcesses.set('task-watcher', status as unknown)
+        emitEvent('watcherStatus', status)
+        return
+      }
+    }
+
+    if (type === 'TASK_WATCHER_PROCESS_SNAPSHOT') {
+      const ts = Number((msg as any)?.ts)
+      const processes = Array.isArray((msg as any)?.processes) ? ((msg as any).processes as ProcessSample[]) : []
+      runtimeProcesses.set('system-processes', { ts: Number.isFinite(ts) ? ts : Date.now(), processes } as unknown)
+      emitEvent('processChanged', { ts: Number.isFinite(ts) ? ts : Date.now(), processes })
+      return
+    }
+
+    if (type === 'TASK_WATCHER_WINDOW_FOCUS') {
+      const ts = Number((msg as any)?.ts)
+      const window = ((msg as any)?.window ?? undefined) as ForegroundWindowSample | undefined
+      runtimeWindows.set('foreground', { ts: Number.isFinite(ts) ? ts : Date.now(), window } as unknown)
+      emitEvent('windowFocusChanged', { ts: Number.isFinite(ts) ? ts : Date.now(), window })
+
+      const state = getOrInitUiState(UI_STATE_APP_WINDOW_ID)
+      const identified = identifyActiveApp(window)
+      state[ACTIVE_APP_UI_STATE_KEY] = identified.activeApp
+      state[PPT_FULLSCREEN_UI_STATE_KEY] = identified.pptFullscreen
+      emitEvent('UI_STATE_PUT', { windowId: UI_STATE_APP_WINDOW_ID, key: ACTIVE_APP_UI_STATE_KEY, value: identified.activeApp })
+      emitEvent('UI_STATE_PUT', {
+        windowId: UI_STATE_APP_WINDOW_ID,
+        key: PPT_FULLSCREEN_UI_STATE_KEY,
+        value: identified.pptFullscreen
+      })
+      return
+    }
+
+    if (type === 'TASK_WATCHER_ERROR') {
+      emitEvent('watcherError', (msg as any) ?? {})
+      return
+    }
+
     emitEvent('MAIN_MESSAGE', msg)
   } catch {
     return
@@ -381,6 +530,67 @@ const api = new Elysia({ adapter: node() })
     }
   })
   .get('/health', () => ({ ok: true, port }))
+  .get('/watcher/docs', () => {
+    return {
+      ok: true,
+      endpoints: {
+        docs: 'GET /watcher/docs',
+        state: 'GET /watcher/state',
+        events: 'GET /events',
+        commands: 'POST /commands'
+      },
+      commands: [
+        { command: 'watcher.start', payload: { intervalMs: 'number?' } },
+        { command: 'watcher.stop', payload: {} }
+      ],
+      subscription: {
+        poll: {
+          endpoint: 'GET /events',
+          query: { sinceId: 'number?', limit: 'number?' },
+          returns: { ok: 'boolean', events: 'EventItem[]' }
+        },
+        eventItem: { id: 'number', type: 'string', payload: 'unknown', ts: 'number' }
+      },
+      events: [
+        { type: 'watcherStatus', payload: { running: 'boolean', intervalMs: 'number', ts: 'number', lastError: 'string?' } },
+        { type: 'processChanged', payload: { ts: 'number', processes: 'ProcessSample[]' } },
+        { type: 'windowFocusChanged', payload: { ts: 'number', window: 'ForegroundWindowSample?' } },
+        { type: 'watcherError', payload: { ts: 'number', stage: 'string', error: 'string' } }
+      ],
+      types: {
+        ProcessSample: {
+          pid: 'number',
+          name: 'string',
+          cpuPercent: 'number?',
+          cpuTimeMs: 'number?',
+          memoryBytes: 'number?'
+        },
+        ForegroundWindowSample: {
+          pid: 'number?',
+          processName: 'string?',
+          title: 'string',
+          handle: 'string?',
+          bounds: '{ x:number, y:number, width:number, height:number }?'
+        }
+      },
+      runtime: {
+        processesKey: 'system-processes',
+        windowKey: 'foreground'
+      },
+      notes: [
+        'watcherStatus 在 start/stop 时必定触发；失败时 lastError 更新',
+        'processChanged 仅在采样结果发生变化时触发（含 CPU/内存变化）',
+        'windowFocusChanged 仅在前台窗口 key 变化时触发（pid|handle|title）',
+        'watcherError 表示采样阶段失败（例如权限不足、命令不可用、超时）'
+      ]
+    }
+  })
+  .get('/watcher/state', () => {
+    const processes = runtimeProcesses.get('system-processes')
+    const foreground = runtimeWindows.get('foreground')
+    const watcher = runtimeProcesses.get('task-watcher')
+    return { ok: true, watcher, processes, foreground }
+  })
   .all('/cs/*', async ({ request, set, params }) => {
     if (!csBaseUrl) {
       set.status = 503
