@@ -491,8 +491,8 @@ function computeToolbarSubwindowBounds(
   workArea: WorkArea
 ) {
   const gap = 10
-  const widthLimit = Math.max(360, workArea.width - 20)
-  const width = Math.max(360, Math.min(widthLimit, Math.round(item.width)))
+  const widthLimit = Math.max(60, workArea.width - 20)
+  const width = Math.max(60, Math.min(widthLimit, Math.round(item.width)))
   const heightLimit = Math.max(60, workArea.height - 20)
   const height = Math.max(60, Math.min(heightLimit, Math.round(item.height)))
 
@@ -636,8 +636,6 @@ function getOrCreateToolbarSubwindow(kind: string, placement: 'top' | 'bottom'):
   const owner = floatingToolbarWindow
   if (!owner || owner.isDestroyed()) throw new Error('toolbar_owner_missing')
 
-  const ownerBounds = owner.getBounds()
-
   const win = new BrowserWindow({
     width: 360,
     height: 220,
@@ -686,7 +684,7 @@ function getOrCreateToolbarSubwindow(kind: string, placement: 'top' | 'bottom'):
     win,
     placement,
     effectivePlacement: placement,
-    width: Math.max(360, ownerBounds.width),
+    width: 360,
     height: 220
   })
   scheduleRepositionToolbarSubwindows()

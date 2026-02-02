@@ -151,6 +151,15 @@ function FloatingToolbarInner() {
           <Button
             size={uiButtonSize}
             onClick={() => {
+              void postCommand('toggle-subwindow', { kind: 'feature-panel', placement: 'bottom' })
+            }}
+          >
+            功能面板
+          </Button>
+
+          <Button
+            size={uiButtonSize}
+            onClick={() => {
               void postCommand('toggle-subwindow', { kind: 'events', placement: 'bottom' })
             }}
           >

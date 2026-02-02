@@ -63,7 +63,7 @@ body {
 .subwindowMeasure {
   display: inline-block;
   width: fit-content;
-  min-width: 360px;
+  min-width: 0px;
   max-width: 1600px;
 }
 
@@ -93,4 +93,10 @@ body {
 .subwindowMeta {
   font-size: 11px;
   opacity: 0.65;
+}
+
+.subwindowIconGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 40px);
+  gap: 8px;
 }

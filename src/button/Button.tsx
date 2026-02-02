@@ -14,6 +14,8 @@ export type ButtonProps = {
   className?: string
   type?: 'button' | 'submit' | 'reset'
   appRegion?: 'drag' | 'no-drag'
+  showInToolbar?: boolean
+  showInFeaturePanel?: boolean
 }
 
 export function Button({
@@ -25,7 +27,9 @@ export function Button({
   title,
   className,
   type = 'button',
-  appRegion = 'no-drag'
+  appRegion = 'no-drag',
+  showInToolbar,
+  showInFeaturePanel
 }: ButtonProps) {
   const classes = [
     'lsButton',
@@ -39,7 +43,15 @@ export function Button({
     .join(' ')
 
   return (
-    <button className={classes} disabled={disabled} onClick={onClick} title={title} type={type}>
+    <button
+      className={classes}
+      data-show-in-toolbar={showInToolbar === undefined ? undefined : String(showInToolbar)}
+      data-show-in-feature-panel={showInFeaturePanel === undefined ? undefined : String(showInFeaturePanel)}
+      disabled={disabled}
+      onClick={onClick}
+      title={title}
+      type={type}
+    >
       {children}
     </button>
   )
