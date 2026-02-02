@@ -9,7 +9,12 @@ export type ButtonProps = {
   size?: ButtonSize
   disabled?: boolean
   onClick?: () => void
+  onPointerDown?: React.PointerEventHandler<HTMLButtonElement>
+  onPointerUp?: React.PointerEventHandler<HTMLButtonElement>
+  onPointerCancel?: React.PointerEventHandler<HTMLButtonElement>
+  onPointerLeave?: React.PointerEventHandler<HTMLButtonElement>
   children: React.ReactNode
+  ariaLabel?: string
   title?: string
   className?: string
   type?: 'button' | 'submit' | 'reset'
@@ -23,7 +28,12 @@ export function Button({
   size = 'sm',
   disabled,
   onClick,
+  onPointerDown,
+  onPointerUp,
+  onPointerCancel,
+  onPointerLeave,
   children,
+  ariaLabel,
   title,
   className,
   type = 'button',
@@ -47,8 +57,13 @@ export function Button({
       className={classes}
       data-show-in-toolbar={showInToolbar === undefined ? undefined : String(showInToolbar)}
       data-show-in-feature-panel={showInFeaturePanel === undefined ? undefined : String(showInFeaturePanel)}
+      aria-label={ariaLabel}
       disabled={disabled}
       onClick={onClick}
+      onPointerDown={onPointerDown}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerCancel}
+      onPointerLeave={onPointerLeave}
       title={title}
       type={type}
     >

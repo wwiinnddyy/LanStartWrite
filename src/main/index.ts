@@ -283,7 +283,7 @@ function createFloatingToolbarHandleWindow(owner: BrowserWindow): BrowserWindow 
     alwaysOnTop: true,
     skipTaskbar: true,
     parent: owner,
-    title: '拖动把手',
+    title: '浮动工具栏拖动把手',
     backgroundColor: surfaceBackgroundColor(currentAppearance),
     backgroundMaterial: 'mica',
     webPreferences: {
@@ -404,8 +404,16 @@ function applyToolbarOnTopLevel(level: 'normal' | 'floating' | 'torn-off-menu' |
     const win = item.win
     if (win.isDestroyed()) continue
     win.setAlwaysOnTop(true, level)
-    if (win.isVisible()) win.showInactive()
     win.moveTop()
+  }
+}
+
+function hideAllToolbarSubwindows() {
+  for (const item of toolbarSubwindows.values()) {
+    const win = item.win
+    if (win.isDestroyed()) continue
+    stopToolbarSubwindowAnimation(item)
+    if (win.isVisible()) win.hide()
   }
 }
 
@@ -563,8 +571,11 @@ function repositionToolbarSubwindows(animate: boolean) {
   for (const item of toolbarSubwindows.values()) {
     const win = item.win
     if (win.isDestroyed() || !win.isVisible()) continue
+    const prevEffectivePlacement = item.effectivePlacement
     const { bounds, atEdge } = computeToolbarSubwindowBounds(item, ownerBounds, workArea)
-    if (animate) {
+    const placementChanged = item.effectivePlacement !== prevEffectivePlacement
+    const shouldAnimate = animate || placementChanged || Boolean(item.animationTimer)
+    if (shouldAnimate) {
       animateToolbarSubwindowTo(item, bounds, atEdge)
     } else {
       stopToolbarSubwindowAnimation(item)
@@ -657,6 +668,7 @@ function getOrCreateToolbarSubwindow(kind: string, placement: 'top' | 'bottom'):
   const win = new BrowserWindow({
     width: 360,
     height: 220,
+    show: false,
     frame: false,
     transparent: false,
     resizable: false,
@@ -741,7 +753,16 @@ function toggleToolbarSubwindow(kind: string, placement: 'top' | 'bottom') {
     win.setBounds(bounds, false)
   }
   scheduleRepositionToolbarSubwindows('other')
-  win.showInactive()
+  const doShow = () => {
+    if (win.isDestroyed()) return
+    if (win.isVisible()) return
+    win.showInactive()
+  }
+  if (win.webContents.isLoading()) {
+    win.once('ready-to-show', doShow)
+  } else {
+    doShow()
+  }
 }
 
 function setToolbarSubwindowHeight(kind: string, height: number) {
@@ -812,6 +833,7 @@ function handleBackendControlMessage(message: any): void {
     const modeRaw = String((message as any).mode ?? '')
     const mode = modeRaw === 'whiteboard' ? 'whiteboard' : 'toolbar'
     if (mode === 'whiteboard') {
+      hideAllToolbarSubwindows()
       applyToolbarOnTopLevel('screen-saver')
       if (!paintBoardWindow || paintBoardWindow.isDestroyed()) {
         paintBoardWindow = createPaintBoardWindow()

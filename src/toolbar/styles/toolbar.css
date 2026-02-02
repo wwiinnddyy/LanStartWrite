@@ -100,28 +100,25 @@ body {
   font-size: 0;
 }
 
-.toolbarDragHandleButton::before {
-  content: '';
+.toolbarDragHandleIcon {
   display: block;
-  width: 14px;
-  height: 14px;
+  width: 20px;
+  height: 20px;
   margin: 0 auto;
-  border-radius: 8px;
-  background:
-    radial-gradient(circle at 50% 50%, var(--ls-handle-dot) 0 2px, transparent 3px),
-    radial-gradient(circle at 50% 50%, var(--ls-handle-dot) 0 2px, transparent 3px),
-    radial-gradient(circle at 50% 50%, var(--ls-handle-dot) 0 2px, transparent 3px);
-  background-size: 6px 6px;
-  background-position:
-    0 0,
-    0 50%,
-    0 100%;
-  background-repeat: repeat;
-  opacity: 0.75;
+  opacity: 0.85;
+  transition: opacity 120ms ease;
 }
 
 .toolbarDragHandleButton:hover {
   background: var(--ls-handle-hover-bg);
+}
+
+.toolbarDragHandleButton:hover .toolbarDragHandleIcon {
+  opacity: 0.95;
+}
+
+.toolbarDragHandleButton--dragging .toolbarDragHandleIcon {
+  opacity: 1;
 }
 
 .toolbarDragHandleButton:active {
