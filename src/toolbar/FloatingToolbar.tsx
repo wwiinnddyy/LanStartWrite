@@ -25,12 +25,47 @@ function ToolbarToolIcon(props: { kind: 'mouse' | 'pen' | 'eraser' | 'whiteboard
   )
 }
 
+function UndoIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 7v6h6" />
+      <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13" />
+    </svg>
+  )
+}
+
+function RedoIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 7v6h-6" />
+      <path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13" />
+    </svg>
+  )
+}
+
+function ChevronLeftIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="m15 18-6-6 6-6" />
+    </svg>
+  )
+}
+
+function ChevronRightIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="m9 18 6-6-6-6" />
+    </svg>
+  )
+}
+
 type ToolbarState = {
   collapsed: boolean
   alwaysOnTop: boolean
   uiWidth?: number
   uiButtonSize?: 'sm' | 'md'
   tool?: 'mouse' | 'pen' | 'eraser'
+  expanded?: boolean
 }
 
 function isToolbarState(value: unknown): value is ToolbarState {
@@ -41,6 +76,7 @@ function isToolbarState(value: unknown): value is ToolbarState {
   if (v.uiWidth !== undefined && typeof v.uiWidth !== 'number') return false
   if (v.uiButtonSize !== undefined && v.uiButtonSize !== 'sm' && v.uiButtonSize !== 'md') return false
   if (v.tool !== undefined && v.tool !== 'mouse' && v.tool !== 'pen' && v.tool !== 'eraser') return false
+  if (v.expanded !== undefined && typeof v.expanded !== 'boolean') return false
   return true
 }
 
@@ -62,7 +98,8 @@ function ToolbarProvider({ children }: { children: React.ReactNode }) {
     collapsed: false,
     alwaysOnTop: true,
     uiWidth: 360,
-    uiButtonSize: 'sm'
+    uiButtonSize: 'sm',
+    expanded: true
   }, { validate: isToolbarState })
 
   useEffect(() => {
@@ -71,14 +108,16 @@ function ToolbarProvider({ children }: { children: React.ReactNode }) {
       alwaysOnTop: Boolean(state.alwaysOnTop),
       uiWidth: typeof state.uiWidth === 'number' ? state.uiWidth : 360,
       uiButtonSize: state.uiButtonSize === 'md' ? 'md' : 'sm',
-      tool: state.tool === 'pen' ? 'pen' : state.tool === 'eraser' ? 'eraser' : 'mouse'
+      tool: state.tool === 'pen' ? 'pen' : state.tool === 'eraser' ? 'eraser' : 'mouse',
+      expanded: state.expanded !== false
     }
     if (
       normalized.collapsed !== state.collapsed ||
       normalized.alwaysOnTop !== state.alwaysOnTop ||
       normalized.uiWidth !== state.uiWidth ||
       normalized.uiButtonSize !== state.uiButtonSize ||
-      normalized.tool !== state.tool
+      normalized.tool !== state.tool ||
+      normalized.expanded !== state.expanded
     ) {
       setState(normalized)
     }
@@ -97,9 +136,14 @@ function FloatingToolbarInner() {
   const tool: 'mouse' | 'pen' | 'eraser' = state.tool === 'pen' ? 'pen' : state.tool === 'eraser' ? 'eraser' : 'mouse'
   const { appMode, setAppMode } = useAppMode()
   const whiteboardActive = appMode === 'whiteboard'
+  const isExpanded = state.expanded !== false
 
   useToolbarWindowAutoResize({ root: contentRef.current })
   useHyperGlassRealtimeBlur({ root: rootRef.current })
+
+  const toggleExpanded = () => {
+    setState({ ...state, expanded: !isExpanded })
+  }
 
   return (
     <motion.div
@@ -111,129 +155,182 @@ function FloatingToolbarInner() {
     >
       <div ref={contentRef} className="toolbarDragArea">
         <div className="toolbarLayout">
+          {/* 主要工具按钮区域 */}
           <div className="toolbarBarRow">
             <ButtonGroup>
-          <Button
-            size={uiButtonSize}
-            variant={tool === 'mouse' ? 'light' : 'default'}
-            ariaLabel="鼠标"
-            title="鼠标"
-            onClick={() => {
-              setState({ ...state, tool: 'mouse' })
-              void postCommand('app.setTool', { tool: 'mouse' })
-            }}
-          >
-            <ToolbarToolIcon kind="mouse" />
-          </Button>
+              <Button
+                size={uiButtonSize}
+                variant={tool === 'mouse' ? 'light' : 'default'}
+                ariaLabel="鼠标"
+                title="鼠标"
+                onClick={() => {
+                  setState({ ...state, tool: 'mouse' })
+                  void postCommand('app.setTool', { tool: 'mouse' })
+                }}
+              >
+                <ToolbarToolIcon kind="mouse" />
+              </Button>
 
-          <Button
-            size={uiButtonSize}
-            variant={tool === 'pen' ? 'light' : 'default'}
-            ariaLabel="笔"
-            title="笔"
-            onClick={() => {
-              setState({ ...state, tool: 'pen' })
-              void postCommand('app.setTool', { tool: 'pen' })
-            }}
-          >
-            <ToolbarToolIcon kind="pen" />
-          </Button>
+              <Button
+                size={uiButtonSize}
+                variant={tool === 'pen' ? 'light' : 'default'}
+                ariaLabel="笔"
+                title="笔"
+                onClick={() => {
+                  setState({ ...state, tool: 'pen' })
+                  void postCommand('app.setTool', { tool: 'pen' })
+                }}
+              >
+                <ToolbarToolIcon kind="pen" />
+              </Button>
 
-          <Button
-            size={uiButtonSize}
-            variant={tool === 'eraser' ? 'light' : 'default'}
-            ariaLabel="橡皮"
-            title="橡皮"
-            onClick={() => {
-              setState({ ...state, tool: 'eraser' })
-              void postCommand('app.setTool', { tool: 'eraser' })
-            }}
-          >
-            <ToolbarToolIcon kind="eraser" />
-          </Button>
+              <Button
+                size={uiButtonSize}
+                variant={tool === 'eraser' ? 'light' : 'default'}
+                ariaLabel="橡皮"
+                title="橡皮"
+                onClick={() => {
+                  setState({ ...state, tool: 'eraser' })
+                  void postCommand('app.setTool', { tool: 'eraser' })
+                }}
+              >
+                <ToolbarToolIcon kind="eraser" />
+              </Button>
 
-          <Button
-            size={uiButtonSize}
-            variant={whiteboardActive ? 'light' : 'default'}
-            ariaLabel="白板"
-            title="白板"
-            onClick={() => {
-              setAppMode(whiteboardActive ? 'toolbar' : 'whiteboard')
-            }}
-          >
-            <ToolbarToolIcon kind="whiteboard" />
-          </Button>
-
-          <Button
-            size={uiButtonSize}
-            onClick={() => {
-              void postCommand('create-window')
-            }}
-          >
-            新建窗口
-          </Button>
-
-          <Button
-            size={uiButtonSize}
-            onClick={() => {
-              void postCommand('toggle-subwindow', { kind: 'feature-panel', placement: 'bottom' })
-            }}
-          >
-            功能面板
-          </Button>
-
-          <Button
-            size={uiButtonSize}
-            onClick={() => {
-              void postCommand('toggle-subwindow', { kind: 'events', placement: 'bottom' })
-            }}
-          >
-            事件
-          </Button>
-
-          <Button
-            size={uiButtonSize}
-            onClick={() => {
-              void postCommand('watcher.openWindow')
-            }}
-          >
-            监视器
-          </Button>
-
-          <Button
-            size={uiButtonSize}
-            onClick={() => {
-              void postCommand('toggle-subwindow', { kind: 'settings', placement: 'top' })
-            }}
-          >
-            设置
-          </Button>
-
-          <Button
-            size={uiButtonSize}
-            variant={state.alwaysOnTop ? 'light' : 'default'}
-            title="切换是否始终置顶（由主进程执行）"
-            onClick={() => {
-              const next = !state.alwaysOnTop
-              setState({ ...state, alwaysOnTop: next })
-              void postCommand('set-toolbar-always-on-top', { value: next })
-            }}
-          >
-            置顶
-          </Button>
-
-          <Button
-            size={uiButtonSize}
-            variant="danger"
-            onClick={() => {
-              markQuitting()
-              void postCommand('quit')
-            }}
-          >
-            退出
-          </Button>
-          </ButtonGroup>
+              <Button
+                size={uiButtonSize}
+                variant={whiteboardActive ? 'light' : 'default'}
+                ariaLabel="白板"
+                title="白板"
+                onClick={() => {
+                  setAppMode(whiteboardActive ? 'toolbar' : 'whiteboard')
+                }}
+              >
+                <ToolbarToolIcon kind="whiteboard" />
+              </Button>
+            </ButtonGroup>
           </div>
+
+          {/* 折叠/展开切换按钮 */}
+          <div className="toolbarBarRow">
+            <Button
+              size={uiButtonSize}
+              variant="light"
+              className="toolbarToggleButton"
+              title={isExpanded ? '点击折叠工具栏' : '点击展开工具栏'}
+              onClick={toggleExpanded}
+            >
+              {isExpanded ? <ChevronLeftIcon /> : <ChevronRightIcon />}
+            </Button>
+          </div>
+
+          {/* 可折叠区域 */}
+          <motion.div
+            className="toolbarCollapsibleSection"
+            initial={false}
+            animate={{
+              width: isExpanded ? 'auto' : 0,
+              opacity: isExpanded ? 1 : 0
+            }}
+            transition={reduceMotion ? undefined : { duration: 0.2, ease: [0.2, 0.8, 0.2, 1] }}
+          >
+            <div className="toolbarBarRow toolbarCollapsibleContent">
+              <ButtonGroup>
+                <Button
+                  size={uiButtonSize}
+                  ariaLabel="撤销"
+                  title="撤销"
+                  onClick={() => {
+                    // TODO: 实现撤销功能
+                    console.log('撤销')
+                  }}
+                >
+                  <UndoIcon />
+                </Button>
+
+                <Button
+                  size={uiButtonSize}
+                  ariaLabel="重做"
+                  title="重做"
+                  onClick={() => {
+                    // TODO: 实现重做功能
+                    console.log('重做')
+                  }}
+                >
+                  <RedoIcon />
+                </Button>
+
+                <Button
+                  size={uiButtonSize}
+                  onClick={() => {
+                    void postCommand('create-window')
+                  }}
+                >
+                  新建窗口
+                </Button>
+
+                <Button
+                  size={uiButtonSize}
+                  onClick={() => {
+                    void postCommand('toggle-subwindow', { kind: 'feature-panel', placement: 'bottom' })
+                  }}
+                >
+                  功能面板
+                </Button>
+
+                <Button
+                  size={uiButtonSize}
+                  onClick={() => {
+                    void postCommand('toggle-subwindow', { kind: 'events', placement: 'bottom' })
+                  }}
+                >
+                  事件
+                </Button>
+
+                <Button
+                  size={uiButtonSize}
+                  onClick={() => {
+                    void postCommand('watcher.openWindow')
+                  }}
+                >
+                  监视器
+                </Button>
+
+                <Button
+                  size={uiButtonSize}
+                  onClick={() => {
+                    void postCommand('toggle-subwindow', { kind: 'settings', placement: 'top' })
+                  }}
+                >
+                  设置
+                </Button>
+
+                <Button
+                  size={uiButtonSize}
+                  variant={state.alwaysOnTop ? 'light' : 'default'}
+                  title="切换是否始终置顶（由主进程执行）"
+                  onClick={() => {
+                    const next = !state.alwaysOnTop
+                    setState({ ...state, alwaysOnTop: next })
+                    void postCommand('set-toolbar-always-on-top', { value: next })
+                  }}
+                >
+                  置顶
+                </Button>
+
+                <Button
+                  size={uiButtonSize}
+                  variant="danger"
+                  onClick={() => {
+                    markQuitting()
+                    void postCommand('quit')
+                  }}
+                >
+                  退出
+                </Button>
+              </ButtonGroup>
+            </div>
+          </motion.div>
         </div>
       </div>
     </motion.div>

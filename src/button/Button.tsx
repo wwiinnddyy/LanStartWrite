@@ -21,6 +21,7 @@ export type ButtonProps = {
   appRegion?: 'drag' | 'no-drag'
   showInToolbar?: boolean
   showInFeaturePanel?: boolean
+  style?: React.CSSProperties
 }
 
 export function Button({
@@ -39,7 +40,8 @@ export function Button({
   type = 'button',
   appRegion = 'no-drag',
   showInToolbar,
-  showInFeaturePanel
+  showInFeaturePanel,
+  style
 }: ButtonProps) {
   const classes = [
     'lsButton',
@@ -66,6 +68,7 @@ export function Button({
       onPointerLeave={onPointerLeave}
       title={title}
       type={type}
+      style={style}
     >
       {children}
     </button>

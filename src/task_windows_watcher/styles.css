@@ -1,83 +1,772 @@
-.twRow {
+/* 任务与窗口监视器样式 - 智能响应式设计 */
+
+/* 基础变量 */
+.twWatcherRoot {
+  --tw-spacing-xs: 4px;
+  --tw-spacing-sm: 8px;
+  --tw-spacing-md: 12px;
+  --tw-spacing-lg: 16px;
+  --tw-spacing-xl: 20px;
+  --tw-font-size-xs: 11px;
+  --tw-font-size-sm: 12px;
+  --tw-font-size-md: 13px;
+  --tw-font-size-lg: 14px;
+  --tw-font-size-xl: 16px;
+  --tw-font-size-2xl: 20px;
+  --tw-font-size-3xl: 24px;
+  --tw-border-radius: 8px;
+  --tw-border-radius-lg: 12px;
+  min-width: 320px;
+  max-width: 100%;
+}
+
+/* 卡片容器 */
+.twWatcherCard {
+  container-type: inline-size;
+  container-name: watcher;
+}
+
+/* 紧凑模式 (< 500px) */
+.twWatcherCard--compact {
+  --tw-spacing-xs: 2px;
+  --tw-spacing-sm: 4px;
+  --tw-spacing-md: 6px;
+  --tw-spacing-lg: 8px;
+  --tw-spacing-xl: 12px;
+}
+
+/* 舒适模式 (500px - 800px) */
+.twWatcherCard--comfortable {
+  --tw-spacing-xs: 4px;
+  --tw-spacing-sm: 8px;
+  --tw-spacing-md: 12px;
+  --tw-spacing-lg: 16px;
+  --tw-spacing-xl: 20px;
+}
+
+/* 宽松模式 (> 800px) */
+.twWatcherCard--spacious {
+  --tw-spacing-xs: 6px;
+  --tw-spacing-sm: 10px;
+  --tw-spacing-md: 14px;
+  --tw-spacing-lg: 20px;
+  --tw-spacing-xl: 24px;
+}
+
+/* 头部区域 */
+.twHeader {
   display: flex;
-  gap: 8px;
   align-items: center;
-  flex-wrap: wrap;
-}
-
-.twSection {
-  margin-top: 12px;
-}
-
-.twSectionHeader {
-  display: flex;
   justify-content: space-between;
-  align-items: baseline;
-  margin-bottom: 6px;
-  opacity: 0.92;
+  padding: var(--tw-spacing-lg) var(--tw-spacing-xl);
+  border-bottom: 1px solid var(--ls-surface-border, rgba(0, 0, 0, 0.1));
+  gap: var(--tw-spacing-md);
 }
 
-.twBox {
-  border: 1px solid var(--ls-surface-border);
-  border-radius: 12px;
-  padding: 10px;
-  background: color-mix(in srgb, var(--ls-surface-bg) 90%, transparent);
+.twHeader--compact {
+  padding: var(--tw-spacing-sm) var(--tw-spacing-md);
 }
 
-.twKeyRow {
+.twHeader--spacious {
+  padding: var(--tw-spacing-xl) var(--tw-spacing-xl);
+}
+
+.twTitleSection {
   display: flex;
-  gap: 10px;
-  font-size: 12px;
-  line-height: 1.4;
-}
-
-.twKey {
-  width: 54px;
-  opacity: 0.7;
-}
-
-.twValue {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.twProcessTable {
-  margin-top: 8px;
-  border: 1px solid var(--ls-surface-border);
-  border-radius: 12px;
-  overflow: hidden;
-}
-
-.twProcessHeader,
-.twProcessRow {
-  display: grid;
-  grid-template-columns: 1fr 90px 110px;
-  gap: 8px;
-  padding: 8px 10px;
-  font-size: 12px;
   align-items: center;
+  gap: var(--tw-spacing-md);
+  min-width: 0;
+  flex: 1;
 }
 
-.twProcessHeader {
-  background: color-mix(in srgb, var(--ls-surface-bg) 85%, black 15%);
-  opacity: 0.92;
-}
-
-.twProcessRow {
-  border-top: 1px solid color-mix(in srgb, var(--ls-surface-border) 70%, transparent);
-}
-
-.twProcName {
-  overflow: hidden;
-  text-overflow: ellipsis;
+.twMainTitle {
+  font-size: var(--tw-font-size-2xl);
+  font-weight: 600;
+  margin: 0;
+  color: var(--ls-surface-fg, rgba(12, 12, 12, 0.92));
   white-space: nowrap;
 }
 
-.twProcNum {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
+.twMainTitle--compact {
+  font-size: var(--tw-font-size-lg);
+}
+
+.twMainTitle--spacious {
+  font-size: var(--tw-font-size-3xl);
+}
+
+.twStatusBadges {
+  display: flex;
+  gap: var(--tw-spacing-sm);
+  flex-shrink: 0;
+}
+
+.twStatusBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: var(--tw-font-size-xs);
+  font-weight: 500;
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--ls-surface-fg, rgba(12, 12, 12, 0.6));
+  white-space: nowrap;
+}
+
+.twStatusBadge--active {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+}
+
+.twStatusBadge--error {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  min-width: 20px;
+  justify-content: center;
+  padding: 4px 6px;
+}
+
+.twControls {
+  display: flex;
+  gap: var(--tw-spacing-sm);
+  flex-shrink: 0;
+}
+
+.twControlBtn {
+  padding: var(--tw-spacing-sm) var(--tw-spacing-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 36px;
+  min-height: 36px;
+}
+
+/* 视图切换标签 */
+.twViewTabs {
+  display: flex;
+  gap: var(--tw-spacing-xs);
+  padding: var(--tw-spacing-md) var(--tw-spacing-xl);
+  border-bottom: 1px solid var(--ls-surface-border, rgba(0, 0, 0, 0.1));
+  background: rgba(0, 0, 0, 0.02);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.twViewTabs::-webkit-scrollbar {
+  display: none;
+}
+
+.twViewTabs--compact {
+  padding: var(--tw-spacing-sm) var(--tw-spacing-md);
+  justify-content: space-around;
+}
+
+.twViewTabs--spacious {
+  padding: var(--tw-spacing-lg) var(--tw-spacing-xl);
+}
+
+.twViewTab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: var(--tw-spacing-sm) var(--tw-spacing-lg);
+  border: none;
+  border-radius: var(--tw-border-radius);
+  background: transparent;
+  color: var(--ls-surface-fg, rgba(12, 12, 12, 0.6));
+  font-size: var(--tw-font-size-md);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.twViewTab:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--ls-surface-fg, rgba(12, 12, 12, 0.92));
+}
+
+.twViewTab--active {
+  background: var(--ls-surface-bg, rgba(255, 255, 255, 0.58));
+  color: var(--ls-surface-fg, rgba(12, 12, 12, 0.92));
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* 统计卡片网格 */
+.twStatsGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--tw-spacing-md);
+  padding: var(--tw-spacing-lg) var(--tw-spacing-xl);
+  border-bottom: 1px solid var(--ls-surface-border, rgba(0, 0, 0, 0.1));
+}
+
+.twStatsGrid--compact {
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--tw-spacing-sm);
+  padding: var(--tw-spacing-md);
+}
+
+.twStatsGrid--spacious {
+  gap: var(--tw-spacing-lg);
+  padding: var(--tw-spacing-xl);
+}
+
+/* 容器查询：小屏幕时改为单列 */
+@container watcher (max-width: 500px) {
+  .twStatsGrid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--tw-spacing-xs);
+  }
+}
+
+@container watcher (max-width: 400px) {
+  .twStatsGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.twStatCard {
+  display: flex;
+  align-items: center;
+  gap: var(--tw-spacing-md);
+  padding: var(--tw-spacing-lg);
+  background: var(--ls-surface-bg, rgba(255, 255, 255, 0.58));
+  border: 1px solid var(--ls-surface-border, rgba(0, 0, 0, 0.1));
+  border-radius: var(--tw-border-radius-lg);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  cursor: pointer;
+  min-width: 0;
+}
+
+.twStatCard--compact {
+  padding: var(--tw-spacing-sm);
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--tw-spacing-xs);
+}
+
+.twStatCard--spacious {
+  padding: var(--tw-spacing-xl);
+}
+
+.twStatIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: currentColor;
+  opacity: 0.1;
+  flex-shrink: 0;
+}
+
+.twStatIcon svg {
+  color: currentColor;
   opacity: 0.9;
 }
 
+.twStatContent {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.twStatLabel {
+  font-size: var(--tw-font-size-xs);
+  color: var(--ls-surface-fg, rgba(12, 12, 12, 0.6));
+}
+
+.twStatValue {
+  font-size: var(--tw-font-size-2xl);
+  font-weight: 600;
+  color: var(--ls-surface-fg, rgba(12, 12, 12, 0.92));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.twStatCard--compact .twStatValue {
+  font-size: var(--tw-font-size-lg);
+}
+
+.twStatSubValue {
+  font-size: var(--tw-font-size-xs);
+  color: var(--ls-surface-fg, rgba(12, 12, 12, 0.5));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 可折叠区域 */
+.twCollapsibleSection {
+  border-bottom: 1px solid var(--ls-surface-border, rgba(0, 0, 0, 0.1));
+}
+
+.twCollapsibleSection--compact {
+  border-bottom-width: 0.5px;
+}
+
+.twCollapsibleHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--tw-spacing-md);
+  width: 100%;
+  padding: var(--tw-spacing-md) var(--tw-spacing-xl);
+  border: none;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  font-size: var(--tw-font-size-md);
+  font-weight: 500;
+  color: var(--ls-surface-fg, rgba(12, 12, 12, 0.92));
+  transition: background-color 0.15s ease;
+}
+
+.twCollapsibleSection--compact .twCollapsibleHeader {
+  padding: var(--tw-spacing-sm) var(--tw-spacing-md);
+  font-size: var(--tw-font-size-sm);
+}
+
+.twCollapsibleTitle {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.twCollapsibleSubtitle {
+  font-size: var(--tw-font-size-xs);
+  color: var(--ls-surface-fg, rgba(12, 12, 12, 0.5));
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.twCollapsibleIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ls-surface-fg, rgba(12, 12, 12, 0.5));
+  flex-shrink: 0;
+}
+
+.twCollapsibleContent {
+  overflow: hidden;
+}
+
+/* 前台窗口卡片 */
+.twForegroundCard {
+  padding: var(--tw-spacing-lg) var(--tw-spacing-xl);
+  background: rgba(59, 130, 246, 0.05);
+  border-left: 3px solid #3b82f6;
+}
+
+.twForegroundItem {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--tw-spacing-md);
+  padding: var(--tw-spacing-sm) 0;
+}
+
+.twForegroundItem:first-child {
+  padding-top: 0;
+}
+
+.twForegroundItem:last-child {
+  padding-bottom: 0;
+}
+
+.twForegroundLabel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 80px;
+  font-size: var(--tw-font-size-xs);
+  font-weight: 500;
+  color: var(--ls-surface-fg, rgba(12, 12, 12, 0.6));
+  flex-shrink: 0;
+}
+
+.twForegroundValue {
+  flex: 1;
+  font-size: var(--tw-font-size-sm);
+  color: var(--ls-surface-fg, rgba(12, 12, 12, 0.92));
+  word-break: break-all;
+}
+
+/* 历史列表 */
+.twHistoryList {
+  max-height: 300px;
+  overflow-y: auto;
+  padding: var(--tw-spacing-xs) 0;
+}
+
+.twHistoryList--compact {
+  max-height: 200px;
+}
+
+.twHistoryItem {
+  display: flex;
+  align-items: center;
+  gap: var(--tw-spacing-md);
+  padding: var(--tw-spacing-sm) var(--tw-spacing-xl);
+  font-size: var(--tw-font-size-md);
+}
+
+.twHistoryItem--compact {
+  padding: var(--tw-spacing-xs) var(--tw-spacing-md);
+  font-size: var(--tw-font-size-sm);
+  gap: var(--tw-spacing-sm);
+}
+
+.twHistoryItem:hover {
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.twHistoryDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #3b82f6;
+  flex-shrink: 0;
+}
+
+.twHistoryTitle {
+  flex: 1;
+  color: var(--ls-surface-fg, rgba(12, 12, 12, 0.92));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.twHistoryTime {
+  font-size: var(--tw-font-size-xs);
+  color: var(--ls-surface-fg, rgba(12, 12, 12, 0.5));
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  flex-shrink: 0;
+}
+
+/* 排序栏 */
+.twSortBar {
+  display: flex;
+  align-items: center;
+  gap: var(--tw-spacing-sm);
+  padding: var(--tw-spacing-md) var(--tw-spacing-xl);
+  border-bottom: 1px solid var(--ls-surface-border, rgba(0, 0, 0, 0.05));
+  flex-wrap: wrap;
+}
+
+.twSortBar--compact {
+  padding: var(--tw-spacing-sm) var(--tw-spacing-md);
+  gap: var(--tw-spacing-xs);
+}
+
+.twSortLabel {
+  font-size: var(--tw-font-size-xs);
+  color: var(--ls-surface-fg, rgba(12, 12, 12, 0.5));
+  margin-right: 4px;
+}
+
+.twSortBtn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  border: 1px solid var(--ls-surface-border, rgba(0, 0, 0, 0.1));
+  border-radius: 6px;
+  background: transparent;
+  font-size: var(--tw-font-size-xs);
+  font-weight: 500;
+  color: var(--ls-surface-fg, rgba(12, 12, 12, 0.6));
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.twSortBtn:hover {
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.twSortBtn--active {
+  background: rgba(59, 130, 246, 0.1);
+  border-color: #3b82f6;
+  color: #3b82f6;
+}
+
+/* 进程列表 */
+.twProcessList {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.twProcessList--compact {
+  max-height: 300px;
+}
+
+.twProcessHeader {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr;
+  gap: var(--tw-spacing-md);
+  padding: var(--tw-spacing-sm) var(--tw-spacing-xl);
+  font-size: var(--tw-font-size-xs);
+  font-weight: 600;
+  color: var(--ls-surface-fg, rgba(12, 12, 12, 0.5));
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  background: rgba(0, 0, 0, 0.02);
+  border-bottom: 1px solid var(--ls-surface-border, rgba(0, 0, 0, 0.05));
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.twProcessHeader--compact {
+  grid-template-columns: 1.5fr 1fr;
+  padding: var(--tw-spacing-xs) var(--tw-spacing-md);
+  font-size: 10px;
+}
+
+.twProcessBody {
+  padding: var(--tw-spacing-xs) 0;
+}
+
+.twProcessItem {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr;
+  gap: var(--tw-spacing-md);
+  align-items: center;
+  padding: var(--tw-spacing-sm) var(--tw-spacing-xl);
+  font-size: var(--tw-font-size-md);
+  transition: background-color 0.15s ease;
+}
+
+.twProcessItem--compact {
+  grid-template-columns: 1.5fr 1fr;
+  padding: var(--tw-spacing-xs) var(--tw-spacing-md);
+  font-size: var(--tw-font-size-sm);
+  gap: var(--tw-spacing-sm);
+}
+
+.twProcessItem:hover {
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.twProcessCol {
+  display: flex;
+  align-items: center;
+  gap: var(--tw-spacing-sm);
+  overflow: hidden;
+  min-width: 0;
+}
+
+.twProcessCol--name {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.twProcessName {
+  font-weight: 500;
+  color: var(--ls-surface-fg, rgba(12, 12, 12, 0.92));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.twProcessPid {
+  font-size: var(--tw-font-size-xs);
+  color: var(--ls-surface-fg, rgba(12, 12, 12, 0.4));
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.twProcessValue {
+  font-size: var(--tw-font-size-xs);
+  color: var(--ls-surface-fg, rgba(12, 12, 12, 0.7));
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  min-width: 40px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+/* 进度条 */
+.twProgressBar {
+  flex: 1;
+  height: 6px;
+  background: rgba(0, 0, 0, 0.08);
+  border-radius: 3px;
+  overflow: hidden;
+  min-width: 30px;
+}
+
+.twProgressFill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+/* 性能视图 */
+.twPerformanceGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--tw-spacing-lg);
+  padding: var(--tw-spacing-lg) var(--tw-spacing-xl);
+}
+
+.twPerformanceGrid--compact {
+  grid-template-columns: 1fr;
+  gap: var(--tw-spacing-sm);
+  padding: var(--tw-spacing-md);
+}
+
+.twPerformanceGrid--spacious {
+  gap: var(--tw-spacing-xl);
+  padding: var(--tw-spacing-xl);
+}
+
+/* 容器查询：小屏幕时改为单列 */
+@container watcher (max-width: 500px) {
+  .twPerformanceGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.twPerformanceCard {
+  padding: var(--tw-spacing-lg);
+  background: var(--ls-surface-bg, rgba(255, 255, 255, 0.58));
+  border: 1px solid var(--ls-surface-border, rgba(0, 0, 0, 0.1));
+  border-radius: var(--tw-border-radius-lg);
+}
+
+.twPerformanceCard--compact {
+  padding: var(--tw-spacing-md);
+}
+
+.twPerformanceCard--spacious {
+  padding: var(--tw-spacing-xl);
+}
+
+.twPerformanceHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--tw-spacing-sm);
+  font-size: var(--tw-font-size-sm);
+  font-weight: 500;
+  color: var(--ls-surface-fg, rgba(12, 12, 12, 0.6));
+  margin-bottom: var(--tw-spacing-md);
+}
+
+.twPerformanceValue {
+  font-size: 32px;
+  font-weight: 600;
+  color: var(--ls-surface-fg, rgba(12, 12, 12, 0.92));
+  margin-bottom: var(--tw-spacing-md);
+}
+
+.twPerformanceValue--compact {
+  font-size: 24px;
+}
+
+.twPerformanceValue--spacious {
+  font-size: 40px;
+}
+
+/* 深色主题适配 */
+:root[data-appearance='dark'] .twWatcherRoot {
+  --ls-surface-fg: rgba(255, 255, 255, 0.92);
+  --ls-surface-bg: rgba(25, 28, 36, 0.46);
+  --ls-surface-border: rgba(255, 255, 255, 0.12);
+}
+
+:root[data-appearance='dark'] .twStatCard,
+:root[data-appearance='dark'] .twPerformanceCard {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+:root[data-appearance='dark'] .twViewTabs {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+:root[data-appearance='dark'] .twViewTab--active {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+:root[data-appearance='dark'] .twForegroundCard {
+  background: rgba(59, 130, 246, 0.1);
+}
+
+:root[data-appearance='dark'] .twProcessHeader {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+:root[data-appearance='dark'] .twProgressBar {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* 滚动条样式 */
+.twHistoryList::-webkit-scrollbar,
+.twProcessList::-webkit-scrollbar {
+  width: 6px;
+}
+
+.twHistoryList::-webkit-scrollbar-track,
+.twProcessList::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.twHistoryList::-webkit-scrollbar-thumb,
+.twProcessList::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 3px;
+}
+
+.twHistoryList::-webkit-scrollbar-thumb:hover,
+.twProcessList::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+:root[data-appearance='dark'] .twHistoryList::-webkit-scrollbar-thumb,
+:root[data-appearance='dark'] .twProcessList::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+:root[data-appearance='dark'] .twHistoryList::-webkit-scrollbar-thumb:hover,
+:root[data-appearance='dark'] .twProcessList::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* 动画优化：减少动画偏好 */
+@media (prefers-reduced-motion: reduce) {
+  .twStatCard,
+  .twViewTab,
+  .twSortBtn,
+  .twProcessItem,
+  .twHistoryItem {
+    transition: none;
+  }
+  
+  .twProgressFill {
+    transition: none;
+  }
+}
+
+/* 触摸设备优化 */
+@media (pointer: coarse) {
+  .twViewTab,
+  .twSortBtn,
+  .twCollapsibleHeader {
+    min-height: 44px;
+  }
+  
+  .twControlBtn {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
