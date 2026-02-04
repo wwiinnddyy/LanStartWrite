@@ -227,6 +227,11 @@ async function handleCommand(command: string, payload: unknown): Promise<Command
         return { ok: true }
       }
 
+      if (action === 'openSettingsWindow') {
+        requestMain({ type: 'OPEN_SETTINGS_WINDOW' })
+        return { ok: true }
+      }
+
       return { ok: false, error: 'UNKNOWN_COMMAND' }
     }
 

@@ -308,7 +308,7 @@ function FloatingToolbarInner() {
                 <Button
                   size={uiButtonSize}
                   onClick={() => {
-                    void postCommand('toggle-subwindow', { kind: 'settings', placement: 'top' })
+                    void postCommand('app.openSettingsWindow')
                   }}
                 >
                   设置

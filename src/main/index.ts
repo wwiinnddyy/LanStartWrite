@@ -6,6 +6,10 @@ import { platform } from 'node:process'
 import { createTaskWatcherAdapter } from '../system_different_code'
 import { TaskWindowsWatcher } from '../task_windows_watcher/TaskWindowsWatcher'
 
+// 启用 DPI 感知支持
+app.commandLine.appendSwitch('high-dpi-support', '1')
+app.commandLine.appendSwitch('force-device-scale-factor', '1')
+
 let backendProcess: ChildProcessWithoutNullStreams | undefined
 
 const BACKEND_PORT = 3131
@@ -15,6 +19,7 @@ const WINDOW_ID_FLOATING_TOOLBAR_HANDLE = 'floating-toolbar-handle'
 const WINDOW_TITLE_FLOATING_TOOLBAR = '浮动工具栏'
 const WINDOW_ID_TOOLBAR_SUBWINDOW = 'toolbar-subwindow'
 const WINDOW_ID_WATCHER = 'watcher'
+const WINDOW_ID_SETTINGS_WINDOW = 'settings-window'
 const TOOLBAR_HANDLE_GAP = 10
 const TOOLBAR_HANDLE_WIDTH = 30
 const APPEARANCE_KV_KEY = 'app-appearance'
@@ -95,8 +100,20 @@ let floatingToolbarWindow: BrowserWindow | undefined
 let floatingToolbarHandleWindow: BrowserWindow | undefined
 let paintBoardWindow: BrowserWindow | undefined
 let watcherWindow: BrowserWindow | undefined
+let settingsWindow: BrowserWindow | undefined
 let taskWatcher: TaskWindowsWatcher | undefined
 let syncingToolbarPair = false
+
+// 根据 DPI 缩放调整窗口 zoomFactor
+function adjustWindowZoomFactor(win: BrowserWindow): void {
+  const display = screen.getDisplayMatching(win.getBounds())
+  const scaleFactor = display.scaleFactor
+  
+  // 如果缩放比例不是 1.0，调整 zoomFactor 以匹配 DPI
+  if (scaleFactor !== 1) {
+    win.webContents.setZoomFactor(scaleFactor)
+  }
+}
 const toolbarSubwindows = new Map<
   string,
   {
@@ -267,6 +284,11 @@ function createFloatingToolbarWindow(): BrowserWindow {
     win.loadFile(join(__dirname, '../renderer/index.html'), { query: { window: WINDOW_ID_FLOATING_TOOLBAR } })
   }
 
+  // 调整 DPI 缩放
+  win.webContents.on('did-finish-load', () => {
+    adjustWindowZoomFactor(win)
+  })
+
   return win
 }
 
@@ -381,6 +403,71 @@ function createWatcherWindow(): BrowserWindow {
   } else {
     win.loadFile(join(__dirname, '../renderer/index.html'), { query: { window: WINDOW_ID_WATCHER } })
   }
+
+  return win
+}
+
+function getOrCreateSettingsWindow(): BrowserWindow {
+  const existing = settingsWindow
+  if (existing && !existing.isDestroyed()) {
+    existing.show()
+    existing.focus()
+    return existing
+  }
+
+  const { width: screenWidth, height: screenHeight } = screen.getPrimaryDisplay().workAreaSize
+  const winWidth = 800
+  const winHeight = 500
+
+  const win = new BrowserWindow({
+    width: winWidth,
+    height: winHeight,
+    x: Math.round((screenWidth - winWidth) / 2),
+    y: Math.round((screenHeight - winHeight) / 2),
+    title: '设置',
+    resizable: true,
+    minimizable: true,
+    maximizable: false,
+    fullscreenable: false,
+    show: false,
+    frame: false,
+    transparent: true,
+    backgroundMaterial: 'mica',
+    backgroundColor: surfaceBackgroundColor(currentAppearance),
+    webPreferences: {
+      preload: join(__dirname, '../preload/index.js'),
+      sandbox: false,
+      contextIsolation: true,
+      nodeIntegration: false,
+    },
+  })
+
+  settingsWindow = win
+
+  win.once('ready-to-show', () => {
+    win.show()
+  })
+
+  win.on('closed', () => {
+    settingsWindow = undefined
+  })
+
+  applyWindowsBackdrop(win)
+  wireWindowDebug(win, 'settings-window')
+  wireWindowStatus(win, WINDOW_ID_SETTINGS_WINDOW)
+
+  const devUrl = getDevServerUrl()
+  if (devUrl) {
+    win.loadURL(`${devUrl}?window=${encodeURIComponent(WINDOW_ID_SETTINGS_WINDOW)}`)
+    if (process.env.LANSTART_OPEN_DEVTOOLS === '1') win.webContents.openDevTools({ mode: 'detach' })
+  } else {
+    win.loadFile(join(__dirname, '../renderer/index.html'), { query: { window: WINDOW_ID_SETTINGS_WINDOW } })
+  }
+
+  // 调整 DPI 缩放
+  win.webContents.on('did-finish-load', () => {
+    adjustWindowZoomFactor(win)
+  })
 
   return win
 }
@@ -826,6 +913,11 @@ function handleBackendControlMessage(message: any): void {
     win.on('closed', () => {
       if (watcherWindow === win) watcherWindow = undefined
     })
+    return
+  }
+
+  if (message.type === 'OPEN_SETTINGS_WINDOW') {
+    getOrCreateSettingsWindow()
     return
   }
 

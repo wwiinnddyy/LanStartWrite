@@ -1,0 +1,62 @@
+/* 设置窗口主样式 - 澎湃OS风格 */
+
+.settingsWindowRoot {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  padding: 0;
+  overflow: hidden;
+  color: var(--ls-surface-fg);
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, 'Apple Color Emoji',
+    'Segoe UI Emoji';
+  background: var(--ls-surface-bg);
+  border: 1px solid var(--ls-surface-border);
+  border-radius: 0;
+  box-shadow: var(--ls-surface-shadow);
+}
+
+.settingsWindowRoot::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: var(--hyper-glass-bg);
+  background-size: cover;
+  background-position: center;
+  transform: scale(1.08);
+  opacity: 0.32;
+  filter: saturate(1.12) contrast(1.04);
+  will-change: transform, opacity;
+}
+
+.settingsWindowRoot::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--ls-surface-overlay);
+  mix-blend-mode: var(--ls-surface-overlay-blend);
+  pointer-events: none;
+}
+
+.settingsWindowCard {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  padding: 0;
+}
+
+.settingsWindowMeasure {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-width: 800px;
+  min-height: 500px;
+}
+
+/* 深色主题适配 */
+:root[data-appearance='dark'] .settingsWindowRoot {
+  background: rgba(25, 28, 36, 0.95);
+  border-color: rgba(255, 255, 255, 0.12);
+}

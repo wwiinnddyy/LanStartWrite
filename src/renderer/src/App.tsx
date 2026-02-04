@@ -5,6 +5,7 @@ import { Button } from '../../button'
 import { EventsMenu, FeaturePanelMenu, PenSubmenu, SettingsMenu } from '../../toolbar-subwindows'
 import { TaskWindowsWatcherWindow } from '../../task_windows_watcher'
 import { PaintBoardApp } from '../../paint_board'
+import { SettingsWindow } from '../../settings'
 
 function useWindowParams(): { windowId: string; kind?: string } {
   return useMemo(() => {
@@ -81,6 +82,7 @@ export default function App() {
   if (windowId === WINDOW_ID_FLOATING_TOOLBAR_HANDLE) return <FloatingToolbarHandleApp />
   if (windowId === 'paint-board') return <PaintBoardApp />
   if (windowId === 'watcher') return <TaskWindowsWatcherWindow />
+  if (windowId === 'settings-window') return <SettingsWindow />
 
   if (windowId === 'toolbar-subwindow') {
     if (kind === 'events') return <EventsMenu kind="events" />

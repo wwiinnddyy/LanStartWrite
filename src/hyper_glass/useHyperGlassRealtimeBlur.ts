@@ -106,24 +106,32 @@ export function useHyperGlassRealtimeBlur(options: {
       const cropW = Math.max(1, Math.round(sw))
       const cropH = Math.max(1, Math.round(sh))
 
+      // 考虑 DPI 缩放
+      const dpr = window.devicePixelRatio || 1
+
       const canvas = document.createElement('canvas')
-      canvas.width = cropW
-      canvas.height = cropH
+      canvas.width = cropW * dpr
+      canvas.height = cropH * dpr
+      canvas.style.width = `${cropW}px`
+      canvas.style.height = `${cropH}px`
       const ctx = canvas.getContext('2d', { willReadFrequently: true })
       if (!ctx) return
 
+      ctx.scale(dpr, dpr)
       ctx.drawImage(bmp, sx, sy, sw, sh, 0, 0, cropW, cropH)
       bmp.close()
 
-      const imageData = ctx.getImageData(0, 0, cropW, cropH)
+      const imageData = ctx.getImageData(0, 0, cropW * dpr, cropH * dpr)
       const { image } = computeThumbnailBlur(
         { width: imageData.width, height: imageData.height, data: imageData.data },
-        { maxSide: blurMaxSide, radius: blurRadius, passes: blurPasses }
+        { maxSide: blurMaxSide * dpr, radius: blurRadius * dpr, passes: blurPasses }
       )
 
       const outCanvas = document.createElement('canvas')
       outCanvas.width = image.width
       outCanvas.height = image.height
+      outCanvas.style.width = `${image.width / dpr}px`
+      outCanvas.style.height = `${image.height / dpr}px`
       const outCtx = outCanvas.getContext('2d', { willReadFrequently: false })
       if (!outCtx) return
       const outImageData = new ImageData(image.data, image.width, image.height)

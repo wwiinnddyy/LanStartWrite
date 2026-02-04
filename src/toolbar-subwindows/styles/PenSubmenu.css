@@ -1,59 +1,65 @@
 /* 笔二级菜单样式 */
 
 .penSubmenu {
-  width: 280px;
-  background: var(--ls-surface-bg, rgba(255, 255, 255, 0.9));
-  border: 1px solid var(--ls-surface-border, rgba(0, 0, 0, 0.1));
-  border-radius: 12px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
-  padding: 16px;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  width: 100%;
+  min-width: 380px; /* 增加宽度以容纳两列布局 */
+  padding: 8px 12px;
+  box-sizing: border-box;
 }
 
-/* 主网格布局 */
-.penSubmenuGrid {
-  display: grid;
-  grid-template-columns: 1.5fr 1fr;
-  gap: 12px;
-  margin-bottom: 12px;
+/* 覆盖 subwindowMeasure 的 inline-block */
+.penSubmenu .subwindowMeasure {
+  display: block;
+  width: 100%;
 }
 
-/* 颜色区域 */
-.penColorSection {
+/* 主内容容器 - 左右分栏 */
+.penSubmenuContent {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  gap: 16px;
+  width: 100%;
+  padding-top: 4px;
+}
+
+/* 左列：颜色选择 */
+.penColorSection {
+  flex: 0 0 auto; /* 固定宽度，由内容决定 */
 }
 
 .penColorGrid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
+  grid-template-rows: repeat(4, auto); /* 4行 */
+  gap: 10px;
+  justify-items: center;
 }
 
 /* 颜色按钮 */
 .penColorButton {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
+  width: 44px;
+  height: 32px;
+  border-radius: 8px; /* 圆角矩形 */
   border: 2px solid transparent;
   cursor: pointer;
   position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s ease;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .penColorButton:hover {
   transform: scale(1.1);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 1;
 }
 
 .penColorButton--active {
   border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2), 0 4px 8px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2), 0 4px 8px rgba(0, 0, 0, 0.15);
+  transform: scale(1.05);
 }
 
 .penColorCheck {
@@ -62,96 +68,104 @@
   justify-content: center;
 }
 
-/* 笔类型区域 */
+/* 垂直分隔线 */
+.penSubmenuVerticalDivider {
+  width: 1px;
+  background: rgba(0, 0, 0, 0.08);
+  margin: 0 4px;
+}
+
+/* 右列：控制区 (笔类型 + 粗细) */
+.penControlSection {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-width: 160px;
+}
+
+/* 笔类型列表 */
 .penTypeSection {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
+  align-items: flex-end; /* 靠右对齐 */
+  padding-right: 4px; /* 给移动留出空间 */
 }
 
-/* 笔类型卡片（带前推动画） */
+/* 笔类型卡片 (Office 风格) */
 .penTypeCard {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  padding: 10px 6px;
-  border-radius: 10px;
-  border: 1px solid var(--ls-surface-border, rgba(0, 0, 0, 0.1));
-  background: var(--ls-surface-bg, rgba(255, 255, 255, 0.58));
-  cursor: pointer;
-  position: relative;
-  transition: border-color 0.2s ease;
-}
-
-.penTypeCard:hover {
-  border-color: rgba(59, 130, 246, 0.3);
-}
-
-.penTypeCard--active {
-  border-color: #3b82f6;
-  background: linear-gradient(
-    180deg,
-    rgba(59, 130, 246, 0.08) 0%,
-    rgba(59, 130, 246, 0.02) 100%
-  );
-}
-
-.penTypeIcon {
-  width: 24px;
-  height: 24px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--ls-surface-fg, rgba(12, 12, 12, 0.8));
+  padding: 4px;
+  height: 48px;
+  width: 100%; /* 占满宽度，但内容靠右 */
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  position: relative;
+  transition: background-color 0.2s ease;
+}
+
+.penTypeCard:hover {
+  /* background: handled by motion prop or specific hover style */
+}
+
+/* 笔图标容器 */
+.penTypeIcon {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end; /* 图标靠右 */
+  padding-right: 8px;
 }
 
 .penTypeIcon svg {
-  width: 100%;
+  width: auto;
   height: 100%;
+  max-height: 40px;
+  overflow: visible;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));
 }
 
-.penTypeLabel {
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--ls-surface-fg, rgba(12, 12, 12, 0.7));
+/* 粗细控制区 */
+.penThicknessSection {
+  margin-top: 16px;
+  padding: 8px 4px;
+  background: rgba(0, 0, 0, 0.02);
+  border-radius: 8px;
 }
 
-.penTypeIndicator {
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: #3b82f6;
-  position: absolute;
-  bottom: 4px;
-}
-
-/* 分隔线 */
-.penSubmenuDivider {
-  height: 1px;
-  background: var(--ls-surface-border, rgba(0, 0, 0, 0.1));
-  margin: 12px 0;
-}
-
-/* 粗细控制 */
 .penThicknessControl {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 0 4px;
+  gap: 12px;
+  height: 24px;
 }
 
 .penThicknessLabel {
-  font-size: 13px;
+  font-size: 14px;
+  color: var(--ls-surface-fg, rgba(12, 12, 12, 0.8));
+  /* 手写体风格可选，这里先用常规字体 */
   font-weight: 500;
-  color: var(--ls-surface-fg, rgba(12, 12, 12, 0.7));
-  white-space: nowrap;
+}
+
+.penThicknessValue {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ls-surface-fg, rgba(12, 12, 12, 0.8));
+  min-width: 32px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 
 .penSliderContainer {
   flex: 1;
   position: relative;
-  height: 20px;
+  height: 24px;
   display: flex;
   align-items: center;
 }
@@ -161,12 +175,13 @@
   height: 6px;
   -webkit-appearance: none;
   appearance: none;
-  background: rgba(0, 0, 0, 0.1);
+  background: rgba(0, 0, 0, 0.08);
   border-radius: 3px;
   outline: none;
   cursor: pointer;
   position: relative;
   z-index: 2;
+  margin: 0;
 }
 
 .penSlider::-webkit-slider-thumb {
@@ -175,24 +190,24 @@
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: #3b82f6;
+  background: #ffffff;
+  border: 2px solid #3b82f6;
   cursor: pointer;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
   transition: transform 0.15s ease;
+  margin-top: -5px;
+}
+
+.penSlider::-webkit-slider-runnable-track {
+  width: 100%;
+  height: 6px;
+  cursor: pointer;
+  background: transparent;
+  border-radius: 3px;
 }
 
 .penSlider::-webkit-slider-thumb:hover {
   transform: scale(1.1);
-}
-
-.penSlider::-moz-range-thumb {
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: #3b82f6;
-  cursor: pointer;
-  border: none;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
 .penSliderTrack {
@@ -207,149 +222,23 @@
   z-index: 1;
 }
 
-.penThicknessValue {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--ls-surface-fg, rgba(12, 12, 12, 0.8));
-  min-width: 36px;
-  text-align: right;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-}
-
-/* 底部状态栏 */
+/* 隐藏底部状态栏 */
 .penSubmenuFooter {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 4px;
+  display: none;
 }
 
-.penStatusInfo {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: 1;
-  min-width: 0;
-}
-
-.penStatusName {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--ls-surface-fg, rgba(12, 12, 12, 0.9));
-}
-
-.penStatusParams {
-  font-size: 12px;
-  color: var(--ls-surface-fg, rgba(12, 12, 12, 0.6));
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-}
-
-.penStatusColor {
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  border: 1px solid rgba(0, 0, 0, 0.2);
-  flex-shrink: 0;
-}
-
-.penStatusColorName {
-  font-size: 12px;
-  color: var(--ls-surface-fg, rgba(12, 12, 12, 0.6));
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.penStatusActions {
-  display: flex;
-  gap: 6px;
-  flex-shrink: 0;
-}
-
-.penActionBtn {
-  padding: 6px;
-  min-width: 32px;
-  min-height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-/* 深色主题适配 */
-:root[data-appearance='dark'] .penSubmenu {
-  background: rgba(25, 28, 36, 0.9);
-  border-color: rgba(255, 255, 255, 0.12);
-}
-
-:root[data-appearance='dark'] .penTypeCard {
-  background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.1);
-}
-
-:root[data-appearance='dark'] .penTypeCard--active {
-  background: linear-gradient(
-    180deg,
-    rgba(59, 130, 246, 0.15) 0%,
-    rgba(59, 130, 246, 0.05) 100%
-  );
-}
-
-:root[data-appearance='dark'] .penSlider {
-  background: rgba(255, 255, 255, 0.15);
-}
-
-:root[data-appearance='dark'] .penSliderTrack {
-  background: #60a5fa;
-}
-
-:root[data-appearance='dark'] .penSlider::-webkit-slider-thumb {
-  background: #60a5fa;
-}
-
-:root[data-appearance='dark'] .penColorButton--active {
-  border-color: #60a5fa;
-  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.3);
-}
-
-/* 响应式优化 */
-@media (max-width: 320px) {
+/* 响应式调整 */
+@media (max-width: 400px) {
   .penSubmenu {
-    width: 260px;
-    padding: 12px;
-  }
-  
-  .penSubmenuGrid {
-    gap: 8px;
+    min-width: 340px;
   }
   
   .penColorButton {
-    width: 32px;
-    height: 32px;
+    width: 28px;
+    height: 28px;
   }
-}
-
-/* 触摸设备优化 */
-@media (pointer: coarse) {
-  .penColorButton {
-    width: 40px;
+  
+  .penTypeCard {
     height: 40px;
-  }
-  
-  .penTypeCard {
-    padding: 12px 8px;
-    min-height: 60px;
-  }
-  
-  .penSlider::-webkit-slider-thumb {
-    width: 20px;
-    height: 20px;
-  }
-}
-
-/* 减少动画偏好 */
-@media (prefers-reduced-motion: reduce) {
-  .penColorButton,
-  .penTypeCard {
-    transition: none;
   }
 }

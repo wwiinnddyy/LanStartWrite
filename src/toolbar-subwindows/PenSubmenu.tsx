@@ -7,7 +7,7 @@ import './styles/PenSubmenu.css'
 
 type PenType = 'writing' | 'highlighter' | 'laser'
 
-// 预设颜色
+// 预设颜色 - 3x4 布局需要 12 个颜色
 const PRESET_COLORS = [
   '#000000', // 黑色
   '#FF0000', // 红色
@@ -18,57 +18,76 @@ const PRESET_COLORS = [
   '#FFA500', // 橙色
   '#00FFFF', // 青色
   '#FFFFFF', // 白色
+  '#808080', // 灰色 (新增)
+  '#795548', // 棕色 (新增)
+  '#E91E63', // 粉色 (新增)
 ]
 
-// Word 风格的彩色铅笔/钢笔图标（侧视图）
+// 倾斜的彩色铅笔/钢笔图标（更符合草图效果）
 function WritingPenIcon({ color = '#333' }: { color?: string }) {
   return (
-    <svg viewBox="0 0 48 24" width="48" height="24">
-      {/* 笔尖 */}
-      <path d="M2 12 L8 8 L8 16 Z" fill={color} />
-      {/* 笔杆金属环 */}
-      <rect x="8" y="9" width="3" height="6" fill="#C0C0C0" />
-      {/* 笔杆主体 */}
-      <rect x="11" y="7" width="30" height="10" rx="1" fill={color} />
-      {/* 笔杆高光 */}
-      <rect x="13" y="8" width="26" height="3" rx="0.5" fill="rgba(255,255,255,0.3)" />
-      {/* 笔尾 */}
-      <rect x="41" y="8" width="4" height="8" rx="1" fill={color} />
+    <svg viewBox="0 0 60 36" width="60" height="36">
+      <g transform="rotate(-25, 30, 18)">
+        {/* 铅笔尖 - 木质削尖部分 */}
+        <path d="M2 18 L12 12 L12 24 Z" fill={color} />
+        {/* 木质笔杆 */}
+        <rect x="12" y="11" width="8" height="14" fill="#DEB887" />
+        {/* 金属环 - 连接木质和笔杆 */}
+        <rect x="20" y="10" width="4" height="16" fill="#C0C0C0" />
+        {/* 彩色笔杆主体 */}
+        <rect x="24" y="9" width="22" height="18" rx="2" fill={color} />
+        {/* 笔杆高光 */}
+        <rect x="26" y="11" width="18" height="5" rx="1" fill="rgba(255,255,255,0.4)" />
+        {/* 笔尾橡皮 */}
+        <rect x="46" y="10" width="8" height="16" rx="3" fill="#FF6B6B" />
+        {/* 橡皮金属箍 */}
+        <rect x="46" y="13" width="2" height="10" fill="#C0C0C0" />
+      </g>
     </svg>
   )
 }
 
 function HighlighterIcon({ color = '#FFEB3B' }: { color?: string }) {
   return (
-    <svg viewBox="0 0 48 24" width="48" height="24">
-      {/* 笔尖 - 荧光笔特有的斜切形状 */}
-      <path d="M2 12 L10 6 L10 18 Z" fill={color} />
-      {/* 笔杆 - 较粗的方形 */}
-      <rect x="10" y="5" width="32" height="14" rx="2" fill={color} />
-      {/* 笔帽/笔尾 */}
-      <rect x="42" y="7" width="4" height="10" rx="1" fill={color} />
-      <rect x="42" y="7" width="4" height="10" rx="1" fill="rgba(0,0,0,0.1)" />
-      {/* 高光 */}
-      <rect x="12" y="7" width="28" height="4" rx="1" fill="rgba(255,255,255,0.4)" />
+    <svg viewBox="0 0 60 36" width="60" height="36">
+      <g transform="rotate(-25, 30, 18)">
+        {/* 荧光笔斜切笔尖 */}
+        <path d="M4 18 L14 10 L14 26 Z" fill={color} />
+        {/* 笔尖深色部分 */}
+        <path d="M4 18 L8 15 L8 21 Z" fill="rgba(0,0,0,0.2)" />
+        {/* 粗笔杆 */}
+        <rect x="14" y="8" width="30" height="20" rx="3" fill={color} />
+        {/* 笔帽夹 */}
+        <rect x="30" y="5" width="4" height="8" rx="1" fill="rgba(0,0,0,0.3)" />
+        {/* 高光 */}
+        <rect x="16" y="10" width="26" height="6" rx="2" fill="rgba(255,255,255,0.5)" />
+        {/* 笔尾 */}
+        <rect x="44" y="10" width="10" height="16" rx="4" fill={color} />
+        <rect x="44" y="10" width="10" height="16" rx="4" fill="rgba(0,0,0,0.1)" />
+      </g>
     </svg>
   )
 }
 
 function LaserPenIcon({ color = '#2196F3' }: { color?: string }) {
   return (
-    <svg viewBox="0 0 48 24" width="48" height="24">
-      {/* 激光发射口 */}
-      <circle cx="5" cy="12" r="3" fill="#FF5722" />
-      {/* 笔尖金属部分 */}
-      <rect x="8" y="10" width="4" height="4" fill="#C0C0C0" />
-      {/* 笔杆 */}
-      <rect x="12" y="8" width="28" height="8" rx="1" fill={color} />
-      {/* 按钮 */}
-      <rect x="20" y="6" width="8" height="3" rx="1" fill="#FF5722" />
-      {/* 高光 */}
-      <rect x="14" y="9" width="24" height="2" rx="0.5" fill="rgba(255,255,255,0.3)" />
-      {/* 笔尾 */}
-      <rect x="40" y="9" width="4" height="6" rx="1" fill={color} />
+    <svg viewBox="0 0 60 36" width="60" height="36">
+      <g transform="rotate(-25, 30, 18)">
+        {/* 激光点 - 发光效果 */}
+        <circle cx="6" cy="18" r="4" fill="#FF4444" />
+        <circle cx="6" cy="18" r="6" fill="rgba(255,68,68,0.3)" />
+        {/* 金属笔尖 */}
+        <rect x="10" y="14" width="6" height="8" fill="#C0C0C0" />
+        {/* 细长笔杆 */}
+        <rect x="16" y="12" width="28" height="12" rx="2" fill={color} />
+        {/* 红色按钮 */}
+        <rect x="24" y="8" width="10" height="5" rx="2" fill="#FF4444" />
+        {/* 高光 */}
+        <rect x="18" y="14" width="24" height="4" rx="1" fill="rgba(255,255,255,0.4)" />
+        {/* 笔尾挂绳孔 */}
+        <rect x="44" y="14" width="8" height="8" rx="4" fill="#333" />
+        <rect x="46" y="16" width="4" height="4" rx="2" fill={color} />
+      </g>
     </svg>
   )
 }
@@ -130,7 +149,7 @@ function ColorButton({
   )
 }
 
-// 笔类型按钮组件（带前推动画）
+// 笔类型按钮组件（Office 风格：无文字，选中时向左移动）
 function PenTypeButton({
   type,
   label,
@@ -150,46 +169,19 @@ function PenTypeButton({
     <motion.button
       className={`penTypeCard ${isActive ? 'penTypeCard--active' : ''}`}
       onClick={onClick}
-      whileHover={{ y: -2 }}
+      whileHover={{ x: isActive ? -12 : -4 }} // 悬停时稍微移动
       whileTap={{ scale: 0.98 }}
-      animate={
-        isActive
-          ? {
-              y: -6,
-              boxShadow: '0 12px 24px rgba(0,0,0,0.12), 0 6px 12px rgba(0,0,0,0.08)',
-            }
-          : {
-              y: 0,
-              boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-            }
-      }
-      transition={{ duration: 0.2, ease: [0.2, 0.8, 0.2, 1] }}
+      title={label}
+      animate={{ 
+        x: isActive ? -12 : 0, // 选中时向左移动露出更多
+        backgroundColor: isActive ? 'rgba(59, 130, 246, 0.1)' : 'transparent'
+      }}
+      transition={{ type: "spring", stiffness: 400, damping: 30 }}
     >
-      <motion.div
-        className="penTypeIcon"
-        animate={
-          isActive
-            ? {
-                scale: 1.15,
-                y: -3,
-                filter: 'drop-shadow(0 4px 8px rgba(59, 130, 246, 0.4))',
-              }
-            : {
-                scale: 1,
-                y: 0,
-                filter: 'drop-shadow(0 0 0 transparent)',
-              }
-        }
-        transition={{ duration: 0.2 }}
-      >
+      {/* 笔图标 */}
+      <div className="penTypeIcon">
         {icon(iconColor)}
-      </motion.div>
-      <span className="penTypeLabel">{label}</span>
-      <motion.span
-        className="penTypeIndicator"
-        animate={isActive ? { scale: 1, opacity: 1 } : { scale: 0, opacity: 0 }}
-        transition={{ duration: 0.15 }}
-      />
+      </div>
     </motion.button>
   )
 }
@@ -213,13 +205,14 @@ function ThicknessSlider({
           value={value}
           onChange={(e) => onChange(Number(e.target.value))}
           className="penSlider"
+          title={`粗细: ${value}px`}
         />
         <div
           className="penSliderTrack"
           style={{ width: `${(value / 50) * 100}%` }}
         />
       </div>
-      <span className="penThicknessValue">{value}px</span>
+      <span className="penThicknessValue">{value}</span>
     </div>
   )
 }
@@ -254,7 +247,7 @@ export function PenSubmenu(props: { kind: string }) {
       const measureRect = measure?.getBoundingClientRect()
       const contentWidth = Math.max(measure?.scrollWidth ?? 0, measureRect?.width ?? 0)
       const contentHeight = Math.max(measure?.scrollHeight ?? 0, measureRect?.height ?? 0)
-      const width = Math.max(280, Math.min(1600, Math.ceil(contentWidth) + 26))
+      const width = Math.max(360, Math.min(1600, Math.ceil(contentWidth) + 32))
       const height = Math.max(60, Math.min(900, Math.ceil(contentHeight) + 26))
       if (width === lastWidth && height === lastHeight) return
       lastWidth = width
@@ -279,21 +272,6 @@ export function PenSubmenu(props: { kind: string }) {
     }
   }, [props.kind])
 
-  const getColorName = (color: string) => {
-    const colorNames: Record<string, string> = {
-      '#000000': '黑色',
-      '#FF0000': '红色',
-      '#0000FF': '蓝色',
-      '#00FF00': '绿色',
-      '#FFFF00': '黄色',
-      '#FF00FF': '紫色',
-      '#FFA500': '橙色',
-      '#00FFFF': '青色',
-      '#FFFFFF': '白色',
-    }
-    return colorNames[color] || '自定义'
-  }
-
   // 应用笔设置
   const applyPenSettings = () => {
     void postCommand('app.setPenSettings', {
@@ -306,7 +284,7 @@ export function PenSubmenu(props: { kind: string }) {
   return (
     <motion.div
       ref={rootRef}
-      className="subwindowRoot"
+      className="subwindowRoot penSubmenu"
       initial={reduceMotion ? false : { opacity: 0, y: 8, scale: 0.99 }}
       animate={reduceMotion ? undefined : { opacity: 1, y: 0, scale: 1 }}
       transition={reduceMotion ? undefined : { duration: 0.18, ease: [0.2, 0.8, 0.2, 1] }}
@@ -319,9 +297,10 @@ export function PenSubmenu(props: { kind: string }) {
             <span className="subwindowMeta">{props.kind}</span>
           </div>
 
-          {/* 主内容区：颜色 + 笔类型 */}
-          <div className="penSubmenuGrid">
-            {/* 左侧：颜色九宫格 */}
+          {/* 主内容区：左右两列布局 */}
+          <div className="penSubmenuContent">
+            
+            {/* 左列：颜色九宫格 (3x4) */}
             <div className="penColorSection">
               <div className="penColorGrid">
                 {PRESET_COLORS.map((color) => (
@@ -338,52 +317,42 @@ export function PenSubmenu(props: { kind: string }) {
               </div>
             </div>
 
-            {/* 右侧：笔类型选择 */}
-            <div className="penTypeSection">
-              {PEN_TYPES.map((pen) => (
-                <PenTypeButton
-                  key={pen.type}
-                  type={pen.type}
-                  label={pen.label}
-                  icon={pen.icon}
-                  iconColor={pen.type === 'writing' ? selectedColor : pen.defaultColor}
-                  isActive={selectedPenType === pen.type}
-                  onClick={() => {
-                    setSelectedPenType(pen.type)
+            {/* 垂直分隔线 */}
+            <div className="penSubmenuVerticalDivider" />
+
+            {/* 右列：笔类型 + 粗细调节 */}
+            <div className="penControlSection">
+              {/* 笔类型列表 */}
+              <div className="penTypeSection">
+                {PEN_TYPES.map((pen) => (
+                  <PenTypeButton
+                    key={pen.type}
+                    type={pen.type}
+                    label={pen.label}
+                    icon={pen.icon}
+                    iconColor={pen.type === 'writing' ? selectedColor : pen.defaultColor}
+                    isActive={selectedPenType === pen.type}
+                    onClick={() => {
+                      setSelectedPenType(pen.type)
+                      applyPenSettings()
+                    }}
+                  />
+                ))}
+              </div>
+
+              {/* 粗细调节 */}
+              <div className="penThicknessSection">
+                <ThicknessSlider 
+                  value={thickness} 
+                  onChange={(value) => {
+                    setThickness(value)
                     applyPenSettings()
-                  }}
+                  }} 
                 />
-              ))}
+              </div>
             </div>
           </div>
-
-          {/* 粗细滑块 */}
-          <div className="penSubmenuDivider" />
-          <ThicknessSlider 
-            value={thickness} 
-            onChange={(value) => {
-              setThickness(value)
-              applyPenSettings()
-            }} 
-          />
-
-          {/* 底部状态栏 */}
-          <div className="penSubmenuDivider" />
-          <div className="penSubmenuFooter">
-            <div className="penStatusInfo">
-              <span className="penStatusName">
-                {PEN_TYPES.find((p) => p.type === selectedPenType)?.label}
-              </span>
-              <span className="penStatusParams">{thickness}px</span>
-              <span
-                className="penStatusColor"
-                style={{ backgroundColor: selectedColor }}
-              />
-              <span className="penStatusColorName">
-                {getColorName(selectedColor)}
-              </span>
-            </div>
-          </div>
+          
         </div>
       </div>
     </motion.div>
