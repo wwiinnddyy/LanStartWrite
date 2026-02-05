@@ -19,6 +19,8 @@ declare global {
       putUiStateKey: (windowId: string, key: string, value: unknown) => Promise<null>
       deleteUiStateKey: (windowId: string, key: string) => Promise<null>
       apiRequest: (input: { method: string; path: string; body?: unknown }) => Promise<{ status: number; body: unknown }>
+      setZoomLevel: (level: number) => void
+      getZoomLevel: () => number
     }
   }
 }

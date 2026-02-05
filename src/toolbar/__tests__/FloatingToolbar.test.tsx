@@ -21,7 +21,9 @@ describe('FloatingToolbar', () => {
       getUiState: async () => ({}),
       putUiStateKey: async () => null,
       deleteUiStateKey: async () => null,
-      apiRequest: async () => ({ status: 200, body: { ok: true } })
+      apiRequest: async () => ({ status: 200, body: { ok: true } }),
+      setZoomLevel: (level: number) => {},
+      getZoomLevel: () => 1
     }
 
     render(<FloatingToolbarApp />)
@@ -47,7 +49,9 @@ describe('FloatingToolbar', () => {
       getUiState: async () => ({}),
       putUiStateKey: async () => null,
       deleteUiStateKey: async () => null,
-      apiRequest: async () => ({ status: 200, body: { ok: true } })
+      apiRequest: async () => ({ status: 200, body: { ok: true } }),
+      setZoomLevel: (level: number) => {},
+      getZoomLevel: () => 1
     }
 
     render(<FloatingToolbarApp />)
@@ -72,7 +76,9 @@ describe('FloatingToolbar', () => {
         return null
       },
       deleteUiStateKey: async () => null,
-      apiRequest: async () => ({ status: 200, body: { ok: true } })
+      apiRequest: async () => ({ status: 200, body: { ok: true } }),
+      setZoomLevel: (level: number) => {},
+      getZoomLevel: () => 1
     }
 
     render(<FloatingToolbarApp />)
@@ -95,7 +101,9 @@ describe('FloatingToolbar', () => {
       getUiState: async () => ({}),
       putUiStateKey: async () => null,
       deleteUiStateKey: async () => null,
-      apiRequest: async () => ({ status: 200, body: { ok: true } })
+      apiRequest: async () => ({ status: 200, body: { ok: true } }),
+      setZoomLevel: (level: number) => {},
+      getZoomLevel: () => 1
     }
 
     const unhandled = vi.fn()

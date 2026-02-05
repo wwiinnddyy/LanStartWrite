@@ -6,6 +6,7 @@ import { TOOLBAR_STATE_KEY, useAppMode } from '../status'
 import { usePersistedState } from './hooks/usePersistedState'
 import { markQuitting, postCommand } from './hooks/useBackend'
 import { useToolbarWindowAutoResize } from './hooks/useToolbarWindowAutoResize'
+import { useZoomOnWheel } from './hooks/useZoomOnWheel'
 import './styles/toolbar.css'
 
 function ToolbarToolIcon(props: { kind: 'mouse' | 'pen' | 'eraser' | 'whiteboard' }) {
@@ -140,6 +141,7 @@ function FloatingToolbarInner() {
 
   useToolbarWindowAutoResize({ root: contentRef.current })
   useHyperGlassRealtimeBlur({ root: rootRef.current })
+  useZoomOnWheel()
 
   const toggleExpanded = () => {
     setState({ ...state, expanded: !isExpanded })

@@ -269,7 +269,7 @@ export class AppWindowsManager {
       title: '设置',
       resizable: true,
       minimizable: true,
-      maximizable: false,
+      maximizable: true,
       fullscreenable: false,
       show: false,
       frame: false,

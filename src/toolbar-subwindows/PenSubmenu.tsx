@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { motion, useReducedMotion } from '../Framer_Motion'
 import { useHyperGlassRealtimeBlur } from '../hyper_glass'
 import { postCommand } from '../toolbar/hooks/useBackend'
+import { useZoomOnWheel } from '../toolbar/hooks/useZoomOnWheel'
 import './styles/subwindow.css'
 import './styles/PenSubmenu.css'
 
@@ -219,6 +220,7 @@ function ThicknessSlider({
 
 // 主组件
 export function PenSubmenu(props: { kind: string }) {
+  useZoomOnWheel()
   const rootRef = useRef<HTMLDivElement | null>(null)
   const cardRef = useRef<HTMLDivElement | null>(null)
   const measureRef = useRef<HTMLDivElement | null>(null)

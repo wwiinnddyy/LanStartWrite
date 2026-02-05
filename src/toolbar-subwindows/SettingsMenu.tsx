@@ -4,9 +4,11 @@ import { motion, useReducedMotion } from '../Framer_Motion'
 import { useHyperGlassRealtimeBlur } from '../hyper_glass'
 import { markQuitting, postCommand } from '../toolbar/hooks/useBackend'
 import { useAppAppearance } from '../status'
+import { useZoomOnWheel } from '../toolbar/hooks/useZoomOnWheel'
 import './styles/subwindow.css'
 
 export function SettingsMenu(props: { kind: string }) {
+  useZoomOnWheel()
   const rootRef = useRef<HTMLDivElement | null>(null)
   const cardRef = useRef<HTMLDivElement | null>(null)
   const measureRef = useRef<HTMLDivElement | null>(null)

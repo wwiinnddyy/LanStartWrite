@@ -3,6 +3,8 @@ body {
   margin: 0;
   padding: 0;
   background: transparent;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 :root {
@@ -69,6 +71,11 @@ body {
   padding: 14px;
   font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
   color: var(--ls-surface-fg);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
 }
 
 .childHeader {

@@ -33,6 +33,7 @@ function surfaceBackgroundColor(appearance: Appearance): string {
 
 let currentAppearance: Appearance = 'light'
 let didApplyAppearance = false
+let toolbarUiZoom = 0
 
 type BackendRpcResponse =
   | { type: 'RPC_RESPONSE'; id: number; ok: true; result: unknown }
@@ -91,6 +92,21 @@ function applyAppearance(appearance: Appearance): void {
     } catch {}
   }
   broadcastAppearanceToUiState(appearance)
+}
+
+function applyToolbarUiZoom(zoom: number): void {
+  const targets = [
+    floatingToolbarWindow,
+    floatingToolbarHandleWindow,
+    ...Array.from(toolbarSubwindows.values()).map((v) => v.win)
+  ]
+  for (const win of targets) {
+    if (win && !win.isDestroyed()) {
+      try {
+        win.webContents.setZoomLevel(zoom)
+      } catch {}
+    }
+  }
 }
 
 let floatingToolbarWindow: BrowserWindow | undefined
@@ -270,6 +286,9 @@ function createFloatingToolbarWindow(): BrowserWindow {
   win.setAlwaysOnTop(true, 'floating')
   wireWindowDebug(win, 'floating-toolbar')
   wireWindowStatus(win, WINDOW_ID_FLOATING_TOOLBAR)
+  try {
+    win.webContents.setZoomLevel(toolbarUiZoom)
+  } catch {}
   win.on('move', () => scheduleRepositionToolbarSubwindows('move'))
   win.on('resize', () => scheduleRepositionToolbarSubwindows('resize'))
   win.on('show', () => {
@@ -328,6 +347,9 @@ function createFloatingToolbarHandleWindow(owner: BrowserWindow): BrowserWindow 
   win.setAlwaysOnTop(true, 'floating')
   wireWindowDebug(win, 'floating-toolbar-handle')
   wireWindowStatus(win, WINDOW_ID_FLOATING_TOOLBAR_HANDLE)
+  try {
+    win.webContents.setZoomLevel(toolbarUiZoom)
+  } catch {}
 
   win.on('move', () => {
     if (syncingToolbarPair) return
@@ -470,12 +492,16 @@ function animateToolbarSubwindowTo(item: { win: BrowserWindow; animationTimer?: 
   item.animationTimer = setTimeout(tick, 0)
 }
 
+function getUiZoomFactor(): number {
+  return Math.pow(1.2, toolbarUiZoom)
+}
+
 function computeToolbarSubwindowBounds(
   item: { effectivePlacement: 'top' | 'bottom'; width: number; height: number },
   ownerBounds: Bounds,
   workArea: WorkArea
 ) {
-  const gap = 10
+  const gap = Math.round(TOOLBAR_HANDLE_GAP * getUiZoomFactor())
   const widthLimit = Math.max(60, workArea.width - 20)
   const width = Math.max(60, Math.min(widthLimit, Math.round(item.width)))
   const heightLimit = Math.max(60, workArea.height - 20)
@@ -517,8 +543,9 @@ function repositionToolbarSubwindows(animate: boolean) {
 
   const handle = floatingToolbarHandleWindow
   if (handle && !handle.isDestroyed() && handle.isVisible()) {
+    const gap = Math.round(TOOLBAR_HANDLE_GAP * getUiZoomFactor())
     const next = {
-      x: ownerBounds.x + ownerBounds.width + TOOLBAR_HANDLE_GAP,
+      x: ownerBounds.x + ownerBounds.width + gap,
       y: ownerBounds.y,
       width: TOOLBAR_HANDLE_WIDTH,
       height: ownerBounds.height
@@ -663,6 +690,9 @@ function getOrCreateToolbarSubwindow(kind: string, placement: 'top' | 'bottom'):
   win.setAlwaysOnTop(true, 'floating')
   wireWindowDebug(win, `subwindow-${kind}`)
   wireWindowStatus(win, `${WINDOW_ID_TOOLBAR_SUBWINDOW}:${kind}`)
+  try {
+    win.webContents.setZoomLevel(toolbarUiZoom)
+  } catch {}
 
   const devUrl = getDevServerUrl()
   if (devUrl) {
@@ -775,6 +805,15 @@ function handleBackendControlMessage(message: any): void {
     const appearance = (message as any).appearance
     if (!isAppearance(appearance)) return
     applyAppearance(appearance)
+    return
+  }
+
+  if (message.type === 'SET_UI_ZOOM') {
+    const zoom = Number(message.zoom)
+    if (Number.isFinite(zoom)) {
+      toolbarUiZoom = zoom
+      applyToolbarUiZoom(zoom)
+    }
     return
   }
 

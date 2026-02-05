@@ -1,5 +1,11 @@
 /* 设置窗口主样式 - 澎湃OS风格 */
 
+html,
+body {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
 .settingsWindowRoot {
   position: relative;
   width: 100%;
@@ -14,6 +20,13 @@
   border: 1px solid var(--ls-surface-border);
   border-radius: 0;
   box-shadow: var(--ls-surface-shadow);
+  
+  /* 基础变量复用 */
+  --tw-spacing-xs: 4px;
+  --tw-spacing-sm: 8px;
+  --tw-spacing-md: 12px;
+  --tw-spacing-lg: 16px;
+  --tw-spacing-xl: 20px;
 }
 
 .settingsWindowRoot::before {
@@ -45,6 +58,39 @@
   height: 100%;
   box-sizing: border-box;
   padding: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-direction: column;
+  container-type: inline-size;
+  container-name: settings;
+}
+
+/* 紧凑模式 */
+.settingsWindowCard--compact {
+  --tw-spacing-xs: 2px;
+  --tw-spacing-sm: 4px;
+  --tw-spacing-md: 6px;
+  --tw-spacing-lg: 8px;
+  --tw-spacing-xl: 12px;
+}
+
+/* 舒适模式 */
+.settingsWindowCard--comfortable {
+  --tw-spacing-xs: 4px;
+  --tw-spacing-sm: 8px;
+  --tw-spacing-md: 12px;
+  --tw-spacing-lg: 16px;
+  --tw-spacing-xl: 20px;
+}
+
+/* 宽松模式 */
+.settingsWindowCard--spacious {
+  --tw-spacing-xs: 6px;
+  --tw-spacing-sm: 10px;
+  --tw-spacing-md: 14px;
+  --tw-spacing-lg: 20px;
+  --tw-spacing-xl: 24px;
 }
 
 .settingsWindowMeasure {

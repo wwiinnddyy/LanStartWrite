@@ -3,9 +3,11 @@ import { motion, useReducedMotion } from '../Framer_Motion'
 import { useHyperGlassRealtimeBlur } from '../hyper_glass'
 import { useEventsPoll } from '../toolbar/hooks/useEventsPoll'
 import { postCommand } from '../toolbar/hooks/useBackend'
+import { useZoomOnWheel } from '../toolbar/hooks/useZoomOnWheel'
 import './styles/subwindow.css'
 
 export function EventsMenu(props: { kind: string }) {
+  useZoomOnWheel()
   const events = useEventsPoll(800)
   const rootRef = useRef<HTMLDivElement | null>(null)
   const cardRef = useRef<HTMLDivElement | null>(null)

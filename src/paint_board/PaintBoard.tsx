@@ -6,7 +6,10 @@ export function PaintBoardApp() {
       style={{
         width: '100vw',
         height: '100vh',
-        background: '#ffffff'
+        background: '#ffffff',
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center'
       }}
     />
   )

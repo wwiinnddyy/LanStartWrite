@@ -170,6 +170,13 @@ async function handleCommand(command: string, payload: unknown): Promise<Command
         return { ok: true }
       }
 
+      if (action === 'setUiZoom') {
+        const zoom = Number((payload as any)?.zoom)
+        if (!Number.isFinite(zoom)) return { ok: false, error: 'BAD_ZOOM' }
+        requestMain({ type: 'SET_UI_ZOOM', zoom })
+        return { ok: true }
+      }
+
       if (action === 'quit') {
         requestMain({ type: 'QUIT_APP' })
         return { ok: true }

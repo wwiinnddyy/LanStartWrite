@@ -2,6 +2,11 @@
 
 /* 基础变量 */
 .twWatcherRoot {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
   --tw-spacing-xs: 4px;
   --tw-spacing-sm: 8px;
   --tw-spacing-md: 12px;
