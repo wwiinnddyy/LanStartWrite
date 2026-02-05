@@ -140,19 +140,22 @@ body {
 }
 
 .toolbarDragHandleButton:hover {
-  background: var(--ls-handle-hover-bg);
+  background: var(--ls-accent-light);
 }
 
 .toolbarDragHandleButton:hover .toolbarDragHandleIcon {
   opacity: 0.95;
+  color: var(--ls-accent-primary);
 }
 
 .toolbarDragHandleButton--dragging .toolbarDragHandleIcon {
   opacity: 1;
+  color: var(--ls-accent-primary);
 }
 
 .toolbarDragHandleButton:active {
   transform: translateY(0.5px);
+  background: var(--ls-accent-light);
 }
 
 .toolbarLabel {
@@ -175,6 +178,21 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
+  background: transparent;
+  color: var(--ls-surface-fg);
+  opacity: 0.5;
+  border: none;
+  box-shadow: none;
+}
+
+.toolbarToggleButton:hover {
+  background: transparent;
+  opacity: 0.75;
+}
+
+.toolbarToggleButton:active {
+  background: transparent;
+  opacity: 0.9;
 }
 
 .toolbarCollapsibleSection {

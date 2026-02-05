@@ -1,0 +1,109 @@
+/* 强调色选择器样式 */
+
+.accentColorPicker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 4px;
+}
+
+.accentColorOption {
+  position: relative;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  border: 3px solid transparent;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.accentColorOption:hover {
+  transform: scale(1.1);
+}
+
+.accentColorOption--active {
+  border-color: var(--ls-accent-primary, #3b82f6);
+  box-shadow: 0 0 0 4px var(--ls-accent-light, rgba(59, 130, 246, 0.15));
+}
+
+.accentColorSwatch {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.accentColorCheck {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  width: 20px;
+  height: 20px;
+  background: var(--ls-accent-primary, #3b82f6);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* 系统取色方案特殊样式 */
+.accentColorOption--system .accentColorSwatch {
+  position: relative;
+  overflow: hidden;
+}
+
+.accentColorOption--system .accentColorSwatch::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.3) 0%,
+    transparent 50%,
+    rgba(0, 0, 0, 0.1) 100%
+  );
+  pointer-events: none;
+}
+
+/* 加载状态 */
+.accentColorLoading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+}
+
+.accentColorLoadingSpinner {
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--ls-surface-border, rgba(0, 0, 0, 0.1));
+  border-top-color: var(--ls-accent-primary, #3b82f6);
+  border-radius: 50%;
+  animation: accentColorSpin 0.8s linear infinite;
+}
+
+@keyframes accentColorSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* 深色主题适配 */
+:root[data-appearance='dark'] .accentColorOption--active {
+  border-color: var(--ls-accent-primary, #60a5fa);
+  box-shadow: 0 0 0 4px var(--ls-accent-light, rgba(96, 165, 250, 0.2));
+}
+
+:root[data-appearance='dark'] .accentColorCheck {
+  background: var(--ls-accent-primary, #60a5fa);
+}
+
+:root[data-appearance='dark'] .accentColorLoadingSpinner {
+  border-color: rgba(255, 255, 255, 0.1);
+  border-top-color: var(--ls-accent-primary, #60a5fa);
+}

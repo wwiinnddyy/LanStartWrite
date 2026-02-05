@@ -76,13 +76,13 @@
   width: 80px;
   height: 80px;
   border-radius: 20px;
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  background: var(--ls-accent-gradient, linear-gradient(135deg, #3b82f6 0%, #2563eb 100%));
   color: white;
   display: flex;
   align-items: center;
   justify-content: center;
   margin-bottom: 20px;
-  box-shadow: 0 8px 24px rgba(59, 130, 246, 0.3);
+  box-shadow: 0 8px 24px var(--ls-accent-light, rgba(59, 130, 246, 0.3));
 }
 
 .settingsAboutAppName {
@@ -112,16 +112,16 @@
 
 .settingsAboutLink {
   font-size: 13px;
-  color: #3b82f6;
+  color: var(--ls-accent-primary, #3b82f6);
   text-decoration: none;
   padding: 8px 16px;
   border-radius: 8px;
-  background: rgba(59, 130, 246, 0.08);
+  background: var(--ls-accent-light, rgba(59, 130, 246, 0.08));
   transition: all 0.2s ease;
 }
 
 .settingsAboutLink:hover {
-  background: rgba(59, 130, 246, 0.15);
+  background: var(--ls-accent-light, rgba(59, 130, 246, 0.15));
 }
 
 /* 技术栈 */
@@ -184,8 +184,8 @@
 }
 
 .settingsAppearanceCard--active {
-  border-color: #3b82f6;
-  background: rgba(59, 130, 246, 0.08);
+  border-color: var(--ls-accent-primary, #3b82f6);
+  background: var(--ls-accent-light, rgba(59, 130, 246, 0.08));
 }
 
 .settingsAppearancePreview {
@@ -242,6 +242,38 @@
   color: var(--ls-surface-fg, rgba(12, 12, 12, 0.8));
 }
 
+/* 子部分样式 */
+.settingsSubSection {
+  margin-top: 32px;
+  padding-top: 32px;
+  border-top: 1px solid var(--ls-surface-border, rgba(0, 0, 0, 0.08));
+}
+
+.settingsSubTitle {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ls-surface-fg, rgba(12, 12, 12, 0.9));
+  margin: 0 0 4px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.settingsSubTitleHint {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--ls-accent-primary, #3b82f6);
+  padding: 2px 8px;
+  background: var(--ls-accent-light, rgba(59, 130, 246, 0.1));
+  border-radius: 4px;
+}
+
+.settingsSubDescription {
+  font-size: 13px;
+  color: var(--ls-surface-fg, rgba(12, 12, 12, 0.5));
+  margin: 0 0 16px 0;
+}
+
 /* 深色主题适配 */
 :root[data-appearance='dark'] .settingsContent {
   background: rgba(25, 28, 36, 0.4);
@@ -256,8 +288,8 @@
 }
 
 :root[data-appearance='dark'] .settingsAppearanceCard--active {
-  border-color: #60a5fa;
-  background: rgba(96, 165, 250, 0.15);
+  border-color: var(--ls-accent-primary, #60a5fa);
+  background: var(--ls-accent-light, rgba(96, 165, 250, 0.15));
 }
 
 :root[data-appearance='dark'] .settingsAppearanceLabel {
@@ -303,12 +335,12 @@
 }
 
 :root[data-appearance='dark'] .settingsAboutLink {
-  color: #60a5fa;
-  background: rgba(96, 165, 250, 0.1);
+  color: var(--ls-accent-primary, #60a5fa);
+  background: var(--ls-accent-light, rgba(96, 165, 250, 0.1));
 }
 
 :root[data-appearance='dark'] .settingsAboutLink:hover {
-  background: rgba(96, 165, 250, 0.2);
+  background: var(--ls-accent-light, rgba(96, 165, 250, 0.2));
 }
 
 :root[data-appearance='dark'] .settingsAboutCredits {
@@ -324,4 +356,21 @@
   color: rgba(255, 255, 255, 0.6);
   background: rgba(255, 255, 255, 0.05);
   border-color: rgba(255, 255, 255, 0.08);
+}
+
+:root[data-appearance='dark'] .settingsSubSection {
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+:root[data-appearance='dark'] .settingsSubTitle {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+:root[data-appearance='dark'] .settingsSubTitleHint {
+  color: var(--ls-accent-primary, #60a5fa);
+  background: var(--ls-accent-light, rgba(96, 165, 250, 0.15));
+}
+
+:root[data-appearance='dark'] .settingsSubDescription {
+  color: rgba(255, 255, 255, 0.5);
 }

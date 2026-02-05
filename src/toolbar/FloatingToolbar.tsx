@@ -7,6 +7,7 @@ import { usePersistedState } from './hooks/usePersistedState'
 import { markQuitting, postCommand } from './hooks/useBackend'
 import { useToolbarWindowAutoResize } from './hooks/useToolbarWindowAutoResize'
 import { useZoomOnWheel } from './hooks/useZoomOnWheel'
+import { useAppearanceSettings } from '../settings'
 import './styles/toolbar.css'
 
 function ToolbarToolIcon(props: { kind: 'mouse' | 'pen' | 'eraser' | 'whiteboard' }) {
@@ -138,6 +139,9 @@ function FloatingToolbarInner() {
   const { appMode, setAppMode } = useAppMode()
   const whiteboardActive = appMode === 'whiteboard'
   const isExpanded = state.expanded !== false
+
+  // 应用外观设置（强调色等）
+  useAppearanceSettings()
 
   useToolbarWindowAutoResize({ root: contentRef.current })
   useHyperGlassRealtimeBlur({ root: rootRef.current })
@@ -360,6 +364,9 @@ export function FloatingToolbarHandleApp() {
   const rootRef = useRef<HTMLDivElement | null>(null)
   const reduceMotion = useReducedMotion()
   const [dragging, setDragging] = useState(false)
+
+  // 应用外观设置（强调色等）
+  useAppearanceSettings()
 
   useHyperGlassRealtimeBlur({ root: rootRef.current })
 

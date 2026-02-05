@@ -1,0 +1,255 @@
+/* 过渡设置样式 */
+
+.transitionSettings {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+.transitionSettingsSection {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.transitionSettingsSubtitle {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ls-surface-fg, rgba(12, 12, 12, 0.9));
+  margin: 0;
+}
+
+.transitionSettingsDescription {
+  font-size: 13px;
+  color: var(--ls-surface-fg, rgba(12, 12, 12, 0.5));
+  margin: 0;
+}
+
+/* 过渡预设网格 */
+.transitionPresetGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+}
+
+.transitionPresetCard {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16px 12px;
+  border: 2px solid transparent;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.03);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  gap: 12px;
+}
+
+.transitionPresetCard:hover {
+  background: rgba(0, 0, 0, 0.06);
+  transform: translateY(-2px);
+}
+
+.transitionPresetCard--active {
+  border-color: var(--ls-accent-primary, #3b82f6);
+  background: var(--ls-accent-light, rgba(59, 130, 246, 0.1));
+}
+
+.transitionPresetPreview {
+  width: 60px;
+  height: 40px;
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  overflow: hidden;
+}
+
+.transitionPresetDemo {
+  width: 20px;
+  height: 20px;
+  background: var(--ls-accent-primary, #3b82f6);
+  border-radius: 4px;
+}
+
+.transitionPresetInfo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.transitionPresetName {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ls-surface-fg, rgba(12, 12, 12, 0.9));
+}
+
+.transitionPresetDesc {
+  font-size: 12px;
+  color: var(--ls-surface-fg, rgba(12, 12, 12, 0.5));
+}
+
+.transitionPresetCheck {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 20px;
+  height: 20px;
+  background: var(--ls-accent-primary, #3b82f6);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+}
+
+/* 背景过渡网格 */
+.backgroundTransitionGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+}
+
+.backgroundTransitionCard {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16px 12px;
+  border: 2px solid transparent;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.03);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  gap: 12px;
+}
+
+.backgroundTransitionCard:hover {
+  background: rgba(0, 0, 0, 0.06);
+  transform: translateY(-2px);
+}
+
+.backgroundTransitionCard--active {
+  border-color: var(--ls-accent-primary, #3b82f6);
+  background: var(--ls-accent-light, rgba(59, 130, 246, 0.1));
+}
+
+.backgroundTransitionPreview {
+  width: 60px;
+  height: 40px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.backgroundTransitionDemo {
+  width: 40px;
+  height: 24px;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 4px;
+}
+
+.backgroundTransitionInfo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.backgroundTransitionName {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ls-surface-fg, rgba(12, 12, 12, 0.9));
+}
+
+.backgroundTransitionDesc {
+  font-size: 12px;
+  color: var(--ls-surface-fg, rgba(12, 12, 12, 0.5));
+}
+
+.backgroundTransitionCheck {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 20px;
+  height: 20px;
+  background: var(--ls-accent-primary, #3b82f6);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+}
+
+/* 深色主题适配 */
+:root[data-appearance='dark'] .transitionSettingsSubtitle {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+:root[data-appearance='dark'] .transitionSettingsDescription {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+:root[data-appearance='dark'] .transitionPresetCard {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+:root[data-appearance='dark'] .transitionPresetCard:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+:root[data-appearance='dark'] .transitionPresetCard--active {
+  border-color: var(--ls-accent-primary, #60a5fa);
+  background: var(--ls-accent-light, rgba(96, 165, 250, 0.15));
+}
+
+:root[data-appearance='dark'] .transitionPresetPreview {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+:root[data-appearance='dark'] .transitionPresetDemo {
+  background: var(--ls-accent-primary, #60a5fa);
+}
+
+:root[data-appearance='dark'] .transitionPresetName {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+:root[data-appearance='dark'] .transitionPresetDesc {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+:root[data-appearance='dark'] .transitionPresetCheck {
+  background: var(--ls-accent-primary, #60a5fa);
+}
+
+:root[data-appearance='dark'] .backgroundTransitionCard {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+:root[data-appearance='dark'] .backgroundTransitionCard:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+:root[data-appearance='dark'] .backgroundTransitionCard--active {
+  border-color: var(--ls-accent-primary, #60a5fa);
+  background: var(--ls-accent-light, rgba(96, 165, 250, 0.15));
+}
+
+:root[data-appearance='dark'] .backgroundTransitionName {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+:root[data-appearance='dark'] .backgroundTransitionDesc {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+:root[data-appearance='dark'] .backgroundTransitionCheck {
+  background: var(--ls-accent-primary, #60a5fa);
+}

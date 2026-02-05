@@ -3,6 +3,9 @@ import { motion } from '../../Framer_Motion'
 import { useAppAppearance } from '../../status'
 import { Button } from '../../button'
 import type { SettingsTab } from '../types'
+import { AccentColorPicker } from './AccentColorPicker'
+import { TransitionSettings } from './TransitionSettings'
+import { useAppearanceSettings } from '../hooks/useAppearanceSettings'
 import './SettingsContent.css'
 
 interface SettingsContentProps {
@@ -12,12 +15,21 @@ interface SettingsContentProps {
 // 外观设置组件
 function AppearanceSettings() {
   const { appearance, setAppearance } = useAppAppearance()
+  const {
+    accentColor,
+    setAccentColor,
+    transitionPreset,
+    setTransitionPreset,
+    backgroundTransition,
+    setBackgroundTransition,
+  } = useAppearanceSettings()
 
   return (
     <div className="settingsContentSection">
       <h2 className="settingsContentTitle">外观</h2>
       <p className="settingsContentDescription">选择您喜欢的主题外观</p>
 
+      {/* 主题模式选择 */}
       <div className="settingsAppearanceOptions">
         <button
           className={`settingsAppearanceCard ${appearance === 'light' ? 'settingsAppearanceCard--active' : ''}`}
@@ -46,6 +58,28 @@ function AppearanceSettings() {
           </div>
           <span className="settingsAppearanceLabel">深色</span>
         </button>
+      </div>
+
+      {/* 强调色设置 */}
+      <div className="settingsSubSection">
+        <h3 className="settingsSubTitle">
+          强调色
+          <span className="settingsSubTitleHint">（{appearance === 'dark' ? '深色' : '浅色'}模式独立设置）</span>
+        </h3>
+        <p className="settingsSubDescription">选择应用的主题强调色</p>
+        <AccentColorPicker value={accentColor.value} onChange={setAccentColor} />
+      </div>
+
+      {/* 过渡效果设置 */}
+      <div className="settingsSubSection">
+        <h3 className="settingsSubTitle">过渡效果</h3>
+        <p className="settingsSubDescription">调整界面动画和背景过渡效果</p>
+        <TransitionSettings
+          transitionPreset={transitionPreset.value}
+          onTransitionChange={setTransitionPreset}
+          backgroundTransition={backgroundTransition.value}
+          onBackgroundTransitionChange={setBackgroundTransition}
+        />
       </div>
     </div>
   )

@@ -61,10 +61,16 @@
 .lsButton--light {
   background: var(--ls-btn-light-bg);
   color: var(--ls-btn-light-fg);
+  box-shadow: 0 0 0 3px var(--ls-accent-light);
 }
 
 .lsButton--light:hover {
   background: var(--ls-btn-light-bg-hover);
+}
+
+.lsButton--light:active {
+  background: var(--ls-accent-light);
+  transform: translateY(0.5px);
 }
 
 .lsButton--sm {

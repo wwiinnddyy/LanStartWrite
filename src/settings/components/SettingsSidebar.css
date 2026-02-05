@@ -28,12 +28,12 @@
   width: 40px;
   height: 40px;
   border-radius: 12px;
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  background: var(--ls-accent-gradient, linear-gradient(135deg, #3b82f6 0%, #2563eb 100%));
   color: white;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+  box-shadow: 0 4px 12px var(--ls-accent-light, rgba(59, 130, 246, 0.3));
 }
 
 .settingsSidebarTitle {
@@ -70,13 +70,13 @@
 }
 
 .settingsSidebarTab:hover {
-  background: rgba(59, 130, 246, 0.08);
+  background: var(--ls-accent-light, rgba(59, 130, 246, 0.08));
   color: var(--ls-surface-fg, rgba(12, 12, 12, 0.85));
 }
 
 .settingsSidebarTab--active {
-  background: rgba(59, 130, 246, 0.12);
-  color: #3b82f6;
+  background: var(--ls-accent-light, rgba(59, 130, 246, 0.12));
+  color: var(--ls-accent-primary, #3b82f6);
 }
 
 .settingsSidebarTabIcon {
@@ -103,9 +103,9 @@
   transform: translateY(-50%);
   width: 3px;
   height: 20px;
-  background: #3b82f6;
+  background: var(--ls-accent-primary, #3b82f6);
   border-radius: 0 3px 3px 0;
-  box-shadow: 0 0 8px rgba(59, 130, 246, 0.5);
+  box-shadow: 0 0 8px var(--ls-accent-light, rgba(59, 130, 246, 0.5));
 }
 
 /* 底部信息 */
@@ -140,18 +140,18 @@
 }
 
 :root[data-appearance='dark'] .settingsSidebarTab:hover {
-  background: rgba(96, 165, 250, 0.1);
+  background: var(--ls-accent-light, rgba(96, 165, 250, 0.1));
   color: rgba(255, 255, 255, 0.85);
 }
 
 :root[data-appearance='dark'] .settingsSidebarTab--active {
-  background: rgba(96, 165, 250, 0.15);
-  color: #60a5fa;
+  background: var(--ls-accent-light, rgba(96, 165, 250, 0.15));
+  color: var(--ls-accent-primary, #60a5fa);
 }
 
 :root[data-appearance='dark'] .settingsSidebarTabIndicator {
-  background: #60a5fa;
-  box-shadow: 0 0 8px rgba(96, 165, 250, 0.5);
+  background: var(--ls-accent-primary, #60a5fa);
+  box-shadow: 0 0 8px var(--ls-accent-light, rgba(96, 165, 250, 0.5));
 }
 
 :root[data-appearance='dark'] .settingsSidebarFooter {

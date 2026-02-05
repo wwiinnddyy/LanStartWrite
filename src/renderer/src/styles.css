@@ -31,10 +31,9 @@ body {
   --ls-btn-danger-bg-hover: rgba(255, 80, 80, 0.22);
   --ls-btn-danger-border: rgba(200, 40, 40, 0.28);
 
-  --ls-btn-light-fg: rgba(10, 10, 10, 0.92);
-  --ls-btn-light-bg: rgba(255, 255, 255, 0.92);
-  --ls-btn-light-bg-hover: rgba(255, 255, 255, 1);
-  --ls-btn-light-border: rgba(0, 0, 0, 0.12);
+  --ls-btn-light-fg: var(--ls-accent-primary, rgba(10, 10, 10, 0.92));
+  --ls-btn-light-bg: var(--ls-accent-light, rgba(59, 130, 246, 0.12));
+  --ls-btn-light-bg-hover: var(--ls-accent-light, rgba(59, 130, 246, 0.2));
 }
 
 :root[data-appearance='dark'] {
@@ -61,10 +60,9 @@ body {
   --ls-btn-danger-bg-hover: rgba(255, 80, 80, 0.24);
   --ls-btn-danger-border: rgba(255, 80, 80, 0.35);
 
-  --ls-btn-light-fg: rgba(10, 10, 10, 0.92);
-  --ls-btn-light-bg: rgba(255, 255, 255, 0.92);
-  --ls-btn-light-bg-hover: rgba(255, 255, 255, 1);
-  --ls-btn-light-border: rgba(0, 0, 0, 0.12);
+  --ls-btn-light-fg: var(--ls-accent-primary, rgba(255, 255, 255, 0.92));
+  --ls-btn-light-bg: var(--ls-accent-light, rgba(96, 165, 250, 0.15));
+  --ls-btn-light-bg-hover: var(--ls-accent-light, rgba(96, 165, 250, 0.25));
 }
 
 .childRoot {
