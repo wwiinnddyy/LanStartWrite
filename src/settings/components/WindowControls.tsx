@@ -5,11 +5,17 @@ import './WindowControls.css'
 
 export function WindowControls() {
   const handleMinimize = () => {
-    postCommand('app.minimizeSettingsWindow').catch(() => undefined)
+    console.log('[WindowControls] Minimize clicked')
+    postCommand('app.minimizeSettingsWindow').catch((e) => {
+      console.error('[WindowControls] Minimize failed:', e)
+    })
   }
 
   const handleClose = () => {
-    postCommand('app.closeSettingsWindow').catch(() => undefined)
+    console.log('[WindowControls] Close clicked')
+    postCommand('app.closeSettingsWindow').catch((e) => {
+      console.error('[WindowControls] Close failed:', e)
+    })
   }
 
   return (

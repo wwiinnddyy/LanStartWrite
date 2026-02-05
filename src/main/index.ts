@@ -6,6 +6,7 @@ import { platform } from 'node:process'
 import { AppWindowsManager } from '../app_windows_manerger'
 import { createTaskWatcherAdapter } from '../system_different_code'
 import { TaskWindowsWatcher } from '../task_windows_watcher/TaskWindowsWatcher'
+import { createLanstartwriteLinkController } from '../url_http_link'
 
 let backendProcess: ChildProcessWithoutNullStreams | undefined
 
@@ -60,6 +61,28 @@ function requestBackendRpc<T>(method: string, params?: unknown): Promise<T> {
     sendToBackend({ type: 'RPC_REQUEST', id, method, params })
   })
 }
+
+const lanstartwriteLink = createLanstartwriteLinkController({
+  dispatch: ({ command, payload }) => requestBackendRpc('postCommand', { command, payload }),
+  focusApp: () => {
+    const win =
+      floatingToolbarWindow && !floatingToolbarWindow.isDestroyed()
+        ? floatingToolbarWindow
+        : BrowserWindow.getAllWindows().find((w) => !w.isDestroyed())
+    if (!win || win.isDestroyed()) return
+    try {
+      if (win.isMinimized()) win.restore()
+    } catch {}
+    try {
+      if (!win.isVisible()) win.show()
+    } catch {}
+    try {
+      win.focus()
+    } catch {}
+  }
+})
+
+const hasSingleInstanceLock = lanstartwriteLink.register(app)
 
 async function backendPutUiStateKey(windowId: string, key: string, value: unknown): Promise<void> {
   await requestBackendRpc('putUiStateKey', { windowId, key, value })
@@ -160,18 +183,23 @@ function getDevServerUrl(): string | undefined {
   return undefined
 }
 
-function getDisplayScaleFactor(win: BrowserWindow): number {
-  const display = screen.getDisplayMatching(win.getBounds())
-  return display.scaleFactor
-}
-
 function adjustWindowForDPI(win: BrowserWindow, baseWidth: number, baseHeight: number): void {
-  const scaleFactor = getDisplayScaleFactor(win)
+  const display = screen.getDisplayMatching(win.getBounds())
+  const scaleFactor = display.scaleFactor
+  const { width: maxWidth, height: maxHeight } = display.workAreaSize
+
+  let width = baseWidth
+  let height = baseHeight
+
   if (scaleFactor !== 1) {
-    const scaledWidth = Math.round(baseWidth * scaleFactor)
-    const scaledHeight = Math.round(baseHeight * scaleFactor)
-    win.setSize(scaledWidth, scaledHeight)
+    width = Math.round(baseWidth * scaleFactor)
+    height = Math.round(baseHeight * scaleFactor)
   }
+
+  width = Math.max(100, Math.min(width, maxWidth))
+  height = Math.max(80, Math.min(height, maxHeight))
+
+  win.setSize(width, height)
 }
 
 const appWindowsManager = new AppWindowsManager({
@@ -1005,14 +1033,16 @@ function startBackend(): void {
   })
 }
 
-app
-  .whenReady()
-  .then(() => {
+if (hasSingleInstanceLock) {
+  app
+    .whenReady()
+    .then(() => {
     try {
       startBackend()
     } catch (e) {
       process.stderr.write(String(e))
     }
+    lanstartwriteLink.flush().catch(() => undefined)
     ;(async () => {
       for (let attempt = 0; attempt < 3; attempt++) {
         try {
@@ -1052,10 +1082,11 @@ app
         })
       }
     })
-  })
-  .catch((e) => {
-    process.stderr.write(String(e))
-  })
+    })
+    .catch((e) => {
+      process.stderr.write(String(e))
+    })
+}
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()

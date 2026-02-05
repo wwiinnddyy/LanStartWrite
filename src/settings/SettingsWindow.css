@@ -40,6 +40,7 @@ body {
   opacity: 0.32;
   filter: saturate(1.12) contrast(1.04);
   will-change: transform, opacity;
+  pointer-events: none;
 }
 
 .settingsWindowRoot::after {
@@ -59,11 +60,30 @@ body {
   box-sizing: border-box;
   padding: 0;
   display: flex;
-  justify-content: center;
-  align-items: center;
   flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
   container-type: inline-size;
   container-name: settings;
+}
+
+.settingsWindowTitlebar {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  padding: 0 56px 0 20px;
+  height: 40px;
+  box-sizing: border-box;
+  -webkit-app-region: drag;
+}
+
+.settingsWindowTitle {
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--ls-surface-fg);
+  opacity: 0.9;
 }
 
 /* 紧凑模式 */
@@ -96,9 +116,9 @@ body {
 .settingsWindowMeasure {
   display: flex;
   width: 100%;
-  height: 100%;
+  height: calc(100% - 40px);
   min-width: 800px;
-  min-height: 500px;
+  min-height: 460px;
 }
 
 /* 深色主题适配 */

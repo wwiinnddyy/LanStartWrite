@@ -63,6 +63,9 @@ export function SettingsWindow() {
     >
       <WindowControls />
       <div ref={cardRef} className={`settingsWindowCard settingsWindowCard--${layoutSize} animate-ls-pop-in`}>
+        <div className="settingsWindowTitlebar">
+          <div className="settingsWindowTitle">设置</div>
+        </div>
         <div className="settingsWindowMeasure">
           <SettingsSidebar activeTab={activeTab} onTabChange={setActiveTab} />
           <SettingsContent activeTab={activeTab} />

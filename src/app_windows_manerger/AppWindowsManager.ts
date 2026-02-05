@@ -119,6 +119,26 @@ export class AppWindowsManager {
       this.showWindowWhenReady(win, { focus: true })
       return true
     }
+
+    if (type === 'MINIMIZE_SETTINGS_WINDOW') {
+      const win = this.windows.get('settings')
+      if (win && !win.isDestroyed()) {
+        try {
+          win.minimize()
+        } catch {}
+      }
+      return true
+    }
+
+    if (type === 'CLOSE_SETTINGS_WINDOW') {
+      const win = this.windows.get('settings')
+      if (win && !win.isDestroyed()) {
+        try {
+          win.close()
+        } catch {}
+      }
+      return true
+    }
  
     if (type === 'SET_APP_WINDOW_BOUNDS') {
       const windowId = String((message as any).windowId ?? '')
