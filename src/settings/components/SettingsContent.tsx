@@ -1,5 +1,5 @@
 import React from 'react'
-import { Box } from '@mantine/core'
+import { Box, Select } from '@mantine/core'
 import { motion } from '../../Framer_Motion'
 import { putUiStateKey, TOOLBAR_STATE_KEY, TOOLBAR_STATE_UI_STATE_KEY, UI_STATE_APP_WINDOW_ID, useAppAppearance, usePersistedState } from '../../status'
 import { Button } from '../../button'
@@ -469,11 +469,32 @@ function FeaturePanelSettings() {
 }
 
 function AnnotationSettings() {
+  const [writingSystem, setWritingSystem] = React.useState<'leafer' | 'inkcanvas' | 'winui'>('leafer')
+  const writingSystemLabel =
+    writingSystem === 'inkcanvas' ? 'inkcanvas' : writingSystem === 'winui' ? 'winui' : 'leafer.js'
+
   return (
     <div className="settingsContentSection">
       <h2 className="settingsContentTitle">批注系统</h2>
       <p className="settingsContentDescription">配置批注工具和笔刷设置</p>
-      
+
+      <div className="settingsFormCard">
+        <div className="settingsFormTitle">书写系统</div>
+        <div className="settingsFormDescription">切换不同书写系统的启用与设置（占位）</div>
+        <Select
+          value={writingSystem}
+          data={[
+            { value: 'leafer', label: 'leafer.js' },
+            { value: 'inkcanvas', label: 'inkcanvas' },
+            { value: 'winui', label: 'winui' }
+          ]}
+          allowDeselect={false}
+          onChange={(value) => {
+            if (value === 'leafer' || value === 'inkcanvas' || value === 'winui') setWritingSystem(value)
+          }}
+        />
+      </div>
+
       <div className="settingsContentPlaceholder">
         <div className="settingsContentPlaceholderIcon">
           <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -481,7 +502,7 @@ function AnnotationSettings() {
             <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z" />
           </svg>
         </div>
-        <p className="settingsContentPlaceholderText">批注系统设置即将推出</p>
+        <p className="settingsContentPlaceholderText">{writingSystemLabel} 的启用与设置即将推出</p>
       </div>
     </div>
   )
@@ -530,7 +551,7 @@ function AboutSettings() {
           </svg>
         </div>
         <h3 className="settingsAboutAppName">LanStartWrite</h3>
-        <p className="settingsAboutVersion">版本 0.0.0</p>
+        <p className="settingsAboutVersion">Doctor</p>
         <p className="settingsAboutDescription">
           一款现代化的屏幕批注和演示工具，
           <br />
