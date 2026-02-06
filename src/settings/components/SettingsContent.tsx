@@ -1,7 +1,7 @@
 import React from 'react'
 import { Box, Select } from '@mantine/core'
 import { motion } from '../../Framer_Motion'
-import { putUiStateKey, TOOLBAR_STATE_KEY, TOOLBAR_STATE_UI_STATE_KEY, UI_STATE_APP_WINDOW_ID, useAppAppearance, usePersistedState } from '../../status'
+import { putKv, putUiStateKey, TOOLBAR_STATE_KEY, TOOLBAR_STATE_UI_STATE_KEY, UI_STATE_APP_WINDOW_ID, useAppAppearance, usePersistedState } from '../../status'
 import { Button } from '../../button'
 import type { SettingsTab } from '../types'
 import { AccentColorPicker } from './AccentColorPicker'
@@ -109,12 +109,72 @@ function ToolbarSettings() {
     uiButtonSize?: 'sm' | 'md'
     tool?: 'mouse' | 'pen' | 'eraser'
     expanded?: boolean
-    primaryButtonsOrder?: Array<'mouse' | 'pen' | 'eraser' | 'whiteboard'>
-    secondaryButtonsOrder?: Array<'undo' | 'redo' | 'feature-panel'>
+    allowedPrimaryButtons?: PrimaryButtonId[]
+    allowedSecondaryButtons?: SecondaryButtonId[]
+    primaryButtonsOrder?: PrimaryButtonId[]
+    secondaryButtonsOrder?: SecondaryButtonId[]
   }
 
   const DEFAULT_PRIMARY: PrimaryButtonId[] = ['mouse', 'pen', 'eraser', 'whiteboard']
   const DEFAULT_SECONDARY: SecondaryButtonId[] = ['undo', 'redo', 'feature-panel']
+
+  function normalizeAllowedPrimaryButtons(input: unknown): PrimaryButtonId[] {
+    if (!Array.isArray(input)) return DEFAULT_PRIMARY
+    const allowed = new Set(DEFAULT_PRIMARY)
+    const unique: PrimaryButtonId[] = []
+    for (const item of input) {
+      if (item !== 'mouse' && item !== 'pen' && item !== 'eraser' && item !== 'whiteboard') continue
+      if (!allowed.has(item)) continue
+      if (unique.includes(item)) continue
+      unique.push(item)
+    }
+    return unique.length ? unique : DEFAULT_PRIMARY
+  }
+
+  function normalizeAllowedSecondaryButtons(input: unknown): SecondaryButtonId[] {
+    if (!Array.isArray(input)) return DEFAULT_SECONDARY
+    const allowed = new Set(DEFAULT_SECONDARY)
+    const unique: SecondaryButtonId[] = []
+    for (const item of input) {
+      if (item !== 'undo' && item !== 'redo' && item !== 'feature-panel') continue
+      if (!allowed.has(item)) continue
+      if (unique.includes(item)) continue
+      unique.push(item)
+    }
+    return unique
+  }
+
+  function normalizePrimaryButtonsOrder(input: unknown, allowedButtons: readonly PrimaryButtonId[]): PrimaryButtonId[] {
+    const allowed = new Set(allowedButtons)
+    const unique: PrimaryButtonId[] = []
+    if (Array.isArray(input)) {
+      for (const item of input) {
+        if (item !== 'mouse' && item !== 'pen' && item !== 'eraser' && item !== 'whiteboard') continue
+        if (!allowed.has(item)) continue
+        if (unique.includes(item)) continue
+        unique.push(item)
+      }
+    }
+    for (const item of DEFAULT_PRIMARY) if (allowed.has(item) && !unique.includes(item)) unique.push(item)
+    for (const item of allowedButtons) if (!unique.includes(item)) unique.push(item)
+    return unique
+  }
+
+  function normalizeSecondaryButtonsOrder(input: unknown, allowedButtons: readonly SecondaryButtonId[]): SecondaryButtonId[] {
+    const allowed = new Set(allowedButtons)
+    const unique: SecondaryButtonId[] = []
+    if (Array.isArray(input)) {
+      for (const item of input) {
+        if (item !== 'undo' && item !== 'redo' && item !== 'feature-panel') continue
+        if (!allowed.has(item)) continue
+        if (unique.includes(item)) continue
+        unique.push(item)
+      }
+    }
+    for (const item of DEFAULT_SECONDARY) if (allowed.has(item) && !unique.includes(item)) unique.push(item)
+    for (const item of allowedButtons) if (!unique.includes(item)) unique.push(item)
+    return unique
+  }
 
   const isToolbarState = (value: unknown): value is ToolbarState => {
     if (!value || typeof value !== 'object') return false
@@ -125,6 +185,8 @@ function ToolbarSettings() {
     if (v.uiButtonSize !== undefined && v.uiButtonSize !== 'sm' && v.uiButtonSize !== 'md') return false
     if (v.tool !== undefined && v.tool !== 'mouse' && v.tool !== 'pen' && v.tool !== 'eraser') return false
     if (v.expanded !== undefined && typeof v.expanded !== 'boolean') return false
+    if (v.allowedPrimaryButtons !== undefined && !Array.isArray(v.allowedPrimaryButtons)) return false
+    if (v.allowedSecondaryButtons !== undefined && !Array.isArray(v.allowedSecondaryButtons)) return false
     if (v.primaryButtonsOrder !== undefined && !Array.isArray(v.primaryButtonsOrder)) return false
     if (v.secondaryButtonsOrder !== undefined && !Array.isArray(v.secondaryButtonsOrder)) return false
     return true
@@ -138,14 +200,19 @@ function ToolbarSettings() {
       uiWidth: 360,
       uiButtonSize: 'sm',
       expanded: true,
+      allowedPrimaryButtons: DEFAULT_PRIMARY,
+      allowedSecondaryButtons: DEFAULT_SECONDARY,
       primaryButtonsOrder: DEFAULT_PRIMARY,
       secondaryButtonsOrder: DEFAULT_SECONDARY,
     },
     { validate: isToolbarState }
   )
 
-  const primaryButtonsOrder = toolbarState.primaryButtonsOrder ?? DEFAULT_PRIMARY
-  const secondaryButtonsOrder = toolbarState.secondaryButtonsOrder ?? DEFAULT_SECONDARY
+  const allowedPrimaryButtons = normalizeAllowedPrimaryButtons((toolbarState as any).allowedPrimaryButtons)
+  const allowedSecondaryButtons = normalizeAllowedSecondaryButtons((toolbarState as any).allowedSecondaryButtons)
+
+  const primaryButtonsOrder = normalizePrimaryButtonsOrder(toolbarState.primaryButtonsOrder, allowedPrimaryButtons)
+  const secondaryButtonsOrder = normalizeSecondaryButtonsOrder(toolbarState.secondaryButtonsOrder, allowedSecondaryButtons)
 
   const labelForButton = (id: PrimaryButtonId | SecondaryButtonId) => {
     if (id === 'mouse') return '鼠标'
@@ -259,6 +326,25 @@ function ToolbarSettings() {
     )
   }
 
+  function PlusIcon() {
+    return (
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width="16"
+        height="16"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M12 5v14" />
+        <path d="M5 12h14" />
+      </svg>
+    )
+  }
+
   const iconForButton = (id: PrimaryButtonId | SecondaryButtonId) => {
     if (id === 'mouse') return <ToolbarToolIcon kind="mouse" />
     if (id === 'pen') return <ToolbarToolIcon kind="pen" />
@@ -267,6 +353,16 @@ function ToolbarSettings() {
     if (id === 'undo') return <UndoIcon />
     if (id === 'redo') return <RedoIcon />
     return <FeaturePanelIcon />
+  }
+
+  const descriptionForButton = (id: PrimaryButtonId | SecondaryButtonId) => {
+    if (id === 'mouse') return '切换到鼠标工具'
+    if (id === 'pen') return '切换到笔工具（再次点击可打开设置）'
+    if (id === 'eraser') return '切换到橡皮工具'
+    if (id === 'whiteboard') return '进入/退出白板模式'
+    if (id === 'undo') return '撤销上一步操作'
+    if (id === 'redo') return '重做上一步操作'
+    return '打开功能面板'
   }
 
   const moveItem = <T,>(list: readonly T[], fromIndex: number, toIndex: number): T[] => {
@@ -312,6 +408,10 @@ function ToolbarSettings() {
       }
       return
     }
+    if (!secondaryButtonsOrder.length) {
+      setSelectedButton({ group: 'primary', id: primaryButtonsOrder[0] ?? 'mouse' })
+      return
+    }
     if (!secondaryButtonsOrder.includes(selectedButton.id)) {
       setSelectedButton({ group: 'secondary', id: secondaryButtonsOrder[0] ?? 'undo' })
     }
@@ -327,31 +427,88 @@ function ToolbarSettings() {
   const canMovePrev = selectedIndex > 0
   const canMoveNext = selectedIndex >= 0 && selectedIndex < selectedCount - 1
 
-  const moveSelected = (delta: -1 | 1) => {
-    setToolbarState((prev) => {
-      if (selectedButton.group === 'primary') {
-        const order = prev.primaryButtonsOrder ?? DEFAULT_PRIMARY
-        const index = order.indexOf(selectedButton.id)
-        if (index < 0) return prev
-        const nextIndex = index + delta
-        if (nextIndex < 0 || nextIndex >= order.length) return prev
-        const nextOrder = moveItem(order, index, nextIndex)
-        return { ...prev, primaryButtonsOrder: nextOrder }
+  const persistToolbarState = (next: ToolbarState) => {
+    setToolbarState(next)
+    void (async () => {
+      try {
+        await putKv(TOOLBAR_STATE_KEY, next)
+      } catch {
+        return
       }
-
-      const order = prev.secondaryButtonsOrder ?? DEFAULT_SECONDARY
-      const index = order.indexOf(selectedButton.id)
-      if (index < 0) return prev
-      const nextIndex = index + delta
-      if (nextIndex < 0 || nextIndex >= order.length) return prev
-      const nextOrder = moveItem(order, index, nextIndex)
-      return { ...prev, secondaryButtonsOrder: nextOrder }
-    })
-
-    window.setTimeout(() => {
-      void putUiStateKey(UI_STATE_APP_WINDOW_ID, TOOLBAR_STATE_UI_STATE_KEY, Date.now())
-    }, 320)
+      try {
+        await putUiStateKey(UI_STATE_APP_WINDOW_ID, TOOLBAR_STATE_UI_STATE_KEY, Date.now())
+      } catch {
+        return
+      }
+    })()
   }
+
+  const moveSelected = (delta: -1 | 1) => {
+    if (selectedButton.group === 'primary') {
+      const order = primaryButtonsOrder
+      const index = order.indexOf(selectedButton.id)
+      if (index < 0) return
+      const nextIndex = index + delta
+      if (nextIndex < 0 || nextIndex >= order.length) return
+      const nextOrder = moveItem(order, index, nextIndex)
+      persistToolbarState({
+        ...toolbarState,
+        allowedPrimaryButtons,
+        allowedSecondaryButtons,
+        primaryButtonsOrder: nextOrder,
+        secondaryButtonsOrder,
+      })
+      return
+    }
+
+    const order = secondaryButtonsOrder
+    const index = order.indexOf(selectedButton.id)
+    if (index < 0) return
+    const nextIndex = index + delta
+    if (nextIndex < 0 || nextIndex >= order.length) return
+    const nextOrder = moveItem(order, index, nextIndex)
+    persistToolbarState({
+      ...toolbarState,
+      allowedPrimaryButtons,
+      allowedSecondaryButtons,
+      primaryButtonsOrder,
+      secondaryButtonsOrder: nextOrder,
+    })
+  }
+
+  const addButtonToToolbar = (group: SelectedButton['group'], id: PrimaryButtonId | SecondaryButtonId) => {
+    if (group === 'primary') {
+      const nextId = id as PrimaryButtonId
+      if (allowedPrimaryButtons.includes(nextId)) return
+      const nextAllowed = [...allowedPrimaryButtons, nextId]
+      const nextOrder = normalizePrimaryButtonsOrder([...primaryButtonsOrder, nextId], nextAllowed)
+      persistToolbarState({
+        ...toolbarState,
+        allowedPrimaryButtons: nextAllowed,
+        allowedSecondaryButtons,
+        primaryButtonsOrder: nextOrder,
+        secondaryButtonsOrder,
+      })
+      return
+    }
+
+    const nextId = id as SecondaryButtonId
+    if (allowedSecondaryButtons.includes(nextId)) return
+    const nextAllowed = [...allowedSecondaryButtons, nextId]
+    const nextOrder = normalizeSecondaryButtonsOrder([...secondaryButtonsOrder, nextId], nextAllowed)
+    persistToolbarState({
+      ...toolbarState,
+      allowedPrimaryButtons,
+      allowedSecondaryButtons: nextAllowed,
+      primaryButtonsOrder,
+      secondaryButtonsOrder: nextOrder,
+    })
+  }
+
+  const allAddableButtons: Array<{ group: SelectedButton['group']; id: PrimaryButtonId | SecondaryButtonId }> = [
+    ...DEFAULT_PRIMARY.map((id) => ({ group: 'primary' as const, id })),
+    ...DEFAULT_SECONDARY.map((id) => ({ group: 'secondary' as const, id })),
+  ]
 
   return (
     <div className="settingsContentSection">
@@ -413,8 +570,7 @@ function ToolbarSettings() {
           <div className="settingsToolbarSelectionHeader">
             <div className="settingsToolbarSelectionTitle">按钮信息</div>
             <div className="settingsToolbarSelectionMeta">
-              {selectedButton.group === 'primary' ? '主工具区' : '扩展区'} · 第 {selectedIndex + 1} / {selectedCount}{' '}
-              个
+              第 {selectedIndex + 1} / {selectedCount} 个
             </div>
           </div>
 
@@ -432,7 +588,6 @@ function ToolbarSettings() {
               appRegion="no-drag"
               disabled={!canMovePrev}
               onClick={() => moveSelected(-1)}
-              onPointerDown={() => moveSelected(-1)}
             >
               <ChevronLeftIcon />
             </Button>
@@ -444,10 +599,59 @@ function ToolbarSettings() {
               appRegion="no-drag"
               disabled={!canMoveNext}
               onClick={() => moveSelected(1)}
-              onPointerDown={() => moveSelected(1)}
             >
               <ChevronRightIcon />
             </Button>
+          </div>
+        </div>
+
+        <div className="settingsToolbarAddPanel">
+          <div className="settingsToolbarAddHeader">
+            <div className="settingsToolbarAddTitle">添加按钮</div>
+            <div className="settingsToolbarAddMeta">点击右侧加号，将按钮添加到浮动工具栏</div>
+          </div>
+
+          <div className="settingsToolbarAddList">
+            {allAddableButtons.map((item) => {
+              const label = labelForButton(item.id)
+              const icon = iconForButton(item.id)
+              const desc = descriptionForButton(item.id)
+              const isAdded =
+                item.group === 'primary'
+                  ? allowedPrimaryButtons.includes(item.id as PrimaryButtonId)
+                  : allowedSecondaryButtons.includes(item.id as SecondaryButtonId)
+
+              return (
+                <div key={`${item.group}:${item.id}`} className="settingsToolbarAddRow">
+                  <div className="settingsToolbarAddLeft">
+                    <Button size="sm" variant="light" title={label} ariaLabel={label} appRegion="no-drag">
+                      {icon}
+                    </Button>
+                  </div>
+
+                  <div className="settingsToolbarAddMiddle">
+                    <div className="settingsToolbarAddName">
+                      {label}
+                    </div>
+                    <div className="settingsToolbarAddDesc">{desc}</div>
+                  </div>
+
+                  <div className="settingsToolbarAddRight">
+                    <Button
+                      size="sm"
+                      variant="light"
+                      title={isAdded ? '已添加' : '添加到浮动工具栏'}
+                      ariaLabel={isAdded ? '已添加' : '添加到浮动工具栏'}
+                      appRegion="no-drag"
+                      disabled={isAdded}
+                      onClick={() => addButtonToToolbar(item.group, item.id)}
+                    >
+                      <PlusIcon />
+                    </Button>
+                  </div>
+                </div>
+              )
+            })}
           </div>
         </div>
       </div>

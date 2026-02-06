@@ -69,38 +69,78 @@ type ToolbarState = {
   uiButtonSize?: 'sm' | 'md'
   tool?: 'mouse' | 'pen' | 'eraser'
   expanded?: boolean
-  primaryButtonsOrder?: Array<'mouse' | 'pen' | 'eraser' | 'whiteboard'>
-  secondaryButtonsOrder?: Array<'undo' | 'redo' | 'feature-panel'>
+  allowedPrimaryButtons?: PrimaryButtonId[]
+  allowedSecondaryButtons?: SecondaryButtonId[]
+  primaryButtonsOrder?: PrimaryButtonId[]
+  secondaryButtonsOrder?: SecondaryButtonId[]
 }
 
-const DEFAULT_PRIMARY_BUTTONS_ORDER: Array<'mouse' | 'pen' | 'eraser' | 'whiteboard'> = ['mouse', 'pen', 'eraser', 'whiteboard']
-const DEFAULT_SECONDARY_BUTTONS_ORDER: Array<'undo' | 'redo' | 'feature-panel'> = ['undo', 'redo', 'feature-panel']
+type PrimaryButtonId = 'mouse' | 'pen' | 'eraser' | 'whiteboard'
+type SecondaryButtonId = 'undo' | 'redo' | 'feature-panel'
 
-function normalizePrimaryButtonsOrder(input: unknown): Array<'mouse' | 'pen' | 'eraser' | 'whiteboard'> {
-  if (!Array.isArray(input)) return DEFAULT_PRIMARY_BUTTONS_ORDER
-  const allowed = new Set(DEFAULT_PRIMARY_BUTTONS_ORDER)
-  const unique: Array<'mouse' | 'pen' | 'eraser' | 'whiteboard'> = []
+const DEFAULT_ALLOWED_PRIMARY_BUTTONS: PrimaryButtonId[] = ['mouse', 'pen', 'eraser', 'whiteboard']
+const DEFAULT_ALLOWED_SECONDARY_BUTTONS: SecondaryButtonId[] = ['undo', 'redo', 'feature-panel']
+
+const DEFAULT_PRIMARY_BUTTONS_ORDER: PrimaryButtonId[] = ['mouse', 'pen', 'eraser', 'whiteboard']
+const DEFAULT_SECONDARY_BUTTONS_ORDER: SecondaryButtonId[] = ['undo', 'redo', 'feature-panel']
+
+function normalizeAllowedPrimaryButtons(input: unknown): PrimaryButtonId[] {
+  if (!Array.isArray(input)) return DEFAULT_ALLOWED_PRIMARY_BUTTONS
+  const allowed = new Set(DEFAULT_ALLOWED_PRIMARY_BUTTONS)
+  const unique: PrimaryButtonId[] = []
   for (const item of input) {
     if (item !== 'mouse' && item !== 'pen' && item !== 'eraser' && item !== 'whiteboard') continue
     if (!allowed.has(item)) continue
     if (unique.includes(item)) continue
     unique.push(item)
   }
-  for (const item of DEFAULT_PRIMARY_BUTTONS_ORDER) if (!unique.includes(item)) unique.push(item)
-  return unique
+  return unique.length ? unique : DEFAULT_ALLOWED_PRIMARY_BUTTONS
 }
 
-function normalizeSecondaryButtonsOrder(input: unknown): Array<'undo' | 'redo' | 'feature-panel'> {
-  if (!Array.isArray(input)) return DEFAULT_SECONDARY_BUTTONS_ORDER
-  const allowed = new Set(DEFAULT_SECONDARY_BUTTONS_ORDER)
-  const unique: Array<'undo' | 'redo' | 'feature-panel'> = []
+function normalizeAllowedSecondaryButtons(input: unknown): SecondaryButtonId[] {
+  if (!Array.isArray(input)) return DEFAULT_ALLOWED_SECONDARY_BUTTONS
+  const allowed = new Set(DEFAULT_ALLOWED_SECONDARY_BUTTONS)
+  const unique: SecondaryButtonId[] = []
   for (const item of input) {
     if (item !== 'undo' && item !== 'redo' && item !== 'feature-panel') continue
     if (!allowed.has(item)) continue
     if (unique.includes(item)) continue
     unique.push(item)
   }
-  for (const item of DEFAULT_SECONDARY_BUTTONS_ORDER) if (!unique.includes(item)) unique.push(item)
+  return unique
+}
+
+function normalizePrimaryButtonsOrder(input: unknown, allowedButtons: readonly PrimaryButtonId[]): PrimaryButtonId[] {
+  const allowed = new Set(allowedButtons)
+  const unique: PrimaryButtonId[] = []
+  if (Array.isArray(input)) {
+    for (const item of input) {
+      if (item !== 'mouse' && item !== 'pen' && item !== 'eraser' && item !== 'whiteboard') continue
+      if (!allowed.has(item)) continue
+      if (unique.includes(item)) continue
+      unique.push(item)
+    }
+  }
+
+  for (const item of DEFAULT_PRIMARY_BUTTONS_ORDER) if (allowed.has(item) && !unique.includes(item)) unique.push(item)
+  for (const item of allowedButtons) if (!unique.includes(item)) unique.push(item)
+  return unique
+}
+
+function normalizeSecondaryButtonsOrder(input: unknown, allowedButtons: readonly SecondaryButtonId[]): SecondaryButtonId[] {
+  const allowed = new Set(allowedButtons)
+  const unique: SecondaryButtonId[] = []
+  if (Array.isArray(input)) {
+    for (const item of input) {
+      if (item !== 'undo' && item !== 'redo' && item !== 'feature-panel') continue
+      if (!allowed.has(item)) continue
+      if (unique.includes(item)) continue
+      unique.push(item)
+    }
+  }
+
+  for (const item of DEFAULT_SECONDARY_BUTTONS_ORDER) if (allowed.has(item) && !unique.includes(item)) unique.push(item)
+  for (const item of allowedButtons) if (!unique.includes(item)) unique.push(item)
   return unique
 }
 
@@ -121,6 +161,8 @@ function isToolbarState(value: unknown): value is ToolbarState {
   if (v.uiButtonSize !== undefined && v.uiButtonSize !== 'sm' && v.uiButtonSize !== 'md') return false
   if (v.tool !== undefined && v.tool !== 'mouse' && v.tool !== 'pen' && v.tool !== 'eraser') return false
   if (v.expanded !== undefined && typeof v.expanded !== 'boolean') return false
+  if (v.allowedPrimaryButtons !== undefined && !Array.isArray(v.allowedPrimaryButtons)) return false
+  if (v.allowedSecondaryButtons !== undefined && !Array.isArray(v.allowedSecondaryButtons)) return false
   if (v.primaryButtonsOrder !== undefined && !Array.isArray(v.primaryButtonsOrder)) return false
   if (v.secondaryButtonsOrder !== undefined && !Array.isArray(v.secondaryButtonsOrder)) return false
   return true
@@ -146,6 +188,8 @@ function ToolbarProvider({ children }: { children: React.ReactNode }) {
     uiWidth: 360,
     uiButtonSize: 'sm',
     expanded: true,
+    allowedPrimaryButtons: DEFAULT_ALLOWED_PRIMARY_BUTTONS,
+    allowedSecondaryButtons: DEFAULT_ALLOWED_SECONDARY_BUTTONS,
     primaryButtonsOrder: DEFAULT_PRIMARY_BUTTONS_ORDER,
     secondaryButtonsOrder: DEFAULT_SECONDARY_BUTTONS_ORDER
   }, { validate: isToolbarState })
@@ -178,8 +222,10 @@ function ToolbarProvider({ children }: { children: React.ReactNode }) {
   }, [rev, setState])
 
   useEffect(() => {
-    const normalizedPrimary = normalizePrimaryButtonsOrder((state as any).primaryButtonsOrder)
-    const normalizedSecondary = normalizeSecondaryButtonsOrder((state as any).secondaryButtonsOrder)
+    const normalizedAllowedPrimary = normalizeAllowedPrimaryButtons((state as any).allowedPrimaryButtons)
+    const normalizedAllowedSecondary = normalizeAllowedSecondaryButtons((state as any).allowedSecondaryButtons)
+    const normalizedPrimary = normalizePrimaryButtonsOrder((state as any).primaryButtonsOrder, normalizedAllowedPrimary)
+    const normalizedSecondary = normalizeSecondaryButtonsOrder((state as any).secondaryButtonsOrder, normalizedAllowedSecondary)
     const normalized: ToolbarState = {
       collapsed: Boolean(state.collapsed),
       alwaysOnTop: Boolean(state.alwaysOnTop),
@@ -187,6 +233,8 @@ function ToolbarProvider({ children }: { children: React.ReactNode }) {
       uiButtonSize: state.uiButtonSize === 'md' ? 'md' : 'sm',
       tool: state.tool === 'pen' ? 'pen' : state.tool === 'eraser' ? 'eraser' : 'mouse',
       expanded: state.expanded !== false,
+      allowedPrimaryButtons: normalizedAllowedPrimary,
+      allowedSecondaryButtons: normalizedAllowedSecondary,
       primaryButtonsOrder: normalizedPrimary,
       secondaryButtonsOrder: normalizedSecondary
     }
@@ -197,6 +245,8 @@ function ToolbarProvider({ children }: { children: React.ReactNode }) {
       normalized.uiButtonSize !== state.uiButtonSize ||
       normalized.tool !== state.tool ||
       normalized.expanded !== state.expanded ||
+      !arraysEqual(normalizedAllowedPrimary, state.allowedPrimaryButtons) ||
+      !arraysEqual(normalizedAllowedSecondary, state.allowedSecondaryButtons) ||
       !arraysEqual(normalizedPrimary, state.primaryButtonsOrder) ||
       !arraysEqual(normalizedSecondary, state.secondaryButtonsOrder)
     ) {
@@ -245,7 +295,7 @@ function FloatingToolbarInner() {
   const primaryButtonsOrder = state.primaryButtonsOrder ?? DEFAULT_PRIMARY_BUTTONS_ORDER
   const secondaryButtonsOrder = state.secondaryButtonsOrder ?? DEFAULT_SECONDARY_BUTTONS_ORDER
 
-  const renderPrimaryButton = (id: 'mouse' | 'pen' | 'eraser' | 'whiteboard') => {
+  const renderPrimaryButton = (id: PrimaryButtonId) => {
     if (id === 'mouse') {
       const visibility = getAppButtonVisibility('mouse')
       return (
@@ -325,7 +375,7 @@ function FloatingToolbarInner() {
     )
   }
 
-  const renderSecondaryButton = (id: 'undo' | 'redo' | 'feature-panel') => {
+  const renderSecondaryButton = (id: SecondaryButtonId) => {
     if (id === 'undo') {
       const visibility = getAppButtonVisibility('undo')
       return (
