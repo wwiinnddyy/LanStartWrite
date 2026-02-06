@@ -1,0 +1,221 @@
+/* 橡皮二级菜单样式 */
+
+.eraserSubmenu {
+  width: 100%;
+  min-width: 340px;
+  padding: 0; /* 移除多余 padding，由 subwindowCard 统一控制 */
+  box-sizing: border-box;
+}
+
+.eraserSubmenu .subwindowMeasure {
+  display: block;
+  width: 100%;
+}
+
+.eraserSubmenuContent {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+}
+
+/* Top Section: Slider */
+.eraserTopSection {
+  padding: 10px 14px;
+  background: rgba(0, 0, 0, 0.03);
+  border-radius: 16px; /* 更加圆润 */
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.02);
+}
+
+.eraserThicknessControl {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 32px;
+}
+
+.eraserThicknessLabel {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--ls-surface-fg, rgba(12, 12, 12, 0.7));
+  /* 手写体风格 */
+  font-family: "Segoe UI", system-ui, sans-serif; 
+}
+
+.eraserThicknessValue {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ls-surface-fg, rgba(12, 12, 12, 0.9));
+  min-width: 36px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.eraserSliderContainer {
+  flex: 1;
+  position: relative;
+  height: 24px;
+  display: flex;
+  align-items: center;
+}
+
+.eraserSlider {
+  width: 100%;
+  height: 8px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 4px;
+  outline: none;
+  cursor: pointer;
+  position: relative;
+  z-index: 2;
+  margin: 0;
+}
+
+.eraserSlider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 2px solid #3b82f6;
+  cursor: pointer;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
+  transition: transform 0.15s ease;
+  margin-top: -6px;
+}
+
+.eraserSlider::-webkit-slider-thumb:hover {
+  transform: scale(1.1);
+}
+
+.eraserSliderTrack {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 8px;
+  background: #3b82f6;
+  border-radius: 4px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Middle Section: Buttons */
+.eraserMiddleSection {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+}
+
+.eraserTypeCard {
+  flex: 0 1 120px; /* 改为固定最大宽度，而不是 flex: 1 撑满 */
+  max-width: 120px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 4px;
+  height: 110px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
+}
+
+.eraserTypeCard:hover {
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  transform: translateY(-2px);
+}
+
+.eraserTypeCard--active {
+  background: rgba(59, 130, 246, 0.08);
+  border-color: rgba(59, 130, 246, 0.4);
+  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.2), 0 4px 12px rgba(59, 130, 246, 0.15);
+}
+
+.eraserTypeCard--danger {
+  background: #ef4444; /* 红色背景 */
+  border-color: #ef4444;
+  color: white; /* 文字颜色设为白色 */
+  position: relative;
+  overflow: hidden; /* 确保进度条不溢出 */
+}
+
+.eraserTypeCard--danger:hover {
+  background: #dc2626; /* 悬停时加深红色 */
+  border-color: #dc2626;
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+}
+
+.eraserTypeCard--danger .eraserTypeLabel {
+  color: white; /* 强制文字颜色为白色 */
+}
+
+.eraserLongPressProgress {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  background: rgba(255, 255, 255, 0.3); /* 白色半透明进度条 */
+  z-index: 0;
+  pointer-events: none;
+}
+
+.eraserTypeCard--danger .eraserTypeIcon,
+.eraserTypeCard--danger .eraserTypeLabel {
+  position: relative;
+  z-index: 1; /* 确保内容在进度条上方 */
+}
+
+.eraserTypeIcon {
+  width: 60px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 8px;
+}
+
+.eraserTypeIcon svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  filter: drop-shadow(0 2px 3px rgba(0,0,0,0.1));
+}
+
+.eraserTypeLabel {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ls-surface-fg, rgba(12, 12, 12, 0.85));
+}
+
+/* Bottom Section: Status Bar */
+.eraserBottomSection {
+  padding: 12px 18px;
+  background: rgba(0, 0, 0, 0.04);
+  border-radius: 14px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+.eraserStatusBar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.eraserStatusText {
+  /* 模仿草图中的手写字体感觉 */
+  font-family: "Comic Sans MS", "Chalkboard SE", "Segoe Print", sans-serif;
+  font-size: 16px;
+  color: #444;
+  opacity: 0.85;
+  letter-spacing: 0.5px;
+}

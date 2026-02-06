@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { FloatingToolbarApp, FloatingToolbarHandleApp, WINDOW_ID_FLOATING_TOOLBAR, WINDOW_ID_FLOATING_TOOLBAR_HANDLE } from '../../toolbar'
 import { useEventsPoll } from '../../toolbar/hooks/useEventsPoll'
 import { Button } from '../../button'
-import { EventsMenu, FeaturePanelMenu, PenSubmenu, SettingsMenu } from '../../toolbar-subwindows'
+import { EventsMenu, FeaturePanelMenu, PenSubmenu, EraserSubmenu, SettingsMenu } from '../../toolbar-subwindows'
 import { TaskWindowsWatcherWindow } from '../../task_windows_watcher'
 import { PaintBoardApp } from '../../paint_board'
 import { SettingsWindow } from '../../settings'
@@ -89,6 +89,7 @@ export default function App() {
     if (kind === 'feature-panel') return <FeaturePanelMenu kind="feature-panel" />
     if (kind === 'settings') return <SettingsMenu kind="settings" />
     if (kind === 'pen') return <PenSubmenu kind="pen" />
+    if (kind === 'eraser') return <EraserSubmenu kind="eraser" />
     return <EventsMenu kind="events" />
   }
 

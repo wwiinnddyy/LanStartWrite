@@ -222,6 +222,37 @@ async function handleCommand(command: string, payload: unknown): Promise<Command
         return { ok: true }
       }
 
+      if (action === 'setEraserSettings') {
+        const type = coerceString((payload as any)?.type)
+        const thickness = Number((payload as any)?.thickness)
+        
+        const state = getOrInitUiState(UI_STATE_APP_WINDOW_ID)
+        const uiFrameworkRaw = state[WRITING_FRAMEWORK_UI_STATE_KEY]
+        const uiFramework = isWritingFramework(uiFrameworkRaw) ? uiFrameworkRaw : undefined
+        const writingFramework = uiFramework ?? (await getPersistedWritingFramework()) ?? 'konva'
+        const activeAppRaw = state[ACTIVE_APP_UI_STATE_KEY]
+        const activeApp = isActiveApp(activeAppRaw) ? activeAppRaw : undefined
+        const pptFullscreen = state[PPT_FULLSCREEN_UI_STATE_KEY] === true
+        const effective = resolveEffectiveWritingBackend({ writingFramework, activeApp, pptFullscreen })
+
+        emitEvent('BACKEND_FORWARD', { target: effective, command: 'setEraserSettings', payload: { type, thickness }, reason: { writingFramework, activeApp, pptFullscreen } })
+        return { ok: true }
+      }
+
+      if (action === 'clearPage') {
+        const state = getOrInitUiState(UI_STATE_APP_WINDOW_ID)
+        const uiFrameworkRaw = state[WRITING_FRAMEWORK_UI_STATE_KEY]
+        const uiFramework = isWritingFramework(uiFrameworkRaw) ? uiFrameworkRaw : undefined
+        const writingFramework = uiFramework ?? (await getPersistedWritingFramework()) ?? 'konva'
+        const activeAppRaw = state[ACTIVE_APP_UI_STATE_KEY]
+        const activeApp = isActiveApp(activeAppRaw) ? activeAppRaw : undefined
+        const pptFullscreen = state[PPT_FULLSCREEN_UI_STATE_KEY] === true
+        const effective = resolveEffectiveWritingBackend({ writingFramework, activeApp, pptFullscreen })
+
+        emitEvent('BACKEND_FORWARD', { target: effective, command: 'clearPage', payload: {}, reason: { writingFramework, activeApp, pptFullscreen } })
+        return { ok: true }
+      }
+
       if (action === 'setWritingFramework') {
         const frameworkRaw = coerceString((payload as any)?.framework)
         const framework = isWritingFramework(frameworkRaw) ? frameworkRaw : undefined

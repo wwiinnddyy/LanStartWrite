@@ -337,6 +337,18 @@ function FloatingToolbarInner() {
     }
   }
 
+  // 处理橡皮按钮点击
+  const handleEraserClick = () => {
+    if (tool === 'eraser') {
+      // 如果橡皮已经是当前工具，打开二级菜单（独立窗口）
+      void postCommand('toggle-subwindow', { kind: 'eraser', placement: 'bottom' })
+    } else {
+      // 否则切换到橡皮工具
+      setState({ ...state, tool: 'eraser' })
+      void postCommand('app.setTool', { tool: 'eraser' })
+    }
+  }
+
   const primaryButtonsOrder = state.primaryButtonsOrder ?? DEFAULT_PRIMARY_BUTTONS_ORDER
   const pinnedSecondaryButtonsOrder = state.pinnedSecondaryButtonsOrder ?? []
   const secondaryButtonsOrder = state.secondaryButtonsOrder ?? DEFAULT_SECONDARY_BUTTONS_ORDER
@@ -389,13 +401,10 @@ function FloatingToolbarInner() {
           size={uiButtonSize}
           variant={tool === 'eraser' ? 'light' : 'default'}
           ariaLabel="橡皮"
-          title="橡皮"
+          title={tool === 'eraser' ? '橡皮（再次点击打开设置）' : '橡皮'}
           showInToolbar={visibility.showInToolbar}
           showInFeaturePanel={visibility.showInFeaturePanel}
-          onClick={() => {
-            setState({ ...state, tool: 'eraser' })
-            void postCommand('app.setTool', { tool: 'eraser' })
-          }}
+          onClick={handleEraserClick}
         >
           <ToolbarToolIcon kind="eraser" />
         </Button>
