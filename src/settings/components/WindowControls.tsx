@@ -1,5 +1,5 @@
 import React from 'react'
-import { motion } from '../../Framer_Motion'
+import { MotionButton } from '../../button'
 import { postCommand } from '../../toolbar/hooks/useBackend'
 import './WindowControls.css'
 
@@ -20,7 +20,9 @@ export function WindowControls() {
 
   return (
     <div className="windowControls">
-      <motion.button
+      <MotionButton
+        kind="custom"
+        ariaLabel="最小化"
         className="windowControlButton windowControlButton--minimize"
         onClick={handleMinimize}
         whileHover={{ scale: 1.1 }}
@@ -30,9 +32,11 @@ export function WindowControls() {
         <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2">
           <line x1="4" y1="12" x2="20" y2="12" />
         </svg>
-      </motion.button>
+      </MotionButton>
 
-      <motion.button
+      <MotionButton
+        kind="custom"
+        ariaLabel="关闭"
         className="windowControlButton windowControlButton--close"
         onClick={handleClose}
         whileHover={{ scale: 1.1 }}
@@ -43,7 +47,7 @@ export function WindowControls() {
           <line x1="4" y1="4" x2="20" y2="20" />
           <line x1="20" y1="4" x2="4" y2="20" />
         </svg>
-      </motion.button>
+      </MotionButton>
     </div>
   )
 }

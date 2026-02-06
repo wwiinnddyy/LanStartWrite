@@ -1,6 +1,7 @@
 import React from 'react'
 import { motion } from '../../Framer_Motion'
 import type { SettingsTab, SettingsTabItem } from '../types'
+import { MotionButton } from '../../button'
 import './SettingsSidebar.css'
 
 // Fluent 风格图标
@@ -96,8 +97,10 @@ export function SettingsSidebar({ activeTab, onTabChange }: SettingsSidebarProps
       {/* 选项卡列表 */}
       <nav className="settingsSidebarNav">
         {tabs.map((tab, index) => (
-          <motion.button
+          <MotionButton
             key={tab.id}
+            kind="custom"
+            ariaLabel={tab.label}
             className={`settingsSidebarTab ${activeTab === tab.id ? 'settingsSidebarTab--active' : ''}`}
             onClick={() => onTabChange(tab.id)}
             initial={{ x: -20, opacity: 0 }}
@@ -108,7 +111,7 @@ export function SettingsSidebar({ activeTab, onTabChange }: SettingsSidebarProps
           >
             <span className="settingsSidebarTabIcon">{tab.icon}</span>
             <span className="settingsSidebarTabLabel">{tab.label}</span>
-          </motion.button>
+          </MotionButton>
         ))}
       </nav>
 

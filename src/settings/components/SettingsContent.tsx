@@ -32,7 +32,11 @@ function AppearanceSettings() {
 
       {/* 主题模式选择 */}
       <div className="settingsAppearanceOptions">
-        <button
+        <Button
+          kind="custom"
+          appRegion="no-drag"
+          ariaLabel="浅色主题"
+          title="浅色主题"
           className={`settingsAppearanceCard ${appearance === 'light' ? 'settingsAppearanceCard--active' : ''}`}
           onClick={() => setAppearance('light')}
         >
@@ -44,9 +48,13 @@ function AppearanceSettings() {
             </div>
           </div>
           <span className="settingsAppearanceLabel">浅色</span>
-        </button>
+        </Button>
 
-        <button
+        <Button
+          kind="custom"
+          appRegion="no-drag"
+          ariaLabel="深色主题"
+          title="深色主题"
           className={`settingsAppearanceCard ${appearance === 'dark' ? 'settingsAppearanceCard--active' : ''}`}
           onClick={() => setAppearance('dark')}
         >
@@ -58,7 +66,7 @@ function AppearanceSettings() {
             </div>
           </div>
           <span className="settingsAppearanceLabel">深色</span>
-        </button>
+        </Button>
       </div>
 
       {/* 强调色设置 */}

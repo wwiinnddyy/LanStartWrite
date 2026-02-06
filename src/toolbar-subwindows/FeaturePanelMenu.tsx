@@ -5,6 +5,7 @@ import { useHyperGlassRealtimeBlur } from '../hyper_glass'
 import { TOOLBAR_STATE_KEY, usePersistedState } from '../status'
 import { markQuitting, postCommand } from '../toolbar/hooks/useBackend'
 import { useZoomOnWheel } from '../toolbar/hooks/useZoomOnWheel'
+import { getAppButtonVisibility, type AppButtonId } from '../toolbar/utils/constants'
 import './styles/subwindow.css'
 
 type GridIconKind = 'grid' | 'plus' | 'gear' | 'doc' | 'db' | 'events' | 'watcher' | 'pin' | 'quit'
@@ -206,65 +207,69 @@ export function FeaturePanelMenu(props: { kind: string }) {
     }
   }, [])
 
-  const items: Array<{ id: string; title: string; icon: GridIconKind; variant?: 'default' | 'light' | 'danger'; onClick: () => void }> = [
-    {
-      id: 'db',
-      title: '数据库',
-      icon: 'db',
-      onClick: () => {
-        void postCommand('create-window')
+  const items = useMemo(() => {
+    const allItems: Array<{ id: AppButtonId; title: string; icon: GridIconKind; variant?: 'default' | 'light' | 'danger'; onClick: () => void }> = [
+      {
+        id: 'db',
+        title: '数据库',
+        icon: 'db',
+        onClick: () => {
+          void postCommand('create-window')
+        }
+      },
+      {
+        id: 'events',
+        title: '事件',
+        icon: 'events',
+        onClick: () => {
+          void postCommand('toggle-subwindow', { kind: 'events', placement: 'bottom' })
+        }
+      },
+      {
+        id: 'watcher',
+        title: '监视器',
+        icon: 'watcher',
+        onClick: () => {
+          void postCommand('watcher.openWindow')
+        }
+      },
+      {
+        id: 'pin',
+        title: '置顶',
+        icon: 'pin',
+        variant: toolbarState.alwaysOnTop ? 'light' : 'default',
+        onClick: () => {
+          const next = !toolbarState.alwaysOnTop
+          setToolbarState({ ...toolbarState, alwaysOnTop: next })
+          void postCommand('set-toolbar-always-on-top', { value: next })
+        }
+      },
+      {
+        id: 'settings',
+        title: '设置',
+        icon: 'gear',
+        onClick: () => {
+          void postCommand('app.openSettingsWindow')
+        }
+      },
+      {
+        id: 'quit',
+        title: '退出',
+        icon: 'quit',
+        variant: 'danger',
+        onClick: () => {
+          markQuitting()
+          void postCommand('quit')
+        }
       }
-    },
-    {
-      id: 'events',
-      title: '事件',
-      icon: 'events',
-      onClick: () => {
-        void postCommand('toggle-subwindow', { kind: 'events', placement: 'bottom' })
-      }
-    },
-    {
-      id: 'watcher',
-      title: '监视器',
-      icon: 'watcher',
-      onClick: () => {
-        void postCommand('watcher.openWindow')
-      }
-    },
-    {
-      id: 'pin',
-      title: '置顶',
-      icon: 'pin',
-      variant: toolbarState.alwaysOnTop ? 'light' : 'default',
-      onClick: () => {
-        const next = !toolbarState.alwaysOnTop
-        setToolbarState({ ...toolbarState, alwaysOnTop: next })
-        void postCommand('set-toolbar-always-on-top', { value: next })
-      }
-    },
-    {
-      id: 'settings',
-      title: '设置',
-      icon: 'gear',
-      onClick: () => {
-        void postCommand('app.openSettingsWindow')
-      }
-    },
-    {
-      id: 'quit',
-      title: '退出',
-      icon: 'quit',
-      variant: 'danger',
-      onClick: () => {
-        markQuitting()
-        void postCommand('quit')
-      }
-    }
-  ]
+    ]
+
+    return allItems.filter((item) => getAppButtonVisibility(item.id).showInFeaturePanel)
+  }, [setToolbarState, toolbarState.alwaysOnTop])
 
   const pages = useMemo(() => {
     const pageSize = 16
-    const result: Array<Array<{ id: string; title: string; icon: GridIconKind; variant?: 'default' | 'light' | 'danger'; onClick: () => void }>> = []
+    const result: Array<Array<{ id: AppButtonId; title: string; icon: GridIconKind; variant?: 'default' | 'light' | 'danger'; onClick: () => void }>> = []
     for (let i = 0; i < items.length; i += pageSize) {
       result.push(items.slice(i, i + pageSize))
     }
@@ -318,7 +323,16 @@ export function FeaturePanelMenu(props: { kind: string }) {
                   <div key={idx} className="subwindowPagerPage">
                     <div className="subwindowIconGrid">
                       {pageItems.map((item) => (
-                        <Button key={item.id} size="sm" ariaLabel={item.title} title={item.title} variant={item.variant} onClick={item.onClick}>
+                        <Button
+                          key={item.id}
+                          size="sm"
+                          ariaLabel={item.title}
+                          title={item.title}
+                          variant={item.variant}
+                          showInToolbar={getAppButtonVisibility(item.id).showInToolbar}
+                          showInFeaturePanel={getAppButtonVisibility(item.id).showInFeaturePanel}
+                          onClick={item.onClick}
+                        >
                           <GridIcon kind={item.icon} />
                         </Button>
                       ))}

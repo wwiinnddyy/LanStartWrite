@@ -5,10 +5,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
   border: 0;
-  border-radius: 10px;
   background: transparent;
   color: var(--ls-btn-fg);
   cursor: pointer;
@@ -26,17 +23,50 @@
     opacity 120ms ease;
 }
 
-.lsButton:hover {
+.lsButton--icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+}
+
+.lsButton--text {
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 10px;
+  background: var(--ls-btn-bg);
+  border: 1px solid var(--ls-btn-border);
+}
+
+.lsButton.lsButton--text:hover {
+  background: var(--ls-btn-bg-hover);
+}
+
+.lsButton--custom {
   background: transparent;
 }
 
-.lsButton:active {
+.lsButton--custom:active {
+  background: transparent;
+  transform: none;
+}
+
+.lsButton--icon:hover {
+  background: transparent;
+}
+
+.lsButton--icon:active {
+  transform: translateY(0.5px);
+  background: var(--ls-btn-bg-hover);
+}
+
+.lsButton.lsButton--text:active {
   transform: translateY(0.5px);
   background: var(--ls-btn-bg-hover);
 }
 
 .lsButton:focus-visible {
   outline: none;
+  box-shadow: 0 0 0 3px var(--ls-accent-light, rgba(59, 130, 246, 0.15));
 }
 
 .lsButton:disabled {
@@ -71,6 +101,10 @@
 .lsButton--light:active {
   background: var(--ls-accent-light);
   transform: translateY(0.5px);
+}
+
+.lsButton--light:focus-visible {
+  box-shadow: 0 0 0 3px var(--ls-accent-light);
 }
 
 .lsButton--sm {

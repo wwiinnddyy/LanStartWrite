@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { motion, useReducedMotion, AnimatePresence } from '../Framer_Motion'
 import { useHyperGlassRealtimeBlur } from '../hyper_glass'
-import { Button } from '../button'
+import { Button, MotionButton } from '../button'
 import '../toolbar-subwindows/styles/subwindow.css'
 import './styles.css'
 
@@ -279,7 +279,8 @@ function CollapsibleSection({
 
   return (
     <div className={`twCollapsibleSection twCollapsibleSection--${layoutSize}`}>
-      <motion.button
+      <MotionButton
+        kind="custom"
         className="twCollapsibleHeader"
         onClick={() => setExpanded(!expanded)}
         whileHover={{ backgroundColor: 'rgba(0,0,0,0.03)' }}
@@ -294,7 +295,7 @@ function CollapsibleSection({
         >
           <ChevronDownIcon />
         </motion.span>
-      </motion.button>
+      </MotionButton>
       <AnimatePresence initial={false}>
         {expanded && (
           <motion.div
@@ -484,27 +485,39 @@ export function TaskWindowsWatcherWindow() {
 
           {/* 视图切换标签 */}
           <div className={`twViewTabs twViewTabs--${layoutSize}`}>
-            <button
+            <Button
+              kind="custom"
+              appRegion="no-drag"
+              ariaLabel="进程视图"
+              title="进程视图"
               className={`twViewTab ${viewMode === 'processes' ? 'twViewTab--active' : ''}`}
               onClick={() => setViewMode('processes')}
             >
               <ListIcon />
               {!isCompact && <span>进程</span>}
-            </button>
-            <button
+            </Button>
+            <Button
+              kind="custom"
+              appRegion="no-drag"
+              ariaLabel="窗口视图"
+              title="窗口视图"
               className={`twViewTab ${viewMode === 'windows' ? 'twViewTab--active' : ''}`}
               onClick={() => setViewMode('windows')}
             >
               <WindowIcon />
               {!isCompact && <span>窗口</span>}
-            </button>
-            <button
+            </Button>
+            <Button
+              kind="custom"
+              appRegion="no-drag"
+              ariaLabel="性能视图"
+              title="性能视图"
               className={`twViewTab ${viewMode === 'performance' ? 'twViewTab--active' : ''}`}
               onClick={() => setViewMode('performance')}
             >
               <ActivityIcon />
               {!isCompact && <span>性能</span>}
-            </button>
+            </Button>
           </div>
 
           {/* 统计卡片 */}
@@ -605,27 +618,39 @@ export function TaskWindowsWatcherWindow() {
               {/* 排序按钮 */}
               <div className={`twSortBar twSortBar--${layoutSize}`}>
                 {!isCompact && <span className="twSortLabel">排序:</span>}
-                <button
+                <Button
+                  kind="custom"
+                  appRegion="no-drag"
+                  ariaLabel="按 CPU 排序"
+                  title="按 CPU 排序"
                   className={`twSortBtn ${sortKey === 'cpu' ? 'twSortBtn--active' : ''}`}
                   onClick={() => setSortKey('cpu')}
                 >
                   <CpuIcon />
                   {!isCompact && <span>CPU</span>}
-                </button>
-                <button
+                </Button>
+                <Button
+                  kind="custom"
+                  appRegion="no-drag"
+                  ariaLabel="按内存排序"
+                  title="按内存排序"
                   className={`twSortBtn ${sortKey === 'mem' ? 'twSortBtn--active' : ''}`}
                   onClick={() => setSortKey('mem')}
                 >
                   <MemoryIcon />
                   {!isCompact && <span>内存</span>}
-                </button>
+                </Button>
                 {!isCompact && (
-                  <button
+                  <Button
+                    kind="custom"
+                    appRegion="no-drag"
+                    ariaLabel="按 PID 排序"
+                    title="按 PID 排序"
                     className={`twSortBtn ${sortKey === 'pid' ? 'twSortBtn--active' : ''}`}
                     onClick={() => setSortKey('pid')}
                   >
                     PID
-                  </button>
+                  </Button>
                 )}
               </div>
 

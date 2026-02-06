@@ -8,6 +8,7 @@ import { postCommand } from './hooks/useBackend'
 import { useToolbarWindowAutoResize } from './hooks/useToolbarWindowAutoResize'
 import { useZoomOnWheel } from './hooks/useZoomOnWheel'
 import { useAppearanceSettings } from '../settings'
+import { getAppButtonVisibility } from './utils/constants'
 import './styles/toolbar.css'
 
 function ToolbarToolIcon(props: { kind: 'mouse' | 'pen' | 'eraser' | 'whiteboard' }) {
@@ -246,6 +247,7 @@ function FloatingToolbarInner() {
 
   const renderPrimaryButton = (id: 'mouse' | 'pen' | 'eraser' | 'whiteboard') => {
     if (id === 'mouse') {
+      const visibility = getAppButtonVisibility('mouse')
       return (
         <Button
           key="mouse"
@@ -253,6 +255,8 @@ function FloatingToolbarInner() {
           variant={tool === 'mouse' ? 'light' : 'default'}
           ariaLabel="鼠标"
           title="鼠标"
+          showInToolbar={visibility.showInToolbar}
+          showInFeaturePanel={visibility.showInFeaturePanel}
           onClick={() => {
             setState({ ...state, tool: 'mouse' })
             void postCommand('app.setTool', { tool: 'mouse' })
@@ -264,6 +268,7 @@ function FloatingToolbarInner() {
     }
 
     if (id === 'pen') {
+      const visibility = getAppButtonVisibility('pen')
       return (
         <Button
           key="pen"
@@ -271,6 +276,8 @@ function FloatingToolbarInner() {
           variant={tool === 'pen' ? 'light' : 'default'}
           ariaLabel="笔"
           title={tool === 'pen' ? '笔（再次点击打开设置）' : '笔'}
+          showInToolbar={visibility.showInToolbar}
+          showInFeaturePanel={visibility.showInFeaturePanel}
           onClick={handlePenClick}
         >
           <ToolbarToolIcon kind="pen" />
@@ -279,6 +286,7 @@ function FloatingToolbarInner() {
     }
 
     if (id === 'eraser') {
+      const visibility = getAppButtonVisibility('eraser')
       return (
         <Button
           key="eraser"
@@ -286,6 +294,8 @@ function FloatingToolbarInner() {
           variant={tool === 'eraser' ? 'light' : 'default'}
           ariaLabel="橡皮"
           title="橡皮"
+          showInToolbar={visibility.showInToolbar}
+          showInFeaturePanel={visibility.showInFeaturePanel}
           onClick={() => {
             setState({ ...state, tool: 'eraser' })
             void postCommand('app.setTool', { tool: 'eraser' })
@@ -296,6 +306,7 @@ function FloatingToolbarInner() {
       )
     }
 
+    const visibility = getAppButtonVisibility('whiteboard')
     return (
       <Button
         key="whiteboard"
@@ -303,6 +314,8 @@ function FloatingToolbarInner() {
         variant={whiteboardActive ? 'light' : 'default'}
         ariaLabel="白板"
         title="白板"
+        showInToolbar={visibility.showInToolbar}
+        showInFeaturePanel={visibility.showInFeaturePanel}
         onClick={() => {
           setAppMode(whiteboardActive ? 'toolbar' : 'whiteboard')
         }}
@@ -314,12 +327,15 @@ function FloatingToolbarInner() {
 
   const renderSecondaryButton = (id: 'undo' | 'redo' | 'feature-panel') => {
     if (id === 'undo') {
+      const visibility = getAppButtonVisibility('undo')
       return (
         <Button
           key="undo"
           size={uiButtonSize}
           ariaLabel="撤销"
           title="撤销"
+          showInToolbar={visibility.showInToolbar}
+          showInFeaturePanel={visibility.showInFeaturePanel}
           onClick={() => {
             console.log('撤销')
           }}
@@ -330,12 +346,15 @@ function FloatingToolbarInner() {
     }
 
     if (id === 'redo') {
+      const visibility = getAppButtonVisibility('redo')
       return (
         <Button
           key="redo"
           size={uiButtonSize}
           ariaLabel="重做"
           title="重做"
+          showInToolbar={visibility.showInToolbar}
+          showInFeaturePanel={visibility.showInFeaturePanel}
           onClick={() => {
             console.log('重做')
           }}
@@ -345,12 +364,15 @@ function FloatingToolbarInner() {
       )
     }
 
+    const visibility = getAppButtonVisibility('feature-panel')
     return (
       <Button
         key="feature-panel"
         size={uiButtonSize}
         ariaLabel="功能面板"
         title="功能面板"
+        showInToolbar={visibility.showInToolbar}
+        showInFeaturePanel={visibility.showInFeaturePanel}
         onClick={() => {
           void postCommand('toggle-subwindow', { kind: 'feature-panel', placement: 'bottom' })
         }}
@@ -384,15 +406,22 @@ function FloatingToolbarInner() {
 
           {/* 折叠/展开切换按钮 */}
           <div className="toolbarBarRow">
+            {(() => {
+              const visibility = getAppButtonVisibility('toggle-expanded')
+              return (
             <Button
               size={uiButtonSize}
               variant="light"
               className="toolbarToggleButton"
               title={isExpanded ? '点击折叠工具栏' : '点击展开工具栏'}
+              showInToolbar={visibility.showInToolbar}
+              showInFeaturePanel={visibility.showInFeaturePanel}
               onClick={toggleExpanded}
             >
               {isExpanded ? <ChevronLeftIcon /> : <ChevronRightIcon />}
             </Button>
+              )
+            })()}
           </div>
 
           {/* 可折叠区域 */}

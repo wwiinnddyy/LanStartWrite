@@ -1,6 +1,7 @@
 import React from 'react'
 import { motion } from '../../Framer_Motion'
 import { useWallpaperMonetColors, type MonetColor } from '../../hyper_glass'
+import { MotionButton } from '../../button'
 import './AccentColorPicker.css'
 
 export type AccentColor = {
@@ -217,8 +218,10 @@ export function AccentColorPicker({ value, onChange }: AccentColorPickerProps) {
   return (
     <div className="accentColorPicker">
       {allColors.map((color, index) => (
-        <motion.button
+        <MotionButton
           key={color.value}
+          kind="custom"
+          ariaLabel={color.name}
           className={`accentColorOption ${value === color.value ? 'accentColorOption--active' : ''} ${color.value === 'system-monet' ? 'accentColorOption--system' : ''}`}
           onClick={() => onChange(color)}
           initial={{ opacity: 0, scale: 0.8 }}
@@ -244,7 +247,7 @@ export function AccentColorPicker({ value, onChange }: AccentColorPickerProps) {
               </svg>
             </motion.div>
           )}
-        </motion.button>
+        </MotionButton>
       ))}
       {isLoading && (
         <motion.div

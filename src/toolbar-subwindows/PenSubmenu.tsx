@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { motion, useReducedMotion } from '../Framer_Motion'
 import { useHyperGlassRealtimeBlur } from '../hyper_glass'
+import { MotionButton } from '../button'
 import { postCommand } from '../toolbar/hooks/useBackend'
 import { useZoomOnWheel } from '../toolbar/hooks/useZoomOnWheel'
 import './styles/subwindow.css'
@@ -126,7 +127,9 @@ function ColorButton({
   onClick: () => void
 }) {
   return (
-    <motion.button
+    <MotionButton
+      kind="custom"
+      ariaLabel={`颜色 ${color}`}
       className={`penColorButton ${isActive ? 'penColorButton--active' : ''}`}
       onClick={onClick}
       whileHover={{ scale: 1.1 }}
@@ -146,7 +149,7 @@ function ColorButton({
           </svg>
         </motion.div>
       )}
-    </motion.button>
+    </MotionButton>
   )
 }
 
@@ -167,7 +170,9 @@ function PenTypeButton({
   onClick: () => void
 }) {
   return (
-    <motion.button
+    <MotionButton
+      kind="custom"
+      ariaLabel={label}
       className={`penTypeCard ${isActive ? 'penTypeCard--active' : ''}`}
       onClick={onClick}
       whileHover={{ x: isActive ? -12 : -4 }} // 悬停时稍微移动
@@ -183,7 +188,7 @@ function PenTypeButton({
       <div className="penTypeIcon">
         {icon(iconColor)}
       </div>
-    </motion.button>
+    </MotionButton>
   )
 }
 

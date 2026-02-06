@@ -1,6 +1,7 @@
 import React from 'react'
 import { motion } from '../../Framer_Motion'
 import type { Easing } from 'framer-motion'
+import { MotionButton } from '../../button'
 import './TransitionSettings.css'
 
 export type TransitionPreset = {
@@ -121,8 +122,10 @@ export function TransitionSettings({
         
         <div className="transitionPresetGrid">
           {TRANSITION_PRESETS.map((preset, index) => (
-            <motion.button
+            <MotionButton
               key={preset.value}
+              kind="custom"
+              ariaLabel={`过渡预设：${preset.name}`}
               className={`transitionPresetCard ${transitionPreset === preset.value ? 'transitionPresetCard--active' : ''}`}
               onClick={() => onTransitionChange(preset)}
               initial={{ opacity: 0, y: 10 }}
@@ -166,7 +169,7 @@ export function TransitionSettings({
                   </svg>
                 </motion.div>
               )}
-            </motion.button>
+            </MotionButton>
           ))}
         </div>
       </div>
@@ -178,8 +181,10 @@ export function TransitionSettings({
         
         <div className="backgroundTransitionGrid">
           {BACKGROUND_TRANSITIONS.map((transition, index) => (
-            <motion.button
+            <MotionButton
               key={transition.value}
+              kind="custom"
+              ariaLabel={`背景过渡：${transition.name}`}
               className={`backgroundTransitionCard ${backgroundTransition === transition.value ? 'backgroundTransitionCard--active' : ''}`}
               onClick={() => onBackgroundTransitionChange(transition)}
               initial={{ opacity: 0, y: 10 }}
@@ -212,7 +217,7 @@ export function TransitionSettings({
                   </svg>
                 </motion.div>
               )}
-            </motion.button>
+            </MotionButton>
           ))}
         </div>
       </div>
