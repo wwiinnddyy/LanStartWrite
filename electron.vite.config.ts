@@ -1,8 +1,11 @@
 import { resolve } from 'node:path'
+import { readFileSync } from 'node:fs'
 import react from '@vitejs/plugin-react'
 import autoprefixer from 'autoprefixer'
 import tailwindcss from 'tailwindcss'
 import { defineConfig } from 'electron-vite'
+
+const pkg = JSON.parse(readFileSync('package.json', 'utf-8'))
 
 export default defineConfig({
   main: {
@@ -26,6 +29,9 @@ export default defineConfig({
   renderer: {
     root: resolve(__dirname, 'src/renderer'),
     plugins: [react()],
+    define: {
+      '__APP_VERSION__': JSON.stringify(pkg.version)
+    },
     css: {
       postcss: {
         plugins: [

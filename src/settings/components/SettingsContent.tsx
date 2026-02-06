@@ -551,7 +551,7 @@ function AboutSettings() {
           </svg>
         </div>
         <h3 className="settingsAboutAppName">LanStartWrite</h3>
-        <p className="settingsAboutVersion">Doctor</p>
+        <p className="settingsAboutVersion">版本 {__APP_VERSION__}</p>
         <p className="settingsAboutDescription">
           一款现代化的屏幕批注和演示工具，
           <br />
