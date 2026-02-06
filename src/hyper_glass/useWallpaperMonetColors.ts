@@ -171,8 +171,10 @@ export function useWallpaperMonetColors() {
     setError(null)
 
     try {
-      // 捕获屏幕缩略图
-      const capture = await api.captureDisplayThumbnail({ maxSide: 320 })
+      const capture =
+        typeof (api as any).captureWallpaperThumbnail === 'function'
+          ? await (api as any).captureWallpaperThumbnail({ maxSide: 320 })
+          : await api.captureDisplayThumbnail({ maxSide: 320 })
       
       // 解码图像
       const res = await fetch(capture.dataUrl)

@@ -1,4 +1,4 @@
-import { BrowserWindow, app, ipcMain, nativeTheme, screen } from 'electron'
+import { BrowserWindow, app, ipcMain, nativeImage, nativeTheme, screen } from 'electron'
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
@@ -21,6 +21,7 @@ const WINDOW_ID_SETTINGS_WINDOW = 'settings-window'
 const TOOLBAR_HANDLE_GAP = 10
 const TOOLBAR_HANDLE_WIDTH = 30
 const APPEARANCE_KV_KEY = 'app-appearance'
+const NATIVE_MICA_KV_KEY = 'native-mica-enabled'
 
 type Appearance = 'light' | 'dark'
 
@@ -32,9 +33,14 @@ function surfaceBackgroundColor(appearance: Appearance): string {
   return appearance === 'dark' ? '#191c24ff' : '#f4f5f7ff'
 }
 
+function effectiveSurfaceBackgroundColor(appearance: Appearance): string {
+  return surfaceBackgroundColor(appearance)
+}
+
 let currentAppearance: Appearance = 'light'
 let didApplyAppearance = false
 let toolbarUiZoom = 0
+let nativeMicaEnabled = false
 
 type BackendRpcResponse =
   | { type: 'RPC_RESPONSE'; id: number; ok: true; result: unknown }
@@ -107,7 +113,7 @@ function applyAppearance(appearance: Appearance): void {
   try {
     nativeTheme.themeSource = appearance
   } catch {}
-  const bg = surfaceBackgroundColor(appearance)
+  const bg = effectiveSurfaceBackgroundColor(appearance)
   for (const win of BrowserWindow.getAllWindows()) {
     if (win.isDestroyed()) continue
     try {
@@ -115,6 +121,25 @@ function applyAppearance(appearance: Appearance): void {
     } catch {}
   }
   broadcastAppearanceToUiState(appearance)
+}
+
+function applyNativeMica(enabled: boolean): void {
+  nativeMicaEnabled = enabled
+  const bg = effectiveSurfaceBackgroundColor(currentAppearance)
+
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (win.isDestroyed()) continue
+    try {
+      win.setBackgroundColor(bg)
+    } catch {}
+
+    if (process.platform !== 'win32') continue
+    const setMaterial = (win as any).setBackgroundMaterial as undefined | ((m: string) => void)
+    if (typeof setMaterial !== 'function') continue
+    try {
+      setMaterial(enabled ? 'mica' : 'none')
+    } catch {}
+  }
 }
 
 function applyToolbarUiZoom(zoom: number): void {
@@ -202,12 +227,66 @@ function adjustWindowForDPI(win: BrowserWindow, baseWidth: number, baseHeight: n
   win.setSize(width, height)
 }
 
+type CaptureOptions = { maxSide?: unknown }
+
+function computeThumbnailSize(input: { width: number; height: number }, maxSide: number) {
+  const maxInputSide = Math.max(input.width, input.height)
+  if (maxInputSide <= maxSide) return { width: input.width, height: input.height }
+  const scale = maxSide / maxInputSide
+  return { width: Math.max(1, Math.round(input.width * scale)), height: Math.max(1, Math.round(input.height * scale)) }
+}
+
+function runCommandToString(command: string, args: string[]): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const proc = spawn(command, args, { windowsHide: true })
+    let out = ''
+    let err = ''
+    proc.stdout.on('data', (d) => {
+      out += String(d)
+    })
+    proc.stderr.on('data', (d) => {
+      err += String(d)
+    })
+    proc.on('error', reject)
+    proc.on('close', (code) => {
+      if (code === 0) resolve(out)
+      else reject(new Error(err || `exit_${code ?? 'unknown'}`))
+    })
+  })
+}
+
+async function getWindowsWallpaperPath(): Promise<string | undefined> {
+  const candidates: string[] = []
+
+  try {
+    const out = await runCommandToString('reg', ['query', 'HKCU\\Control Panel\\Desktop', '/v', 'WallPaper'])
+    for (const rawLine of out.split(/\r?\n/g)) {
+      const line = rawLine.trim()
+      if (!line) continue
+      const m = line.match(/^WallPaper\s+REG_\w+\s+(.*)$/i)
+      if (!m) continue
+      const value = String(m[1] ?? '').trim()
+      if (value) candidates.push(value)
+    }
+  } catch {}
+
+  const appData = process.env.APPDATA
+  if (appData) candidates.push(join(appData, 'Microsoft', 'Windows', 'Themes', 'TranscodedWallpaper'))
+
+  for (const p of candidates) {
+    if (!p) continue
+    if (existsSync(p)) return p
+  }
+  return undefined
+}
+
 const appWindowsManager = new AppWindowsManager({
   preloadPath: join(__dirname, '../preload/index.js'),
   rendererHtmlPath: join(__dirname, '../renderer/index.html'),
   getDevServerUrl,
   getAppearance: () => currentAppearance,
-  surfaceBackgroundColor,
+  getNativeMicaEnabled: () => nativeMicaEnabled,
+  surfaceBackgroundColor: effectiveSurfaceBackgroundColor,
   applyWindowsBackdrop,
   wireWindowDebug,
   wireWindowStatus,
@@ -217,6 +296,28 @@ const appWindowsManager = new AppWindowsManager({
 })
 
 appWindowsManager.registerIpcHandlers({ ipcMain, requestBackendRpc, coerceString })
+
+ipcMain.handle('hyperGlass:captureWallpaperThumbnail', async (_event, input: CaptureOptions = {}) => {
+  if (platform !== 'win32') throw new Error('unsupported_platform')
+  const maxSide = typeof input.maxSide === 'number' ? Math.max(32, Math.floor(input.maxSide)) : 320
+  const wallpaperPath = await getWindowsWallpaperPath()
+  if (!wallpaperPath) throw new Error('no_wallpaper_path')
+
+  const img = nativeImage.createFromPath(wallpaperPath)
+  if (img.isEmpty()) throw new Error('wallpaper_image_empty')
+
+  const size = img.getSize()
+  const thumbSize = computeThumbnailSize(size, maxSide)
+  const thumb = img.resize({ width: thumbSize.width, height: thumbSize.height, quality: 'best' })
+  const outSize = thumb.getSize()
+
+  return {
+    dataUrl: thumb.toDataURL(),
+    width: outSize.width,
+    height: outSize.height,
+    wallpaper: { path: wallpaperPath, size },
+  }
+})
 
 function wireWindowDebug(win: BrowserWindow, name: string): void {
   win.webContents.on('did-fail-load', (_e, errorCode, errorDescription, validatedURL) => {
@@ -286,16 +387,21 @@ function applyWindowsBackdrop(win: BrowserWindow): void {
   // Windows 11: DWM backdrop (Mica/Acrylic) needs a non-transparent window surface.
   if (process.platform !== 'win32') return
   const setMaterial = (win as any).setBackgroundMaterial as undefined | ((m: string) => void)
-  if (typeof setMaterial === 'function') {
+  if (typeof setMaterial !== 'function') return
+  if (!nativeMicaEnabled) {
     try {
-      setMaterial('mica')
-      return
+      setMaterial('none')
     } catch {}
-    try {
-      setMaterial('acrylic')
-      return
-    } catch {}
+    return
   }
+  try {
+    setMaterial('mica')
+    return
+  } catch {}
+  try {
+    setMaterial('acrylic')
+    return
+  } catch {}
 }
 
 function createFloatingToolbarWindow(): BrowserWindow {
@@ -310,8 +416,8 @@ function createFloatingToolbarWindow(): BrowserWindow {
     alwaysOnTop: true,
     skipTaskbar: true,
     title: WINDOW_TITLE_FLOATING_TOOLBAR,
-    backgroundColor: surfaceBackgroundColor(currentAppearance),
-    backgroundMaterial: 'mica',
+    backgroundColor: effectiveSurfaceBackgroundColor(currentAppearance),
+    backgroundMaterial: nativeMicaEnabled ? 'mica' : 'none',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
@@ -371,8 +477,8 @@ function createFloatingToolbarHandleWindow(owner: BrowserWindow): BrowserWindow 
     skipTaskbar: true,
     parent: owner,
     title: '浮动工具栏拖动把手',
-    backgroundColor: surfaceBackgroundColor(currentAppearance),
-    backgroundMaterial: 'mica',
+    backgroundColor: effectiveSurfaceBackgroundColor(currentAppearance),
+    backgroundMaterial: nativeMicaEnabled ? 'mica' : 'none',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
@@ -714,8 +820,8 @@ function getOrCreateToolbarSubwindow(kind: string, placement: 'top' | 'bottom'):
     skipTaskbar: true,
     parent: owner,
     title: `二级菜单-${kind}`,
-    backgroundColor: surfaceBackgroundColor(currentAppearance),
-    backgroundMaterial: 'mica',
+    backgroundColor: effectiveSurfaceBackgroundColor(currentAppearance),
+    backgroundMaterial: nativeMicaEnabled ? 'mica' : 'none',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
@@ -842,6 +948,11 @@ function handleBackendControlMessage(message: any): void {
     const appearance = (message as any).appearance
     if (!isAppearance(appearance)) return
     applyAppearance(appearance)
+    return
+  }
+
+  if (message.type === 'SET_NATIVE_MICA') {
+    applyNativeMica(Boolean((message as any).enabled))
     return
   }
 
@@ -1045,52 +1156,71 @@ function startBackend(): void {
 if (hasSingleInstanceLock) {
   app
     .whenReady()
-    .then(() => {
-    try {
-      startBackend()
-    } catch (e) {
-      process.stderr.write(String(e))
-    }
-    lanstartwriteLink.flush().catch(() => undefined)
-    ;(async () => {
+    .then(async () => {
+      try {
+        startBackend()
+      } catch (e) {
+        process.stderr.write(String(e))
+      }
+
+      lanstartwriteLink.flush().catch(() => undefined)
+
+      let loadedAppearance: Appearance | undefined
+      let loadedNativeMica: boolean | undefined
+
       for (let attempt = 0; attempt < 3; attempt++) {
+        let backendResponded = false
+
         try {
           const value = await backendGetKv(APPEARANCE_KV_KEY)
-          if (isAppearance(value)) applyAppearance(value)
-          return
-        } catch {
-          await new Promise((r) => setTimeout(r, 220))
+          backendResponded = true
+          if (isAppearance(value)) loadedAppearance = value
+        } catch (e) {
+          if (String(e).includes('kv_not_found')) backendResponded = true
         }
-      }
-      applyAppearance(currentAppearance)
-    })().catch(() => {
-      applyAppearance(currentAppearance)
-    })
-    sendToBackend({ type: 'PROCESS_STATUS', name: 'main', status: 'ready', pid: process.pid, ts: Date.now() })
-    ensureTaskWatcherStarted()
-    const win = createFloatingToolbarWindow()
-    floatingToolbarWindow = win
-    const handle = createFloatingToolbarHandleWindow(win)
-    floatingToolbarHandleWindow = handle
-    win.once('ready-to-show', () => {
-      win.show()
-      scheduleRepositionToolbarSubwindows('other')
-      if (!handle.isDestroyed()) handle.showInactive()
-    })
 
-    app.on('activate', () => {
-      if (BrowserWindow.getAllWindows().length === 0) {
-        const toolbar = createFloatingToolbarWindow()
-        floatingToolbarWindow = toolbar
-        const nextHandle = createFloatingToolbarHandleWindow(toolbar)
-        floatingToolbarHandleWindow = nextHandle
-        toolbar.once('ready-to-show', () => {
-          toolbar.show()
-          scheduleRepositionToolbarSubwindows('other')
-          if (!nextHandle.isDestroyed()) nextHandle.showInactive()
-        })
+        try {
+          const raw = await backendGetKv(NATIVE_MICA_KV_KEY)
+          backendResponded = true
+          if (typeof raw === 'boolean') loadedNativeMica = raw
+          else if (raw === 'true' || raw === 1 || raw === '1') loadedNativeMica = true
+          else if (raw === 'false' || raw === 0 || raw === '0') loadedNativeMica = false
+        } catch (e) {
+          if (String(e).includes('kv_not_found')) backendResponded = true
+        }
+
+        if (backendResponded) break
+        await new Promise((r) => setTimeout(r, 220))
       }
-    })
+
+      applyNativeMica(loadedNativeMica ?? false)
+      applyAppearance(loadedAppearance ?? currentAppearance)
+
+      sendToBackend({ type: 'PROCESS_STATUS', name: 'main', status: 'ready', pid: process.pid, ts: Date.now() })
+      ensureTaskWatcherStarted()
+      const win = createFloatingToolbarWindow()
+      floatingToolbarWindow = win
+      const handle = createFloatingToolbarHandleWindow(win)
+      floatingToolbarHandleWindow = handle
+      win.once('ready-to-show', () => {
+        win.show()
+        scheduleRepositionToolbarSubwindows('other')
+        if (!handle.isDestroyed()) handle.showInactive()
+      })
+
+      app.on('activate', () => {
+        if (BrowserWindow.getAllWindows().length === 0) {
+          const toolbar = createFloatingToolbarWindow()
+          floatingToolbarWindow = toolbar
+          const nextHandle = createFloatingToolbarHandleWindow(toolbar)
+          floatingToolbarHandleWindow = nextHandle
+          toolbar.once('ready-to-show', () => {
+            toolbar.show()
+            scheduleRepositionToolbarSubwindows('other')
+            if (!nextHandle.isDestroyed()) nextHandle.showInactive()
+          })
+        }
+      })
     })
     .catch((e) => {
       process.stderr.write(String(e))

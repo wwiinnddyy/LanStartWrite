@@ -50,6 +50,10 @@ contextBridge.exposeInMainWorld('hyperGlass', {
         size: display.size
       }
     }
+  },
+  captureWallpaperThumbnail: async (options: CaptureOptions = {}) => {
+    const maxSide = typeof options.maxSide === 'number' ? Math.max(32, Math.floor(options.maxSide)) : 320
+    return await ipcRenderer.invoke('hyperGlass:captureWallpaperThumbnail', { maxSide })
   }
 })
 

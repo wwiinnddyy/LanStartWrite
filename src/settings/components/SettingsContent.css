@@ -341,7 +341,7 @@
   content: '';
   position: absolute;
   inset: 0;
-  background: var(--ls-surface-overlay, rgba(255, 255, 255, 0.55));
+  background: var(--ls-window-accent-gradient, none), var(--ls-surface-overlay, rgba(255, 255, 255, 0.55));
   mix-blend-mode: var(--ls-surface-overlay-blend, normal);
   pointer-events: none;
 }

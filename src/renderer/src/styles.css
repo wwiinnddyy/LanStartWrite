@@ -2,12 +2,13 @@ html,
 body {
   margin: 0;
   padding: 0;
-  background: transparent;
+  background: var(--ls-window-accent-gradient, transparent);
   user-select: none;
   -webkit-user-select: none;
 }
 
 :root {
+  --ls-window-accent-gradient: none;
   --ls-surface-fg: rgba(12, 12, 12, 0.92);
   --ls-surface-bg: rgba(255, 255, 255, 0.58);
   --ls-surface-border: rgba(0, 0, 0, 0.1);
@@ -63,6 +64,14 @@ body {
   --ls-btn-light-fg: var(--ls-accent-primary, rgba(255, 255, 255, 0.92));
   --ls-btn-light-bg: var(--ls-accent-light, rgba(96, 165, 250, 0.15));
   --ls-btn-light-bg-hover: var(--ls-accent-light, rgba(96, 165, 250, 0.25));
+}
+
+:root[data-native-mica='true'] {
+  --ls-window-accent-gradient: none;
+  --ls-surface-bg: transparent;
+  --ls-surface-overlay: transparent;
+  --ls-surface-overlay-blend: normal;
+  --ls-window-wallpaper-opacity: 0;
 }
 
 .childRoot {

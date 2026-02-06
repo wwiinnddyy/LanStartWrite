@@ -462,6 +462,16 @@ stdin.on('line', (line) => {
             if (!key) throw new Error('BAD_KEY')
             await putValue(db, key, params?.value)
             emitEvent('KV_PUT', { key })
+            if (key === 'native-mica-enabled') {
+              const raw = (params as any)?.value
+              const enabled =
+                raw === true || raw === 'true' || raw === 1 || raw === '1'
+                  ? true
+                  : raw === false || raw === 'false' || raw === 0 || raw === '0'
+                    ? false
+                    : Boolean(raw)
+              requestMain({ type: 'SET_NATIVE_MICA', enabled })
+            }
             requestMain({ type: 'RPC_RESPONSE', id, ok: true, result: null })
             return
           }

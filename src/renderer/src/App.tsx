@@ -5,7 +5,7 @@ import { Button } from '../../button'
 import { EventsMenu, FeaturePanelMenu, PenSubmenu, EraserSubmenu, SettingsMenu } from '../../toolbar-subwindows'
 import { TaskWindowsWatcherWindow } from '../../task_windows_watcher'
 import { PaintBoardApp } from '../../paint_board'
-import { SettingsWindow } from '../../settings'
+import { SettingsWindow, useAppearanceSettings } from '../../settings'
 
 function useWindowParams(): { windowId: string; kind?: string } {
   return useMemo(() => {
@@ -74,24 +74,29 @@ function ChildWindow() {
   )
 }
 
+function WithAppearance(props: { children: React.ReactNode }) {
+  useAppearanceSettings()
+  return <>{props.children}</>
+}
+
 export default function App() {
   const { windowId, kind } = useWindowParams()
 
-  if (windowId === 'child') return <ChildWindow />
-  if (windowId === WINDOW_ID_FLOATING_TOOLBAR) return <FloatingToolbarApp />
-  if (windowId === WINDOW_ID_FLOATING_TOOLBAR_HANDLE) return <FloatingToolbarHandleApp />
+  if (windowId === 'child') return <WithAppearance><ChildWindow /></WithAppearance>
+  if (windowId === WINDOW_ID_FLOATING_TOOLBAR) return <WithAppearance><FloatingToolbarApp /></WithAppearance>
+  if (windowId === WINDOW_ID_FLOATING_TOOLBAR_HANDLE) return <WithAppearance><FloatingToolbarHandleApp /></WithAppearance>
   if (windowId === 'paint-board') return <PaintBoardApp />
-  if (windowId === 'watcher') return <TaskWindowsWatcherWindow />
-  if (windowId === 'settings-window') return <SettingsWindow />
+  if (windowId === 'watcher') return <WithAppearance><TaskWindowsWatcherWindow /></WithAppearance>
+  if (windowId === 'settings-window') return <WithAppearance><SettingsWindow /></WithAppearance>
 
   if (windowId === 'toolbar-subwindow') {
-    if (kind === 'events') return <EventsMenu kind="events" />
-    if (kind === 'feature-panel') return <FeaturePanelMenu kind="feature-panel" />
-    if (kind === 'settings') return <SettingsMenu kind="settings" />
-    if (kind === 'pen') return <PenSubmenu kind="pen" />
-    if (kind === 'eraser') return <EraserSubmenu kind="eraser" />
-    return <EventsMenu kind="events" />
+    if (kind === 'events') return <WithAppearance><EventsMenu kind="events" /></WithAppearance>
+    if (kind === 'feature-panel') return <WithAppearance><FeaturePanelMenu kind="feature-panel" /></WithAppearance>
+    if (kind === 'settings') return <WithAppearance><SettingsMenu kind="settings" /></WithAppearance>
+    if (kind === 'pen') return <WithAppearance><PenSubmenu kind="pen" /></WithAppearance>
+    if (kind === 'eraser') return <WithAppearance><EraserSubmenu kind="eraser" /></WithAppearance>
+    return <WithAppearance><EventsMenu kind="events" /></WithAppearance>
   }
 
-  return <FloatingToolbarApp />
+  return <WithAppearance><FloatingToolbarApp /></WithAppearance>
 }

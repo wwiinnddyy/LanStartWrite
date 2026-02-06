@@ -10,6 +10,12 @@ declare global {
         height: number
         display: { id: number; scaleFactor: number; bounds: Electron.Rectangle; size: Electron.Size }
       }>
+      captureWallpaperThumbnail: (options?: { maxSide?: number }) => Promise<{
+        dataUrl: string
+        width: number
+        height: number
+        wallpaper: { path: string; size: { width: number; height: number } }
+      }>
     }
     lanstart?: {
       postCommand: (command: string, payload?: unknown) => Promise<null>

@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useAppAppearance } from '../../status'
 import { getKv, putKv } from '../../toolbar/hooks/useBackend'
+import { useWallpaperMonetColors } from '../../hyper_glass'
 import type { AccentColor } from '../components/AccentColorPicker'
-import { PRESET_ACCENT_COLORS, SYSTEM_ACCENT_COLOR } from '../components/AccentColorPicker'
+import { PRESET_ACCENT_COLORS, WALLPAPER_MIX_ACCENT_VALUE, buildWallpaperMixAccentColor } from '../components/AccentColorPicker'
 import type { TransitionPreset, BackgroundTransition } from '../components/TransitionSettings'
 import { TRANSITION_PRESETS, BACKGROUND_TRANSITIONS } from '../components/TransitionSettings'
 
@@ -11,15 +12,10 @@ const ACCENT_COLOR_LIGHT_KEY = 'accent-color-light'
 const ACCENT_COLOR_DARK_KEY = 'accent-color-dark'
 const TRANSITION_PRESET_KEY = 'transition-preset'
 const BACKGROUND_TRANSITION_KEY = 'background-transition'
+const NATIVE_MICA_KEY = 'native-mica-enabled'
 
 // 默认强调色
 const DEFAULT_ACCENT_COLOR = PRESET_ACCENT_COLORS[0] // 蓝色
-
-// 所有可用的强调色（预设 + 系统取色）
-const ALL_ACCENT_COLORS: AccentColor[] = [
-  SYSTEM_ACCENT_COLOR,
-  ...PRESET_ACCENT_COLORS,
-]
 
 // 默认过渡设置
 const DEFAULT_TRANSITION_PRESET = TRANSITION_PRESETS[0] // 流畅
@@ -29,6 +25,9 @@ export type AppearanceSettings = {
   // 强调色
   accentColor: AccentColor
   setAccentColor: (color: AccentColor) => void
+
+  nativeMicaEnabled: boolean
+  setNativeMicaEnabled: (enabled: boolean) => void
   
   // 过渡设置
   transitionPreset: TransitionPreset
@@ -42,12 +41,15 @@ export type AppearanceSettings = {
 
 export function useAppearanceSettings(): AppearanceSettings {
   const { appearance } = useAppAppearance()
+  const { monetColors } = useWallpaperMonetColors()
   
   // 根据当前主题获取对应的存储键
   const accentColorKey = appearance === 'dark' ? ACCENT_COLOR_DARK_KEY : ACCENT_COLOR_LIGHT_KEY
   
   // 强调色状态
   const [accentColorValue, setAccentColorValue] = useState<string>(DEFAULT_ACCENT_COLOR.value)
+
+  const [nativeMicaEnabledValue, setNativeMicaEnabledValue] = useState<boolean>(false)
   
   // 过渡设置状态
   const [transitionPresetValue, setTransitionPresetValue] = useState<string>(DEFAULT_TRANSITION_PRESET.value)
@@ -56,33 +58,55 @@ export function useAppearanceSettings(): AppearanceSettings {
   // 加载保存的设置
   useEffect(() => {
     const loadSettings = async () => {
-      try {
-        // 加载强调色（根据当前主题）
-        const savedAccentColor = await getKv<string>(accentColorKey)
-        if (savedAccentColor) {
-          setAccentColorValue(savedAccentColor)
+      const safeGet = async <T,>(key: string): Promise<T | undefined> => {
+        try {
+          return await getKv<T>(key)
+        } catch {
+          return undefined
         }
-        
-        // 加载过渡设置（全局共享）
-        const savedTransitionPreset = await getKv<string>(TRANSITION_PRESET_KEY)
-        if (savedTransitionPreset) {
-          setTransitionPresetValue(savedTransitionPreset)
-        }
-        
-        const savedBackgroundTransition = await getKv<string>(BACKGROUND_TRANSITION_KEY)
-        if (savedBackgroundTransition) {
-          setBackgroundTransitionValue(savedBackgroundTransition)
-        }
-      } catch (e) {
-        console.error('[useAppearanceSettings] Failed to load settings:', e)
+      }
+
+      const savedAccentColor = await safeGet<string>(accentColorKey)
+      if (savedAccentColor) {
+        setAccentColorValue(savedAccentColor === 'system-monet' ? WALLPAPER_MIX_ACCENT_VALUE : savedAccentColor)
+      }
+
+      const savedNativeMica = await safeGet<unknown>(NATIVE_MICA_KEY)
+      if (typeof savedNativeMica === 'boolean') setNativeMicaEnabledValue(savedNativeMica)
+      else if (savedNativeMica === 'true' || savedNativeMica === 1 || savedNativeMica === '1') setNativeMicaEnabledValue(true)
+      else if (savedNativeMica === 'false' || savedNativeMica === 0 || savedNativeMica === '0') setNativeMicaEnabledValue(false)
+      
+      const savedTransitionPreset = await safeGet<string>(TRANSITION_PRESET_KEY)
+      if (savedTransitionPreset) {
+        setTransitionPresetValue(savedTransitionPreset)
+      }
+      
+      const savedBackgroundTransition = await safeGet<string>(BACKGROUND_TRANSITION_KEY)
+      if (savedBackgroundTransition) {
+        setBackgroundTransitionValue(savedBackgroundTransition)
       }
     }
     
     loadSettings()
   }, [accentColorKey])
   
+  const wallpaperMixAccentColor = buildWallpaperMixAccentColor(monetColors)
+
+  const dynamicAccentColors: AccentColor[] = monetColors.map((m) => ({
+    name: m.name,
+    value: m.value,
+    light: m.light,
+    dark: m.dark,
+  }))
+
+  const allAccentColors: AccentColor[] = [
+    ...PRESET_ACCENT_COLORS,
+    ...(wallpaperMixAccentColor ? [wallpaperMixAccentColor] : []),
+    ...dynamicAccentColors,
+  ]
+
   // 获取完整的强调色对象
-  const accentColor = ALL_ACCENT_COLORS.find(c => c.value === accentColorValue) || DEFAULT_ACCENT_COLOR
+  const accentColor = allAccentColors.find(c => c.value === accentColorValue) || DEFAULT_ACCENT_COLOR
   
   // 获取完整的过渡预设对象
   const transitionPreset = TRANSITION_PRESETS.find(p => p.value === transitionPresetValue) || DEFAULT_TRANSITION_PRESET
@@ -99,6 +123,15 @@ export function useAppearanceSettings(): AppearanceSettings {
       console.error('[useAppearanceSettings] Failed to save accent color:', e)
     }
   }, [accentColorKey])
+
+  const setNativeMicaEnabled = useCallback(async (enabled: boolean) => {
+    setNativeMicaEnabledValue(enabled)
+    try {
+      await putKv(NATIVE_MICA_KEY, enabled)
+    } catch (e) {
+      console.error('[useAppearanceSettings] Failed to save native mica enabled:', e)
+    }
+  }, [])
   
   // 设置过渡预设
   const setTransitionPreset = useCallback(async (preset: TransitionPreset) => {
@@ -131,13 +164,20 @@ export function useAppearanceSettings(): AppearanceSettings {
     root.style.setProperty('--ls-accent-active', colors.primaryActive)
     root.style.setProperty('--ls-accent-light', colors.primaryLight)
     root.style.setProperty('--ls-accent-gradient', colors.gradient)
+    root.style.setProperty(
+      '--ls-window-accent-gradient',
+      !nativeMicaEnabledValue && accentColor.value === WALLPAPER_MIX_ACCENT_VALUE ? colors.gradient : 'none'
+    )
     
     // 应用过渡CSS变量
     root.style.setProperty('--ls-transition-duration', `${transitionPreset.duration}ms`)
     root.style.setProperty('--ls-transition-easing', transitionPreset.easing)
     root.style.setProperty('--ls-bg-transition-duration', `${backgroundTransition.duration}ms`)
     root.style.setProperty('--ls-bg-blur', `${backgroundTransition.blur}px`)
-  }, [appearance, accentColor, transitionPreset, backgroundTransition])
+
+    if (nativeMicaEnabledValue) root.setAttribute('data-native-mica', 'true')
+    else root.removeAttribute('data-native-mica')
+  }, [appearance, accentColor, transitionPreset, backgroundTransition, nativeMicaEnabledValue])
   
   // 当设置改变时自动应用
   useEffect(() => {
@@ -147,6 +187,8 @@ export function useAppearanceSettings(): AppearanceSettings {
   return {
     accentColor,
     setAccentColor,
+    nativeMicaEnabled: nativeMicaEnabledValue,
+    setNativeMicaEnabled,
     transitionPreset,
     setTransitionPreset,
     backgroundTransition,

@@ -7,6 +7,7 @@ export type AppWindowsManagerDeps = {
   rendererHtmlPath: string
   getDevServerUrl: () => string | undefined
   getAppearance: () => 'light' | 'dark'
+  getNativeMicaEnabled: () => boolean
   surfaceBackgroundColor: (appearance: 'light' | 'dark') => string
   applyWindowsBackdrop: (win: BrowserWindow) => void
   wireWindowDebug: (win: BrowserWindow, name: string) => void
@@ -226,7 +227,7 @@ export class AppWindowsManager {
       resizable: true,
       title: '数据库',
       backgroundColor: this.deps.surfaceBackgroundColor(appearance),
-      backgroundMaterial: 'mica',
+      backgroundMaterial: this.deps.getNativeMicaEnabled() ? 'mica' : 'none',
       webPreferences: {
         preload: this.deps.preloadPath,
         contextIsolation: true,
@@ -253,7 +254,7 @@ export class AppWindowsManager {
       resizable: true,
       title: '系统监视器',
       backgroundColor: this.deps.surfaceBackgroundColor(appearance),
-      backgroundMaterial: 'mica',
+      backgroundMaterial: this.deps.getNativeMicaEnabled() ? 'mica' : 'none',
       webPreferences: {
         preload: this.deps.preloadPath,
         contextIsolation: true,
@@ -294,8 +295,8 @@ export class AppWindowsManager {
       show: false,
       frame: false,
       transparent: true,
-      backgroundMaterial: 'mica',
       backgroundColor: this.deps.surfaceBackgroundColor(appearance),
+      backgroundMaterial: this.deps.getNativeMicaEnabled() ? 'mica' : 'none',
       webPreferences: {
         preload: this.deps.preloadPath,
         sandbox: false,

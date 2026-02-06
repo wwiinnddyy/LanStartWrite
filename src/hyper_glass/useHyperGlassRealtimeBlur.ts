@@ -19,6 +19,12 @@ declare global {
   interface Window {
     hyperGlass?: {
       captureDisplayThumbnail: (options?: { maxSide?: number }) => Promise<CaptureResult>
+      captureWallpaperThumbnail: (options?: { maxSide?: number }) => Promise<{
+        dataUrl: string
+        width: number
+        height: number
+        wallpaper: { path: string; size: { width: number; height: number } }
+      }>
     }
   }
 }

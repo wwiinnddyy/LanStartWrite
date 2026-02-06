@@ -180,6 +180,44 @@ function monetToAccentColor(monetColor: MonetColor): AccentColor {
   }
 }
 
+export const WALLPAPER_MIX_ACCENT_VALUE = 'wallpaper-mix'
+
+export function buildWallpaperMixAccentColor(monetColors: MonetColor[]): AccentColor | undefined {
+  const colors = monetColors.slice(0, 5)
+  if (colors.length === 0) return undefined
+
+  const buildGradient = (mode: 'light' | 'dark') => {
+    const stops = colors.map((c) => (mode === 'light' ? c.light.primary : c.dark.primary))
+    if (stops.length === 1) return `linear-gradient(to bottom right, ${stops[0]} 0%, ${stops[0]} 100%)`
+    const parts = stops.map((c, i) => {
+      const pct = Math.round((i / (stops.length - 1)) * 100)
+      return `${c} ${pct}%`
+    })
+    return `linear-gradient(to bottom right, ${parts.join(', ')})`
+  }
+
+  const base = colors[0]
+
+  return {
+    name: '壁纸混合',
+    value: WALLPAPER_MIX_ACCENT_VALUE,
+    light: {
+      primary: base.light.primary,
+      primaryHover: base.light.primaryHover,
+      primaryActive: base.light.primaryActive,
+      primaryLight: base.light.primaryLight,
+      gradient: buildGradient('light'),
+    },
+    dark: {
+      primary: base.dark.primary,
+      primaryHover: base.dark.primaryHover,
+      primaryActive: base.dark.primaryActive,
+      primaryLight: base.dark.primaryLight,
+      gradient: buildGradient('dark'),
+    },
+  }
+}
+
 interface AccentColorPickerProps {
   value: string
   onChange: (color: AccentColor) => void
@@ -208,56 +246,85 @@ export const SYSTEM_ACCENT_COLOR: AccentColor = {
 export function AccentColorPicker({ value, onChange }: AccentColorPickerProps) {
   const { monetColors, isLoading } = useWallpaperMonetColors()
 
-  // 合并预设颜色、系统取色方案和壁纸莫奈色
-  const allColors: AccentColor[] = [
-    SYSTEM_ACCENT_COLOR,
+  const topColors: AccentColor[] = [
     ...PRESET_ACCENT_COLORS,
+  ]
+  const wallpaperMix = buildWallpaperMixAccentColor(monetColors)
+  const wallpaperColors: AccentColor[] = [
+    ...(wallpaperMix ? [wallpaperMix] : []),
     ...monetColors.map(monetToAccentColor),
   ]
 
   return (
     <div className="accentColorPicker">
-      {allColors.map((color, index) => (
-        <MotionButton
-          key={color.value}
-          kind="custom"
-          ariaLabel={color.name}
-          className={`accentColorOption ${value === color.value ? 'accentColorOption--active' : ''} ${color.value === 'system-monet' ? 'accentColorOption--system' : ''}`}
-          onClick={() => onChange(color)}
-          initial={{ opacity: 0, scale: 0.8 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.2, delay: index * 0.03 }}
-          whileHover={{ scale: 1.1 }}
-          whileTap={{ scale: 0.95 }}
-          title={color.name}
-        >
-          <div
-            className="accentColorSwatch"
-            style={{ background: color.light.gradient }}
-          />
-          {value === color.value && (
-            <motion.div
-              className="accentColorCheck"
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-            >
-              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="white" strokeWidth="3">
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
-            </motion.div>
-          )}
-        </MotionButton>
-      ))}
-      {isLoading && (
-        <motion.div
-          className="accentColorLoading"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-        >
-          <div className="accentColorLoadingSpinner" />
-        </motion.div>
-      )}
+      <div className="accentColorPickerRow">
+        {topColors.map((color, index) => (
+          <MotionButton
+            key={color.value}
+            kind="custom"
+            ariaLabel={color.name}
+            className={`accentColorOption ${value === color.value ? 'accentColorOption--active' : ''} ${color.value === 'system-monet' ? 'accentColorOption--system' : ''}`}
+            onClick={() => onChange(color)}
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.2, delay: index * 0.03 }}
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.95 }}
+            title={color.name}
+          >
+            <div className="accentColorSwatch" style={{ background: color.light.gradient }} />
+            {value === color.value && (
+              <motion.div
+                className="accentColorCheck"
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+              >
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="white" strokeWidth="3">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              </motion.div>
+            )}
+          </MotionButton>
+        ))}
+      </div>
+
+      <div className="accentColorPickerWallpaperRow">
+        {wallpaperColors.map((color, index) => (
+          <MotionButton
+            key={color.value}
+            kind="custom"
+            ariaLabel={color.name}
+            className={`accentColorOption ${value === color.value ? 'accentColorOption--active' : ''}`}
+            onClick={() => onChange(color)}
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.2, delay: index * 0.03 }}
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.95 }}
+            title={color.name}
+          >
+            <div className="accentColorSwatch" style={{ background: color.light.gradient }} />
+            {value === color.value && (
+              <motion.div
+                className="accentColorCheck"
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+              >
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="white" strokeWidth="3">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              </motion.div>
+            )}
+          </MotionButton>
+        ))}
+        {isLoading && (
+          <motion.div className="accentColorLoading" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+            <div className="accentColorLoadingSpinner" />
+          </motion.div>
+        )}
+      </div>
     </div>
   )
 }

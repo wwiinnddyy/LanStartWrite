@@ -2,9 +2,24 @@
 
 .accentColorPicker {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 12px;
   padding: 4px;
+}
+
+.accentColorPickerRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.accentColorPickerWallpaperRow {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 12px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  padding-bottom: 4px;
 }
 
 .accentColorOption {

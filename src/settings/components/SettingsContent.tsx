@@ -1,5 +1,5 @@
 import React from 'react'
-import { Box, Select } from '@mantine/core'
+import { Box, Select, Switch } from '@mantine/core'
 import { motion } from '../../Framer_Motion'
 import { putKv, putUiStateKey, TOOLBAR_STATE_KEY, TOOLBAR_STATE_UI_STATE_KEY, UI_STATE_APP_WINDOW_ID, useAppAppearance, usePersistedState } from '../../status'
 import { Button } from '../../button'
@@ -19,6 +19,8 @@ function AppearanceSettings() {
   const {
     accentColor,
     setAccentColor,
+    nativeMicaEnabled,
+    setNativeMicaEnabled,
     transitionPreset,
     setTransitionPreset,
     backgroundTransition,
@@ -67,6 +69,17 @@ function AppearanceSettings() {
           </div>
           <span className="settingsAppearanceLabel">深色</span>
         </Button>
+      </div>
+
+      <div className="settingsSubSection">
+        <h3 className="settingsSubTitle">窗口材质</h3>
+        <p className="settingsSubDescription">开启后使用 Windows 原生黑白 Mica 背景，并让窗口背景透明</p>
+        <Switch
+          checked={nativeMicaEnabled}
+          onChange={(e) => setNativeMicaEnabled(e.currentTarget.checked)}
+          label="启用原生 Mica 效果"
+          size="md"
+        />
       </div>
 
       {/* 强调色设置 */}
