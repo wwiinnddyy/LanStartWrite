@@ -97,9 +97,10 @@ function AppearanceSettings() {
 // 各选项卡的内容占位组件
 function ToolbarSettings() {
   type PrimaryButtonId = 'mouse' | 'pen' | 'eraser' | 'whiteboard'
-  type SecondaryButtonId = 'undo' | 'redo' | 'feature-panel'
+  type SecondaryButtonId = 'undo' | 'redo' | 'feature-panel' | 'events' | 'watcher'
   type SelectedButton =
     | { group: 'primary'; id: PrimaryButtonId }
+    | { group: 'pinned'; id: SecondaryButtonId }
     | { group: 'secondary'; id: SecondaryButtonId }
 
   type ToolbarState = {
@@ -112,11 +113,14 @@ function ToolbarSettings() {
     allowedPrimaryButtons?: PrimaryButtonId[]
     allowedSecondaryButtons?: SecondaryButtonId[]
     primaryButtonsOrder?: PrimaryButtonId[]
+    pinnedSecondaryButtonsOrder?: SecondaryButtonId[]
     secondaryButtonsOrder?: SecondaryButtonId[]
   }
 
   const DEFAULT_PRIMARY: PrimaryButtonId[] = ['mouse', 'pen', 'eraser', 'whiteboard']
   const DEFAULT_SECONDARY: SecondaryButtonId[] = ['undo', 'redo', 'feature-panel']
+  const ALL_SECONDARY: SecondaryButtonId[] = ['undo', 'redo', 'feature-panel', 'events', 'watcher']
+  const DEFAULT_SECONDARY_ORDER: SecondaryButtonId[] = ['undo', 'redo', 'feature-panel']
 
   function normalizeAllowedPrimaryButtons(input: unknown): PrimaryButtonId[] {
     if (!Array.isArray(input)) return DEFAULT_PRIMARY
@@ -133,15 +137,15 @@ function ToolbarSettings() {
 
   function normalizeAllowedSecondaryButtons(input: unknown): SecondaryButtonId[] {
     if (!Array.isArray(input)) return DEFAULT_SECONDARY
-    const allowed = new Set(DEFAULT_SECONDARY)
+    const allowed = new Set(ALL_SECONDARY)
     const unique: SecondaryButtonId[] = []
     for (const item of input) {
-      if (item !== 'undo' && item !== 'redo' && item !== 'feature-panel') continue
+      if (item !== 'undo' && item !== 'redo' && item !== 'feature-panel' && item !== 'events' && item !== 'watcher') continue
       if (!allowed.has(item)) continue
       if (unique.includes(item)) continue
       unique.push(item)
     }
-    return unique
+    return unique.length ? unique : DEFAULT_SECONDARY
   }
 
   function normalizePrimaryButtonsOrder(input: unknown, allowedButtons: readonly PrimaryButtonId[]): PrimaryButtonId[] {
@@ -160,19 +164,46 @@ function ToolbarSettings() {
     return unique
   }
 
-  function normalizeSecondaryButtonsOrder(input: unknown, allowedButtons: readonly SecondaryButtonId[]): SecondaryButtonId[] {
+  function normalizePinnedSecondaryButtonsOrder(input: unknown, allowedButtons: readonly SecondaryButtonId[]): SecondaryButtonId[] {
     const allowed = new Set(allowedButtons)
     const unique: SecondaryButtonId[] = []
     if (Array.isArray(input)) {
       for (const item of input) {
-        if (item !== 'undo' && item !== 'redo' && item !== 'feature-panel') continue
+        if (item !== 'undo' && item !== 'redo' && item !== 'feature-panel' && item !== 'events' && item !== 'watcher') continue
         if (!allowed.has(item)) continue
         if (unique.includes(item)) continue
         unique.push(item)
       }
     }
-    for (const item of DEFAULT_SECONDARY) if (allowed.has(item) && !unique.includes(item)) unique.push(item)
-    for (const item of allowedButtons) if (!unique.includes(item)) unique.push(item)
+    return unique
+  }
+
+  function normalizeSecondaryButtonsOrder(
+    input: unknown,
+    allowedButtons: readonly SecondaryButtonId[],
+    pinnedButtons?: readonly SecondaryButtonId[]
+  ): SecondaryButtonId[] {
+    const allowed = new Set(allowedButtons)
+    const pinned = new Set(pinnedButtons ?? [])
+    const unique: SecondaryButtonId[] = []
+    if (Array.isArray(input)) {
+      for (const item of input) {
+        if (item !== 'undo' && item !== 'redo' && item !== 'feature-panel' && item !== 'events' && item !== 'watcher') continue
+        if (!allowed.has(item)) continue
+        if (pinned.has(item)) continue
+        if (unique.includes(item)) continue
+        unique.push(item)
+      }
+    }
+    for (const item of DEFAULT_SECONDARY_ORDER) {
+      if (!allowed.has(item)) continue
+      if (pinned.has(item)) continue
+      if (!unique.includes(item)) unique.push(item)
+    }
+    for (const item of allowedButtons) {
+      if (pinned.has(item)) continue
+      if (!unique.includes(item)) unique.push(item)
+    }
     return unique
   }
 
@@ -188,6 +219,7 @@ function ToolbarSettings() {
     if (v.allowedPrimaryButtons !== undefined && !Array.isArray(v.allowedPrimaryButtons)) return false
     if (v.allowedSecondaryButtons !== undefined && !Array.isArray(v.allowedSecondaryButtons)) return false
     if (v.primaryButtonsOrder !== undefined && !Array.isArray(v.primaryButtonsOrder)) return false
+    if (v.pinnedSecondaryButtonsOrder !== undefined && !Array.isArray(v.pinnedSecondaryButtonsOrder)) return false
     if (v.secondaryButtonsOrder !== undefined && !Array.isArray(v.secondaryButtonsOrder)) return false
     return true
   }
@@ -203,6 +235,7 @@ function ToolbarSettings() {
       allowedPrimaryButtons: DEFAULT_PRIMARY,
       allowedSecondaryButtons: DEFAULT_SECONDARY,
       primaryButtonsOrder: DEFAULT_PRIMARY,
+      pinnedSecondaryButtonsOrder: [],
       secondaryButtonsOrder: DEFAULT_SECONDARY,
     },
     { validate: isToolbarState }
@@ -212,7 +245,11 @@ function ToolbarSettings() {
   const allowedSecondaryButtons = normalizeAllowedSecondaryButtons((toolbarState as any).allowedSecondaryButtons)
 
   const primaryButtonsOrder = normalizePrimaryButtonsOrder(toolbarState.primaryButtonsOrder, allowedPrimaryButtons)
-  const secondaryButtonsOrder = normalizeSecondaryButtonsOrder(toolbarState.secondaryButtonsOrder, allowedSecondaryButtons)
+  const pinnedSecondaryButtonsOrder = normalizePinnedSecondaryButtonsOrder(
+    (toolbarState as any).pinnedSecondaryButtonsOrder,
+    allowedSecondaryButtons
+  )
+  const secondaryButtonsOrder = normalizeSecondaryButtonsOrder(toolbarState.secondaryButtonsOrder, allowedSecondaryButtons, pinnedSecondaryButtonsOrder)
 
   const labelForButton = (id: PrimaryButtonId | SecondaryButtonId) => {
     if (id === 'mouse') return '鼠标'
@@ -221,6 +258,8 @@ function ToolbarSettings() {
     if (id === 'whiteboard') return '白板'
     if (id === 'undo') return '撤销'
     if (id === 'redo') return '重做'
+    if (id === 'events') return '事件'
+    if (id === 'watcher') return '监视器'
     return '功能面板'
   }
 
@@ -290,6 +329,25 @@ function ToolbarSettings() {
     )
   }
 
+  function EventsIcon() {
+    return (
+      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M8 13a4 4 0 0 1 8 0" />
+        <path d="M12 21a8 8 0 1 1 8-8" />
+        <path d="M20 21l-2.5-2.5" />
+      </svg>
+    )
+  }
+
+  function WatcherIcon() {
+    return (
+      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M2 12s3.5-7 10-7s10 7 10 7s-3.5 7-10 7s-10-7-10-7" />
+        <path d="M12 15a3 3 0 1 0 0-6a3 3 0 0 0 0 6" />
+      </svg>
+    )
+  }
+
   function ChevronLeftIcon() {
     return (
       <svg
@@ -345,6 +403,28 @@ function ToolbarSettings() {
     )
   }
 
+  function TrashIcon() {
+    return (
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width="16"
+        height="16"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M3 6h18" />
+        <path d="M8 6V4h8v2" />
+        <path d="M19 6l-1 14H6L5 6" />
+        <path d="M10 11v6" />
+        <path d="M14 11v6" />
+      </svg>
+    )
+  }
+
   const iconForButton = (id: PrimaryButtonId | SecondaryButtonId) => {
     if (id === 'mouse') return <ToolbarToolIcon kind="mouse" />
     if (id === 'pen') return <ToolbarToolIcon kind="pen" />
@@ -352,6 +432,8 @@ function ToolbarSettings() {
     if (id === 'whiteboard') return <ToolbarToolIcon kind="whiteboard" />
     if (id === 'undo') return <UndoIcon />
     if (id === 'redo') return <RedoIcon />
+    if (id === 'events') return <EventsIcon />
+    if (id === 'watcher') return <WatcherIcon />
     return <FeaturePanelIcon />
   }
 
@@ -362,6 +444,8 @@ function ToolbarSettings() {
     if (id === 'whiteboard') return '进入/退出白板模式'
     if (id === 'undo') return '撤销上一步操作'
     if (id === 'redo') return '重做上一步操作'
+    if (id === 'events') return '打开事件列表窗口'
+    if (id === 'watcher') return '打开进程与窗口监视器'
     return '打开功能面板'
   }
 
@@ -408,22 +492,41 @@ function ToolbarSettings() {
       }
       return
     }
+    if (selectedButton.group === 'pinned') {
+      if (!pinnedSecondaryButtonsOrder.length) {
+        if (secondaryButtonsOrder.length) setSelectedButton({ group: 'secondary', id: secondaryButtonsOrder[0] ?? 'undo' })
+        else setSelectedButton({ group: 'primary', id: primaryButtonsOrder[0] ?? 'mouse' })
+        return
+      }
+      if (!pinnedSecondaryButtonsOrder.includes(selectedButton.id)) {
+        setSelectedButton({ group: 'pinned', id: pinnedSecondaryButtonsOrder[0] ?? 'undo' })
+      }
+      return
+    }
     if (!secondaryButtonsOrder.length) {
-      setSelectedButton({ group: 'primary', id: primaryButtonsOrder[0] ?? 'mouse' })
+      if (pinnedSecondaryButtonsOrder.length) setSelectedButton({ group: 'pinned', id: pinnedSecondaryButtonsOrder[0] ?? 'undo' })
+      else setSelectedButton({ group: 'primary', id: primaryButtonsOrder[0] ?? 'mouse' })
       return
     }
     if (!secondaryButtonsOrder.includes(selectedButton.id)) {
       setSelectedButton({ group: 'secondary', id: secondaryButtonsOrder[0] ?? 'undo' })
     }
-  }, [primaryButtonsOrder, secondaryButtonsOrder, selectedButton.group, selectedButton.id])
+  }, [pinnedSecondaryButtonsOrder, primaryButtonsOrder, secondaryButtonsOrder, selectedButton.group, selectedButton.id])
 
   const selectedLabel = labelForButton(selectedButton.id)
   const selectedIcon = iconForButton(selectedButton.id)
   const selectedIndex =
     selectedButton.group === 'primary'
       ? primaryButtonsOrder.indexOf(selectedButton.id)
-      : secondaryButtonsOrder.indexOf(selectedButton.id)
-  const selectedCount = selectedButton.group === 'primary' ? primaryButtonsOrder.length : secondaryButtonsOrder.length
+      : selectedButton.group === 'pinned'
+        ? pinnedSecondaryButtonsOrder.indexOf(selectedButton.id)
+        : secondaryButtonsOrder.indexOf(selectedButton.id)
+  const selectedCount =
+    selectedButton.group === 'primary'
+      ? primaryButtonsOrder.length
+      : selectedButton.group === 'pinned'
+        ? pinnedSecondaryButtonsOrder.length
+        : secondaryButtonsOrder.length
   const canMovePrev = selectedIndex > 0
   const canMoveNext = selectedIndex >= 0 && selectedIndex < selectedCount - 1
 
@@ -456,6 +559,25 @@ function ToolbarSettings() {
         allowedPrimaryButtons,
         allowedSecondaryButtons,
         primaryButtonsOrder: nextOrder,
+        pinnedSecondaryButtonsOrder,
+        secondaryButtonsOrder,
+      })
+      return
+    }
+
+    if (selectedButton.group === 'pinned') {
+      const order = pinnedSecondaryButtonsOrder
+      const index = order.indexOf(selectedButton.id)
+      if (index < 0) return
+      const nextIndex = index + delta
+      if (nextIndex < 0 || nextIndex >= order.length) return
+      const nextOrder = moveItem(order, index, nextIndex)
+      persistToolbarState({
+        ...toolbarState,
+        allowedPrimaryButtons,
+        allowedSecondaryButtons,
+        primaryButtonsOrder,
+        pinnedSecondaryButtonsOrder: nextOrder,
         secondaryButtonsOrder,
       })
       return
@@ -472,12 +594,13 @@ function ToolbarSettings() {
       allowedPrimaryButtons,
       allowedSecondaryButtons,
       primaryButtonsOrder,
+      pinnedSecondaryButtonsOrder,
       secondaryButtonsOrder: nextOrder,
     })
   }
 
-  const addButtonToToolbar = (group: SelectedButton['group'], id: PrimaryButtonId | SecondaryButtonId) => {
-    if (group === 'primary') {
+  const addButtonToToolbar = (placement: 'primary' | 'pinned' | 'secondary', id: PrimaryButtonId | SecondaryButtonId) => {
+    if (placement === 'primary') {
       const nextId = id as PrimaryButtonId
       if (allowedPrimaryButtons.includes(nextId)) return
       const nextAllowed = [...allowedPrimaryButtons, nextId]
@@ -487,27 +610,97 @@ function ToolbarSettings() {
         allowedPrimaryButtons: nextAllowed,
         allowedSecondaryButtons,
         primaryButtonsOrder: nextOrder,
+        pinnedSecondaryButtonsOrder,
         secondaryButtonsOrder,
       })
       return
     }
 
     const nextId = id as SecondaryButtonId
-    if (allowedSecondaryButtons.includes(nextId)) return
-    const nextAllowed = [...allowedSecondaryButtons, nextId]
-    const nextOrder = normalizeSecondaryButtonsOrder([...secondaryButtonsOrder, nextId], nextAllowed)
+    const nextAllowed = allowedSecondaryButtons.includes(nextId) ? allowedSecondaryButtons : [...allowedSecondaryButtons, nextId]
+
+    if (placement === 'pinned') {
+      const nextPinned = normalizePinnedSecondaryButtonsOrder([...pinnedSecondaryButtonsOrder, nextId], nextAllowed)
+      const nextSecondary = normalizeSecondaryButtonsOrder(
+        secondaryButtonsOrder.filter((x) => x !== nextId),
+        nextAllowed,
+        nextPinned
+      )
+      persistToolbarState({
+        ...toolbarState,
+        allowedPrimaryButtons,
+        allowedSecondaryButtons: nextAllowed,
+        primaryButtonsOrder,
+        pinnedSecondaryButtonsOrder: nextPinned,
+        secondaryButtonsOrder: nextSecondary,
+      })
+      return
+    }
+
+    const nextPinned = normalizePinnedSecondaryButtonsOrder(
+      pinnedSecondaryButtonsOrder.filter((x) => x !== nextId),
+      nextAllowed
+    )
+    const nextSecondary = normalizeSecondaryButtonsOrder([...secondaryButtonsOrder, nextId], nextAllowed, nextPinned)
     persistToolbarState({
       ...toolbarState,
       allowedPrimaryButtons,
       allowedSecondaryButtons: nextAllowed,
       primaryButtonsOrder,
-      secondaryButtonsOrder: nextOrder,
+      pinnedSecondaryButtonsOrder: nextPinned,
+      secondaryButtonsOrder: nextSecondary,
     })
   }
 
+  const canDeleteSelected =
+    selectedButton.group === 'primary'
+      ? allowedPrimaryButtons.length > 1
+      : allowedSecondaryButtons.includes(selectedButton.id as SecondaryButtonId)
+
+  const deleteSelected = () => {
+    if (selectedButton.group === 'primary') {
+      const target = selectedButton.id
+      if (!allowedPrimaryButtons.includes(target)) return
+      const nextAllowed = allowedPrimaryButtons.filter((x) => x !== target)
+      if (!nextAllowed.length) return
+      const nextOrder = normalizePrimaryButtonsOrder(primaryButtonsOrder.filter((x) => x !== target), nextAllowed)
+      persistToolbarState({
+        ...toolbarState,
+        allowedPrimaryButtons: nextAllowed,
+        allowedSecondaryButtons,
+        primaryButtonsOrder: nextOrder,
+        pinnedSecondaryButtonsOrder,
+        secondaryButtonsOrder,
+      })
+      return
+    }
+
+    const target = selectedButton.id as SecondaryButtonId
+    const nextAllowed = allowedSecondaryButtons.filter((x) => x !== target)
+    const nextPinned = normalizePinnedSecondaryButtonsOrder(
+      pinnedSecondaryButtonsOrder.filter((x) => x !== target),
+      nextAllowed
+    )
+    const nextSecondary = normalizeSecondaryButtonsOrder(
+      secondaryButtonsOrder.filter((x) => x !== target),
+      nextAllowed,
+      nextPinned
+    )
+    persistToolbarState({
+      ...toolbarState,
+      allowedPrimaryButtons,
+      allowedSecondaryButtons: nextAllowed,
+      primaryButtonsOrder,
+      pinnedSecondaryButtonsOrder: nextPinned,
+      secondaryButtonsOrder: nextSecondary,
+    })
+  }
+
+  const [pendingAdd, setPendingAdd] = React.useState<null | { id: PrimaryButtonId | SecondaryButtonId }>(null)
+
   const allAddableButtons: Array<{ group: SelectedButton['group']; id: PrimaryButtonId | SecondaryButtonId }> = [
     ...DEFAULT_PRIMARY.map((id) => ({ group: 'primary' as const, id })),
-    ...DEFAULT_SECONDARY.map((id) => ({ group: 'secondary' as const, id })),
+    ...ALL_SECONDARY.map((id) => ({ group: 'secondary' as const, id })),
   ]
 
   return (
@@ -531,6 +724,15 @@ function ToolbarSettings() {
                       id={id}
                       selected={selectedButton.group === 'primary' && selectedButton.id === id}
                       onSelect={() => setSelectedButton({ group: 'primary', id })}
+                    />
+                  ))}
+                  {pinnedSecondaryButtonsOrder.map((id) => (
+                    <SelectableToolbarButtonItem
+                      key={`pinned:${id}`}
+                      group="pinned"
+                      id={id}
+                      selected={selectedButton.group === 'pinned' && selectedButton.id === id}
+                      onSelect={() => setSelectedButton({ group: 'pinned', id })}
                     />
                   ))}
                 </Box>
@@ -602,13 +804,24 @@ function ToolbarSettings() {
             >
               <ChevronRightIcon />
             </Button>
+            <Button
+              size="sm"
+              variant="danger"
+              title="删除"
+              ariaLabel="删除"
+              appRegion="no-drag"
+              disabled={!canDeleteSelected}
+              onClick={deleteSelected}
+            >
+              <TrashIcon />
+            </Button>
           </div>
         </div>
 
         <div className="settingsToolbarAddPanel">
           <div className="settingsToolbarAddHeader">
             <div className="settingsToolbarAddTitle">添加按钮</div>
-            <div className="settingsToolbarAddMeta">点击右侧加号，将按钮添加到浮动工具栏</div>
+            <div className="settingsToolbarAddMeta">点击右侧加号，选择添加到折叠/非折叠区域</div>
           </div>
 
           <div className="settingsToolbarAddList">
@@ -644,10 +857,50 @@ function ToolbarSettings() {
                       ariaLabel={isAdded ? '已添加' : '添加到浮动工具栏'}
                       appRegion="no-drag"
                       disabled={isAdded}
-                      onClick={() => addButtonToToolbar(item.group, item.id)}
+                      onClick={() => {
+                        if (isAdded) return
+                        setPendingAdd((prev) => (prev?.id === item.id ? null : { id: item.id }))
+                      }}
                     >
                       <PlusIcon />
                     </Button>
+                    {pendingAdd?.id === item.id ? (
+                      <div className="settingsToolbarAddSubmenu">
+                        <Button
+                          size="sm"
+                          variant="light"
+                          className="settingsToolbarAddSubmenuItem"
+                          title="添加到非折叠区域"
+                          ariaLabel="添加到非折叠区域"
+                          appRegion="no-drag"
+                          onClick={() => {
+                            const placement =
+                              item.group === 'primary'
+                                ? ('primary' as const)
+                                : ('pinned' as const)
+                            addButtonToToolbar(placement, item.id)
+                            setPendingAdd(null)
+                          }}
+                        >
+                          非折叠区域
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="light"
+                          className="settingsToolbarAddSubmenuItem"
+                          title={item.group === 'primary' ? '该按钮只能添加到非折叠区域' : '添加到折叠区域'}
+                          ariaLabel="添加到折叠区域"
+                          appRegion="no-drag"
+                          disabled={item.group === 'primary'}
+                          onClick={() => {
+                            addButtonToToolbar('secondary', item.id)
+                            setPendingAdd(null)
+                          }}
+                        >
+                          折叠区域
+                        </Button>
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               )

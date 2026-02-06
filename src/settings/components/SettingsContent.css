@@ -547,6 +547,28 @@
 
 .settingsToolbarAddRight {
   flex: 0 0 auto;
+  position: relative;
+}
+
+.settingsToolbarAddSubmenu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 160px;
+  padding: 8px;
+  border-radius: 12px;
+  border: 1px solid var(--ls-surface-border, rgba(0, 0, 0, 0.08));
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.settingsToolbarAddSubmenuItem {
+  width: 100%;
+  justify-content: flex-start;
 }
 
 /* 深色主题适配 */
@@ -628,6 +650,11 @@
 :root[data-appearance='dark'] .settingsToolbarAddRow {
   background: rgba(25, 28, 36, 0.55);
   border-color: rgba(255, 255, 255, 0.08);
+}
+
+:root[data-appearance='dark'] .settingsToolbarAddSubmenu {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(25, 28, 36, 0.94);
 }
 
 :root[data-appearance='dark'] .settingsToolbarAddGroup {

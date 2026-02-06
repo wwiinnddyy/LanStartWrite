@@ -39,7 +39,7 @@ export function SettingsWindow() {
   const cardRef = useRef<HTMLDivElement | null>(null)
   const reduceMotion = useReducedMotion()
 
-  const [activeTab, setActiveTab] = useState<SettingsTab>('toolbar')
+  const [activeTab, setActiveTab] = useState<SettingsTab>('appearance')
 
   // 监听容器大小
   const { width: containerWidth } = useContainerSize(cardRef)

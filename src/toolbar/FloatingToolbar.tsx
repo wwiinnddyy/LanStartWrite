@@ -9,6 +9,7 @@ import { useToolbarWindowAutoResize } from './hooks/useToolbarWindowAutoResize'
 import { useZoomOnWheel } from './hooks/useZoomOnWheel'
 import { useAppearanceSettings } from '../settings'
 import { getAppButtonVisibility } from './utils/constants'
+import { WatcherIcon } from './components/ToolbarIcons'
 import './styles/toolbar.css'
 
 function ToolbarToolIcon(props: { kind: 'mouse' | 'pen' | 'eraser' | 'whiteboard' }) {
@@ -46,6 +47,16 @@ function RedoIcon() {
   )
 }
 
+function EventsIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M8 13a4 4 0 0 1 8 0" />
+      <path d="M12 21a8 8 0 1 1 8-8" />
+      <path d="M20 21l-2.5-2.5" />
+    </svg>
+  )
+}
+
 function ChevronLeftIcon() {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -72,12 +83,14 @@ type ToolbarState = {
   allowedPrimaryButtons?: PrimaryButtonId[]
   allowedSecondaryButtons?: SecondaryButtonId[]
   primaryButtonsOrder?: PrimaryButtonId[]
+  pinnedSecondaryButtonsOrder?: SecondaryButtonId[]
   secondaryButtonsOrder?: SecondaryButtonId[]
 }
 
 type PrimaryButtonId = 'mouse' | 'pen' | 'eraser' | 'whiteboard'
-type SecondaryButtonId = 'undo' | 'redo' | 'feature-panel'
+type SecondaryButtonId = 'undo' | 'redo' | 'feature-panel' | 'events' | 'watcher'
 
+const ALL_SECONDARY_BUTTONS: SecondaryButtonId[] = ['undo', 'redo', 'feature-panel', 'events', 'watcher']
 const DEFAULT_ALLOWED_PRIMARY_BUTTONS: PrimaryButtonId[] = ['mouse', 'pen', 'eraser', 'whiteboard']
 const DEFAULT_ALLOWED_SECONDARY_BUTTONS: SecondaryButtonId[] = ['undo', 'redo', 'feature-panel']
 
@@ -99,13 +112,27 @@ function normalizeAllowedPrimaryButtons(input: unknown): PrimaryButtonId[] {
 
 function normalizeAllowedSecondaryButtons(input: unknown): SecondaryButtonId[] {
   if (!Array.isArray(input)) return DEFAULT_ALLOWED_SECONDARY_BUTTONS
-  const allowed = new Set(DEFAULT_ALLOWED_SECONDARY_BUTTONS)
+  const allowed = new Set(ALL_SECONDARY_BUTTONS)
   const unique: SecondaryButtonId[] = []
   for (const item of input) {
-    if (item !== 'undo' && item !== 'redo' && item !== 'feature-panel') continue
+    if (item !== 'undo' && item !== 'redo' && item !== 'feature-panel' && item !== 'events' && item !== 'watcher') continue
     if (!allowed.has(item)) continue
     if (unique.includes(item)) continue
     unique.push(item)
+  }
+  return unique.length ? unique : DEFAULT_ALLOWED_SECONDARY_BUTTONS
+}
+
+function normalizePinnedSecondaryButtonsOrder(input: unknown, allowedButtons: readonly SecondaryButtonId[]): SecondaryButtonId[] {
+  const allowed = new Set(allowedButtons)
+  const unique: SecondaryButtonId[] = []
+  if (Array.isArray(input)) {
+    for (const item of input) {
+      if (item !== 'undo' && item !== 'redo' && item !== 'feature-panel' && item !== 'events' && item !== 'watcher') continue
+      if (!allowed.has(item)) continue
+      if (unique.includes(item)) continue
+      unique.push(item)
+    }
   }
   return unique
 }
@@ -127,20 +154,33 @@ function normalizePrimaryButtonsOrder(input: unknown, allowedButtons: readonly P
   return unique
 }
 
-function normalizeSecondaryButtonsOrder(input: unknown, allowedButtons: readonly SecondaryButtonId[]): SecondaryButtonId[] {
+function normalizeSecondaryButtonsOrder(
+  input: unknown,
+  allowedButtons: readonly SecondaryButtonId[],
+  pinnedButtons?: readonly SecondaryButtonId[]
+): SecondaryButtonId[] {
   const allowed = new Set(allowedButtons)
+  const pinned = new Set(pinnedButtons ?? [])
   const unique: SecondaryButtonId[] = []
   if (Array.isArray(input)) {
     for (const item of input) {
-      if (item !== 'undo' && item !== 'redo' && item !== 'feature-panel') continue
+      if (item !== 'undo' && item !== 'redo' && item !== 'feature-panel' && item !== 'events' && item !== 'watcher') continue
       if (!allowed.has(item)) continue
+      if (pinned.has(item)) continue
       if (unique.includes(item)) continue
       unique.push(item)
     }
   }
 
-  for (const item of DEFAULT_SECONDARY_BUTTONS_ORDER) if (allowed.has(item) && !unique.includes(item)) unique.push(item)
-  for (const item of allowedButtons) if (!unique.includes(item)) unique.push(item)
+  for (const item of DEFAULT_SECONDARY_BUTTONS_ORDER) {
+    if (!allowed.has(item)) continue
+    if (pinned.has(item)) continue
+    if (!unique.includes(item)) unique.push(item)
+  }
+  for (const item of allowedButtons) {
+    if (pinned.has(item)) continue
+    if (!unique.includes(item)) unique.push(item)
+  }
   return unique
 }
 
@@ -164,6 +204,7 @@ function isToolbarState(value: unknown): value is ToolbarState {
   if (v.allowedPrimaryButtons !== undefined && !Array.isArray(v.allowedPrimaryButtons)) return false
   if (v.allowedSecondaryButtons !== undefined && !Array.isArray(v.allowedSecondaryButtons)) return false
   if (v.primaryButtonsOrder !== undefined && !Array.isArray(v.primaryButtonsOrder)) return false
+  if (v.pinnedSecondaryButtonsOrder !== undefined && !Array.isArray(v.pinnedSecondaryButtonsOrder)) return false
   if (v.secondaryButtonsOrder !== undefined && !Array.isArray(v.secondaryButtonsOrder)) return false
   return true
 }
@@ -191,6 +232,7 @@ function ToolbarProvider({ children }: { children: React.ReactNode }) {
     allowedPrimaryButtons: DEFAULT_ALLOWED_PRIMARY_BUTTONS,
     allowedSecondaryButtons: DEFAULT_ALLOWED_SECONDARY_BUTTONS,
     primaryButtonsOrder: DEFAULT_PRIMARY_BUTTONS_ORDER,
+    pinnedSecondaryButtonsOrder: [],
     secondaryButtonsOrder: DEFAULT_SECONDARY_BUTTONS_ORDER
   }, { validate: isToolbarState })
 
@@ -224,8 +266,9 @@ function ToolbarProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const normalizedAllowedPrimary = normalizeAllowedPrimaryButtons((state as any).allowedPrimaryButtons)
     const normalizedAllowedSecondary = normalizeAllowedSecondaryButtons((state as any).allowedSecondaryButtons)
+    const normalizedPinnedSecondary = normalizePinnedSecondaryButtonsOrder((state as any).pinnedSecondaryButtonsOrder, normalizedAllowedSecondary)
     const normalizedPrimary = normalizePrimaryButtonsOrder((state as any).primaryButtonsOrder, normalizedAllowedPrimary)
-    const normalizedSecondary = normalizeSecondaryButtonsOrder((state as any).secondaryButtonsOrder, normalizedAllowedSecondary)
+    const normalizedSecondary = normalizeSecondaryButtonsOrder((state as any).secondaryButtonsOrder, normalizedAllowedSecondary, normalizedPinnedSecondary)
     const normalized: ToolbarState = {
       collapsed: Boolean(state.collapsed),
       alwaysOnTop: Boolean(state.alwaysOnTop),
@@ -236,6 +279,7 @@ function ToolbarProvider({ children }: { children: React.ReactNode }) {
       allowedPrimaryButtons: normalizedAllowedPrimary,
       allowedSecondaryButtons: normalizedAllowedSecondary,
       primaryButtonsOrder: normalizedPrimary,
+      pinnedSecondaryButtonsOrder: normalizedPinnedSecondary,
       secondaryButtonsOrder: normalizedSecondary
     }
     if (
@@ -248,6 +292,7 @@ function ToolbarProvider({ children }: { children: React.ReactNode }) {
       !arraysEqual(normalizedAllowedPrimary, state.allowedPrimaryButtons) ||
       !arraysEqual(normalizedAllowedSecondary, state.allowedSecondaryButtons) ||
       !arraysEqual(normalizedPrimary, state.primaryButtonsOrder) ||
+      !arraysEqual(normalizedPinnedSecondary, state.pinnedSecondaryButtonsOrder) ||
       !arraysEqual(normalizedSecondary, state.secondaryButtonsOrder)
     ) {
       setState(normalized)
@@ -293,6 +338,7 @@ function FloatingToolbarInner() {
   }
 
   const primaryButtonsOrder = state.primaryButtonsOrder ?? DEFAULT_PRIMARY_BUTTONS_ORDER
+  const pinnedSecondaryButtonsOrder = state.pinnedSecondaryButtonsOrder ?? []
   const secondaryButtonsOrder = state.secondaryButtonsOrder ?? DEFAULT_SECONDARY_BUTTONS_ORDER
 
   const renderPrimaryButton = (id: PrimaryButtonId) => {
@@ -414,6 +460,44 @@ function FloatingToolbarInner() {
       )
     }
 
+    if (id === 'events') {
+      const visibility = getAppButtonVisibility('events')
+      return (
+        <Button
+          key="events"
+          size={uiButtonSize}
+          ariaLabel="事件"
+          title="事件"
+          showInToolbar={visibility.showInToolbar}
+          showInFeaturePanel={visibility.showInFeaturePanel}
+          onClick={() => {
+            void postCommand('toggle-subwindow', { kind: 'events', placement: 'bottom' })
+          }}
+        >
+          <EventsIcon />
+        </Button>
+      )
+    }
+
+    if (id === 'watcher') {
+      const visibility = getAppButtonVisibility('watcher')
+      return (
+        <Button
+          key="watcher"
+          size={uiButtonSize}
+          ariaLabel="监视器"
+          title="监视器"
+          showInToolbar={visibility.showInToolbar}
+          showInFeaturePanel={visibility.showInFeaturePanel}
+          onClick={() => {
+            void postCommand('watcher.openWindow')
+          }}
+        >
+          <WatcherIcon />
+        </Button>
+      )
+    }
+
     const visibility = getAppButtonVisibility('feature-panel')
     return (
       <Button
@@ -451,6 +535,7 @@ function FloatingToolbarInner() {
           <div className="toolbarBarRow">
             <ButtonGroup>
               {primaryButtonsOrder.map(renderPrimaryButton)}
+              {pinnedSecondaryButtonsOrder.map(renderSecondaryButton)}
             </ButtonGroup>
           </div>
 

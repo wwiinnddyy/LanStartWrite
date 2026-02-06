@@ -6,9 +6,18 @@ import { TOOLBAR_STATE_KEY, usePersistedState } from '../status'
 import { markQuitting, postCommand } from '../toolbar/hooks/useBackend'
 import { useZoomOnWheel } from '../toolbar/hooks/useZoomOnWheel'
 import { getAppButtonVisibility, type AppButtonId } from '../toolbar/utils/constants'
+import {
+  WatcherIcon,
+  PinIcon,
+  PinFilledIcon,
+  EventsIcon,
+  SettingsIcon,
+  QuitIcon,
+  DatabaseIcon,
+} from '../toolbar/components/ToolbarIcons'
 import './styles/subwindow.css'
 
-type GridIconKind = 'grid' | 'plus' | 'gear' | 'doc' | 'db' | 'events' | 'watcher' | 'pin' | 'quit'
+type GridIconKind = 'grid' | 'plus' | 'gear' | 'doc' | 'db' | 'events' | 'watcher' | 'pin' | 'pin-filled' | 'quit'
 
 function GridIcon(props: { kind: GridIconKind }) {
   const stroke = 'currentColor'
@@ -32,50 +41,27 @@ function GridIcon(props: { kind: GridIconKind }) {
   }
 
   if (props.kind === 'db') {
-    return (
-      <svg {...common}>
-        <path d="M12 4c4.418 0 8 1.343 8 3s-3.582 3-8 3s-8-1.343-8-3s3.582-3 8-3" />
-        <path d="M4 7v10c0 1.657 3.582 3 8 3s8-1.343 8-3V7" />
-        <path d="M4 12c0 1.657 3.582 3 8 3s8-1.343 8-3" />
-      </svg>
-    )
+    return <DatabaseIcon />
   }
 
   if (props.kind === 'events') {
-    return (
-      <svg {...common}>
-        <path d="M8 13a4 4 0 0 1 8 0" />
-        <path d="M12 21a8 8 0 1 1 8-8" />
-        <path d="M20 21l-2.5-2.5" />
-      </svg>
-    )
+    return <EventsIcon />
   }
 
   if (props.kind === 'watcher') {
-    return (
-      <svg {...common}>
-        <path d="M2 12s3.5-7 10-7s10 7 10 7s-3.5 7-10 7s-10-7-10-7" />
-        <path d="M12 15a3 3 0 1 0 0-6a3 3 0 0 0 0 6" />
-      </svg>
-    )
+    return <WatcherIcon />
   }
 
   if (props.kind === 'pin') {
-    return (
-      <svg {...common}>
-        <path d="M12 17v5" />
-        <path d="M6 10l12 0" />
-        <path d="M9 3h6l1 7H8z" />
-      </svg>
-    )
+    return <PinIcon />
+  }
+
+  if (props.kind === 'pin-filled') {
+    return <PinFilledIcon />
   }
 
   if (props.kind === 'gear') {
-    return (
-      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 20 20">
-        <path fill="currentColor" d="M1.911 7.383a8.5 8.5 0 0 1 1.78-3.08a.5.5 0 0 1 .54-.135l1.918.686a1 1 0 0 0 1.32-.762l.366-2.006a.5.5 0 0 1 .388-.4a8.5 8.5 0 0 1 3.554 0a.5.5 0 0 1 .388.4l.366 2.006a1 1 0 0 0 1.32.762l1.919-.686a.5.5 0 0 1 .54.136a8.5 8.5 0 0 1 1.78 3.079a.5.5 0 0 1-.153.535l-1.555 1.32a1 1 0 0 0 0 1.524l1.555 1.32a.5.5 0 0 1 .152.535a8.5 8.5 0 0 1-1.78 3.08a.5.5 0 0 1-.54.135l-1.918-.686a1 1 0 0 0-1.32.762l-.366 2.007a.5.5 0 0 1-.388.399a8.5 8.5 0 0 1-3.554 0a.5.5 0 0 1-.388-.4l-.366-2.006a1 1 0 0 0-1.32-.762l-1.918.686a.5.5 0 0 1-.54-.136a8.5 8.5 0 0 1-1.78-3.079a.5.5 0 0 1 .152-.535l1.555-1.32a1 1 0 0 0 0-1.524l-1.555-1.32a.5.5 0 0 1-.152-.535m1.06-.006l1.294 1.098a2 2 0 0 1 0 3.05l-1.293 1.098c.292.782.713 1.51 1.244 2.152l1.596-.57q.155-.055.315-.085a2 2 0 0 1 2.326 1.609l.304 1.669a7.6 7.6 0 0 0 2.486 0l.304-1.67a1.998 1.998 0 0 1 2.641-1.524l1.596.571a7.5 7.5 0 0 0 1.245-2.152l-1.294-1.098a1.998 1.998 0 0 1 0-3.05l1.294-1.098a7.5 7.5 0 0 0-1.245-2.152l-1.596.57a2 2 0 0 1-2.64-1.524l-.305-1.669a7.6 7.6 0 0 0-2.486 0l-.304 1.669a2 2 0 0 1-2.64 1.525l-1.597-.571a7.5 7.5 0 0 0-1.244 2.152M7.502 10a2.5 2.5 0 1 1 5 0a2.5 2.5 0 0 1-5 0m1 0a1.5 1.5 0 1 0 3 0a1.5 1.5 0 0 0-3 0"/>
-      </svg>
-    )
+    return <SettingsIcon />
   }
 
   if (props.kind === 'doc') {
@@ -91,13 +77,7 @@ function GridIcon(props: { kind: GridIconKind }) {
   }
 
   if (props.kind === 'quit') {
-    return (
-      <svg {...common}>
-        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-        <path d="M16 17l5-5l-5-5" />
-        <path d="M21 12H9" />
-      </svg>
-    )
+    return <QuitIcon />
   }
 
   return (
@@ -235,8 +215,8 @@ export function FeaturePanelMenu(props: { kind: string }) {
       },
       {
         id: 'pin',
-        title: '置顶',
-        icon: 'pin',
+        title: toolbarState.alwaysOnTop ? '取消置顶' : '置顶',
+        icon: toolbarState.alwaysOnTop ? 'pin-filled' : 'pin',
         variant: toolbarState.alwaysOnTop ? 'light' : 'default',
         onClick: () => {
           const next = !toolbarState.alwaysOnTop
