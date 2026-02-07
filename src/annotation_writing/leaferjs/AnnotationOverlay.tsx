@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { Leafer, Line } from 'leafer-ui'
+import { Leafer, Line, Polygon } from 'leafer-ui'
+import { getStroke } from 'perfect-freehand'
 import {
   APP_MODE_UI_STATE_KEY,
   CLEAR_PAGE_REV_UI_STATE_KEY,
@@ -93,6 +94,12 @@ function hitsLineAtPoint(meta: LineMeta, x: number, y: number, radius: number): 
     if (distSqPointToSegment(x, y, ax, ay, bx, by) <= r2) return true
   }
   return false
+}
+
+function pointsToPerfectFreehandInput(points: number[], scale = 1): number[][] {
+  const out: number[][] = []
+  for (let i = 0; i + 1 < points.length; i += 2) out.push([points[i] * scale, points[i + 1] * scale])
+  return out
 }
 
 const DEFAULT_LEAFER_SETTINGS: LeaferSettings = {
@@ -700,8 +707,30 @@ export function AnnotationOverlayApp() {
       }
     }
 
-    const buildStrokeTriangles = (points: number[], strokeWidthPx: number, dpr: number) => {
-      const r = (strokeWidthPx * dpr) * 0.5
+    const buildStrokeTriangles = (points: number[], strokeWidthPx: number, dpr: number, pfh?: boolean) => {
+      if (pfh && points.length >= 4) {
+        const pfhPoints: number[][] = []
+        for (let i = 0; i + 1 < points.length; i += 2) pfhPoints.push([points[i] * dpr, points[i + 1] * dpr])
+        const outline = getStroke(pfhPoints, {
+          size: strokeWidthPx * dpr,
+          thinning: 0.7,
+          smoothing: 0.6,
+          streamline: 0.5,
+          simulatePressure: true
+        })
+        if (outline.length >= 3) {
+          const verts: number[] = []
+          const p0 = outline[0] as [number, number]
+          for (let i = 1; i + 1 < outline.length; i++) {
+            const p1 = outline[i] as [number, number]
+            const p2 = outline[i + 1] as [number, number]
+            verts.push(p0[0], p0[1], p1[0], p1[1], p2[0], p2[1])
+          }
+          return verts
+        }
+      }
+
+      const r = strokeWidthPx * dpr * 0.5
       const verts: number[] = []
       const segments = strokeWidthPx <= 4 ? 10 : strokeWidthPx <= 12 ? 12 : 14
 
@@ -860,7 +889,7 @@ void main() {
         glAny.blendFunc(glAny.ZERO, glAny.ONE_MINUS_SRC_ALPHA)
       }
 
-      const draw = (nodes: Array<{ role: 'stroke' | 'eraserPixel'; strokeWidth: number; points: number[]; color: [number, number, number, number] }>) => {
+      const draw = (nodes: Array<{ role: 'stroke' | 'eraserPixel'; pfh?: boolean; strokeWidth: number; points: number[]; color: [number, number, number, number] }>) => {
         const dpr = Math.max(1, globalThis.devicePixelRatio || 1)
         gl.viewport(0, 0, canvas.width, canvas.height)
         gl.clearColor(0, 0, 0, 0)
@@ -868,7 +897,7 @@ void main() {
         gl.useProgram(program)
         gl.uniform2f(resolutionLoc, canvas.width, canvas.height)
         for (const node of nodes) {
-          const verts = buildStrokeTriangles(node.points, node.strokeWidth, dpr)
+          const verts = buildStrokeTriangles(node.points, node.strokeWidth, dpr, node.role === 'stroke' && !!node.pfh)
           if (!verts.length) continue
           if (node.role === 'eraserPixel') setBlendEraser()
           else setBlendStroke()
@@ -997,7 +1026,7 @@ struct VSOut {
         })
       }
 
-      const draw = (nodes: Array<{ role: 'stroke' | 'eraserPixel'; strokeWidth: number; points: number[]; color: [number, number, number, number] }>) => {
+      const draw = (nodes: Array<{ role: 'stroke' | 'eraserPixel'; pfh?: boolean; strokeWidth: number; points: number[]; color: [number, number, number, number] }>) => {
         const dpr = Math.max(1, globalThis.devicePixelRatio || 1)
         const textureView = ctx.getCurrentTexture().createView()
         const encoder = device.createCommandEncoder()
@@ -1019,7 +1048,7 @@ struct VSOut {
 
         pass.setBindGroup(0, bindGroup)
         for (const node of nodes) {
-          const verts = buildStrokeTriangles(node.points, node.strokeWidth, dpr)
+          const verts = buildStrokeTriangles(node.points, node.strokeWidth, dpr, node.role === 'stroke' && !!node.pfh)
           if (!verts.length) continue
           const bytes = verts.length * 4
           ensureVertexBuffer(bytes)
@@ -1075,23 +1104,24 @@ struct VSOut {
         } as any
       )
 
-      type Action = { kind: 'add' | 'remove'; nodes: Line[] }
-      const live = new Set<Line>()
+      type CanvasNode = Line | Polygon
+      type Action = { kind: 'add' | 'remove'; nodes: CanvasNode[] }
+      const live = new Set<CanvasNode>()
       const history = { undo: [] as Action[], redo: [] as Action[] }
 
-      const getMeta = (line: Line): LineMeta | undefined => (line as any).__lanstartMeta as LineMeta | undefined
-      const setMeta = (line: Line, meta: LineMeta): void => {
-        ;(line as any).__lanstartMeta = meta
+      const getMeta = (node: CanvasNode): LineMeta | undefined => (node as any).__lanstartMeta as LineMeta | undefined
+      const setMeta = (node: CanvasNode, meta: LineMeta): void => {
+        ;(node as any).__lanstartMeta = meta
       }
 
-      const addNodes = (nodes: Line[]) => {
+      const addNodes = (nodes: CanvasNode[]) => {
         for (const node of nodes) {
           leafer.add(node)
           live.add(node)
         }
       }
 
-      const removeNodes = (nodes: Line[]) => {
+      const removeNodes = (nodes: CanvasNode[]) => {
         for (const node of nodes) {
           try {
             ;(node as any).remove?.()
@@ -1142,8 +1172,8 @@ struct VSOut {
           rawPoints: number[]
           rawTimes: number[]
           erasing: boolean
-          erased: Line[]
-          erasedSet: Set<Line>
+          erased: CanvasNode[]
+          erasedSet: Set<CanvasNode>
           erasedGroupIds: Set<number>
           strokeWidth: number
           stroke: any
@@ -1286,8 +1316,8 @@ struct VSOut {
           rawPoints: [] as number[],
           rawTimes: [] as number[],
           erasing: toolRef.current === 'eraser' && eraserTypeRef.current === 'stroke',
-          erased: [] as Line[],
-          erasedSet: new Set<Line>(),
+          erased: [] as CanvasNode[],
+          erasedSet: new Set<CanvasNode>(),
           erasedGroupIds: new Set<number>(),
           strokeWidth: 6,
           stroke: null as any,
@@ -1316,7 +1346,7 @@ struct VSOut {
               if (session.erasedGroupIds.has(gid)) continue
               if (!hitsLineAtPoint(meta, x, y, radius)) continue
               session.erasedGroupIds.add(gid)
-              const groupNodes: Line[] = []
+              const groupNodes: CanvasNode[] = []
               for (const other of Array.from(live)) {
                 const om = getMeta(other)
                 if (!om || om.role !== 'stroke') continue
@@ -1384,7 +1414,7 @@ struct VSOut {
               if (session.erasedGroupIds.has(gid)) continue
               if (!hitsLineAtPoint(meta, x, y, radius)) continue
               session.erasedGroupIds.add(gid)
-              const groupNodes: Line[] = []
+              const groupNodes: CanvasNode[] = []
               for (const other of Array.from(live)) {
                 const om = getMeta(other)
                 if (!om || om.role !== 'stroke') continue
@@ -1487,27 +1517,90 @@ struct VSOut {
             const sw = meta?.strokeWidth ?? session.strokeWidth
             const baked = bakePolyline(session.points, sw)
             const shouldOptimize = meta?.role === 'stroke' && (postBakeOptimizeRef.current || postBakeOptimizeOnceRef.current)
+            const shouldPerfectFreehand =
+              meta?.role === 'stroke' &&
+              toolRef.current === 'pen' &&
+              penTypeRef.current === 'writing' &&
+              (postBakeOptimizeOnceRef.current ?? false) &&
+              !(postBakeOptimizeRef.current ?? false)
             if (shouldOptimize) {
               const post = postBakeOptimizePolyline(baked, sw)
               if (post.kind === 'split') {
                 removeNodes([activeLine])
-                const next: Line[] = []
+                const next: CanvasNode[] = []
                 for (const s of post.segments) {
                   if (s.points.length <= 6) continue
-                  const line = new Line({
-                    points: s.points,
-                    ...session.stroke,
-                    strokeWidth: sw
-                  } as any)
                   const p0x = s.points[0] ?? 0
                   const p0y = s.points[1] ?? 0
-                  setMeta(line, { role: 'stroke', groupId: session.groupId, strokeWidth: sw, points: s.points, minX: p0x, minY: p0y, maxX: p0x, maxY: p0y })
-                  const m = getMeta(line)
-                  if (m) recomputeBounds(m, s.points)
-                  addNodes([line])
-                  next.push(line)
+                  const meta: LineMeta = { role: 'stroke', groupId: session.groupId, strokeWidth: sw, points: s.points, minX: p0x, minY: p0y, maxX: p0x, maxY: p0y }
+                  recomputeBounds(meta, s.points)
+                  const opacity = typeof (session.stroke as any)?.opacity === 'number' ? (session.stroke as any).opacity : 1
+                  const fill = typeof (session.stroke as any)?.stroke === 'string' ? (session.stroke as any).stroke : '#000000'
+                  if (shouldPerfectFreehand) {
+                    const outline = getStroke(pointsToPerfectFreehandInput(s.points), {
+                      size: sw,
+                      thinning: 0.7,
+                      smoothing: 0.6,
+                      streamline: 0.5,
+                      simulatePressure: true
+                    })
+                    if (outline.length >= 3) {
+                      const polyPoints: number[] = []
+                      for (const p of outline as unknown as [number, number][]) polyPoints.push(p[0], p[1])
+                      const poly = new Polygon({ points: polyPoints, fill, opacity } as any)
+                      setMeta(poly as any, meta)
+                      addNodes([poly])
+                      next.push(poly)
+                    } else {
+                      const line = new Line({ points: s.points, ...session.stroke, strokeWidth: sw } as any)
+                      setMeta(line, meta)
+                      addNodes([line])
+                      next.push(line)
+                    }
+                  } else {
+                    const line = new Line({ points: s.points, ...session.stroke, strokeWidth: sw } as any)
+                    setMeta(line, meta)
+                    addNodes([line])
+                    next.push(line)
+                  }
                 }
                 if (next.length) record({ kind: 'add', nodes: next })
+                if (postBakeOptimizeOnceRef.current) consumePostBakeOptimizeOnce()
+                return
+              }
+              if (shouldPerfectFreehand) {
+                removeNodes([activeLine])
+                const outline = getStroke(pointsToPerfectFreehandInput(post.points), {
+                  size: sw,
+                  thinning: 0.7,
+                  smoothing: 0.6,
+                  streamline: 0.5,
+                  simulatePressure: true
+                })
+                if (outline.length >= 3) {
+                  const polyPoints: number[] = []
+                  for (const p of outline as unknown as [number, number][]) polyPoints.push(p[0], p[1])
+                  const opacity = typeof (session.stroke as any)?.opacity === 'number' ? (session.stroke as any).opacity : 1
+                  const fill = typeof (session.stroke as any)?.stroke === 'string' ? (session.stroke as any).stroke : '#000000'
+                  const poly = new Polygon({ points: polyPoints, fill, opacity } as any)
+                  const p0x = post.points[0] ?? 0
+                  const p0y = post.points[1] ?? 0
+                  const nextMeta: LineMeta = { role: 'stroke', groupId: session.groupId, strokeWidth: sw, points: post.points, minX: p0x, minY: p0y, maxX: p0x, maxY: p0y }
+                  recomputeBounds(nextMeta, post.points)
+                  setMeta(poly as any, nextMeta)
+                  addNodes([poly])
+                  record({ kind: 'add', nodes: [poly] })
+                  if (postBakeOptimizeOnceRef.current) consumePostBakeOptimizeOnce()
+                  return
+                }
+                const line = new Line({ points: post.points, ...session.stroke, strokeWidth: sw } as any)
+                const p0x = post.points[0] ?? 0
+                const p0y = post.points[1] ?? 0
+                const nextMeta: LineMeta = { role: 'stroke', groupId: session.groupId, strokeWidth: sw, points: post.points, minX: p0x, minY: p0y, maxX: p0x, maxY: p0y }
+                recomputeBounds(nextMeta, post.points)
+                setMeta(line, nextMeta)
+                addNodes([line])
+                record({ kind: 'add', nodes: [line] })
                 if (postBakeOptimizeOnceRef.current) consumePostBakeOptimizeOnce()
                 return
               }
@@ -1518,6 +1611,42 @@ struct VSOut {
               ;(activeLine as any).points = post.points
               if (postBakeOptimizeOnceRef.current) consumePostBakeOptimizeOnce()
             } else {
+              if (shouldPerfectFreehand) {
+                removeNodes([activeLine])
+                const outline = getStroke(pointsToPerfectFreehandInput(baked), {
+                  size: sw,
+                  thinning: 0.7,
+                  smoothing: 0.6,
+                  streamline: 0.5,
+                  simulatePressure: true
+                })
+                if (outline.length >= 3) {
+                  const polyPoints: number[] = []
+                  for (const p of outline as unknown as [number, number][]) polyPoints.push(p[0], p[1])
+                  const opacity = typeof (session.stroke as any)?.opacity === 'number' ? (session.stroke as any).opacity : 1
+                  const fill = typeof (session.stroke as any)?.stroke === 'string' ? (session.stroke as any).stroke : '#000000'
+                  const poly = new Polygon({ points: polyPoints, fill, opacity } as any)
+                  const p0x = baked[0] ?? 0
+                  const p0y = baked[1] ?? 0
+                  const nextMeta: LineMeta = { role: 'stroke', groupId: session.groupId, strokeWidth: sw, points: baked, minX: p0x, minY: p0y, maxX: p0x, maxY: p0y }
+                  recomputeBounds(nextMeta, baked)
+                  setMeta(poly as any, nextMeta)
+                  addNodes([poly])
+                  record({ kind: 'add', nodes: [poly] })
+                  if (postBakeOptimizeOnceRef.current) consumePostBakeOptimizeOnce()
+                  return
+                }
+                const line = new Line({ points: baked, ...session.stroke, strokeWidth: sw } as any)
+                const p0x = baked[0] ?? 0
+                const p0y = baked[1] ?? 0
+                const nextMeta: LineMeta = { role: 'stroke', groupId: session.groupId, strokeWidth: sw, points: baked, minX: p0x, minY: p0y, maxX: p0x, maxY: p0y }
+                recomputeBounds(nextMeta, baked)
+                setMeta(line, nextMeta)
+                addNodes([line])
+                record({ kind: 'add', nodes: [line] })
+                if (postBakeOptimizeOnceRef.current) consumePostBakeOptimizeOnce()
+                return
+              }
               if (meta) {
                 meta.points = baked
                 recomputeBounds(meta, baked)
@@ -1602,6 +1731,7 @@ struct VSOut {
 
     type RenderNode = {
       role: 'stroke' | 'eraserPixel'
+      pfh: boolean
       strokeWidth: number
       points: number[]
       meta: LineMeta
@@ -1624,6 +1754,15 @@ struct VSOut {
       return parts.join(' ')
     }
 
+    const outlineToSvgPathD = (outline: [number, number][]): string => {
+      if (!outline.length) return ''
+      const parts: string[] = []
+      parts.push('M', String(outline[0][0]), String(outline[0][1]))
+      for (let i = 1; i < outline.length; i++) parts.push('L', String(outline[i][0]), String(outline[i][1]))
+      parts.push('Z')
+      return parts.join(' ')
+    }
+
     const syncSvgNode = (node: RenderNode) => {
       if (!nodeToSvgPath || !svgLayer) return
       if (node.role !== 'stroke') return
@@ -1633,7 +1772,26 @@ struct VSOut {
       const g = Math.round(node.color[1] * 255)
       const b = Math.round(node.color[2] * 255)
       const a = Math.max(0, Math.min(1, node.color[3]))
+      if (node.pfh) {
+        const outline = getStroke(pointsToPerfectFreehandInput(node.points), {
+          size: node.strokeWidth,
+          thinning: 0.7,
+          smoothing: 0.6,
+          streamline: 0.5,
+          simulatePressure: true
+        })
+        path.setAttribute('fill', `rgb(${r} ${g} ${b})`)
+        path.setAttribute('fill-opacity', String(a))
+        path.setAttribute('stroke', 'none')
+        path.removeAttribute('stroke-opacity')
+        path.removeAttribute('stroke-width')
+        path.removeAttribute('stroke-linecap')
+        path.removeAttribute('stroke-linejoin')
+        path.setAttribute('d', outlineToSvgPathD(outline as [number, number][]))
+        return
+      }
       path.setAttribute('fill', 'none')
+      path.removeAttribute('fill-opacity')
       path.setAttribute('stroke', `rgb(${r} ${g} ${b})`)
       path.setAttribute('stroke-opacity', String(a))
       path.setAttribute('stroke-width', String(Math.max(0.1, node.strokeWidth)))
@@ -1834,7 +1992,7 @@ struct VSOut {
           const p0y = seg.points[1] ?? 0
           const meta: LineMeta = { role: 'stroke', groupId: current.groupId, strokeWidth: seg.strokeWidth, points: seg.points, minX: p0x, minY: p0y, maxX: p0x, maxY: p0y }
           recomputeBounds(meta, seg.points)
-          const n: RenderNode = { role: 'stroke', strokeWidth: seg.strokeWidth, points: seg.points, meta, color: current.color }
+          const n: RenderNode = { role: 'stroke', pfh: false, strokeWidth: seg.strokeWidth, points: seg.points, meta, color: current.color }
           addNodes([n])
           svgDirty?.add(n)
           nextNodes.push(n)
@@ -1980,8 +2138,9 @@ struct VSOut {
       const rgba = role === 'stroke' ? colorToRgba(stroke?.stroke ?? '#000000', opacity) : ([0, 0, 0, 1] as [number, number, number, number])
       session.color = rgba
       session.nibDynamic = nibModeRef.current === 'dynamic' && toolRef.current === 'pen' && penTypeRef.current === 'writing'
+      const pfh = role === 'stroke' && !session.nibDynamic && toolRef.current === 'pen' && penTypeRef.current === 'writing' && (postBakeOptimizeOnceRef.current ?? false) && !(postBakeOptimizeRef.current ?? false)
       const meta: LineMeta = { role, groupId: session.groupId, strokeWidth, points: session.points, minX: p0.x, minY: p0.y, maxX: p0.x, maxY: p0.y }
-      const node: RenderNode = { role, strokeWidth, points: session.points, meta, color: rgba }
+      const node: RenderNode = { role, pfh, strokeWidth, points: session.points, meta, color: rgba }
       session.node = node
       addNodes([node])
       markSvgDirty(node)
@@ -2072,6 +2231,19 @@ struct VSOut {
       } catch {}
       if (erased.length) record({ kind: 'remove', nodes: erased })
       else if (active) {
+        if (active.pfh) {
+          if (inkSmoothingRef.current) {
+            const baked = bakePolyline(session.points, active.strokeWidth)
+            active.points = baked
+            active.meta.points = baked
+            recomputeBounds(active.meta, baked)
+            markSvgDirty(active)
+            requestRender()
+          }
+          record({ kind: 'add', nodes: [active] })
+          if (postBakeOptimizeOnceRef.current) consumePostBakeOptimizeOnce()
+          return
+        }
         if (session.nibDynamic) {
           const full = inkSmoothingRef.current ? bakePolyline(session.rawPoints, session.strokeWidth) : session.rawPoints
           const widthAtT = buildNibWidthAt(session.rawPoints, session.rawTimes, session.strokeWidth) ?? undefined
@@ -2090,7 +2262,7 @@ struct VSOut {
               const p0y = seg.points[1] ?? 0
               const meta: LineMeta = { role: 'stroke', groupId: session.groupId, strokeWidth: seg.strokeWidth, points: seg.points, minX: p0x, minY: p0y, maxX: p0x, maxY: p0y }
               recomputeBounds(meta, seg.points)
-              const n: RenderNode = { role: 'stroke', strokeWidth: seg.strokeWidth, points: seg.points, meta, color: session.color }
+              const n: RenderNode = { role: 'stroke', pfh: false, strokeWidth: seg.strokeWidth, points: seg.points, meta, color: session.color }
               addNodes([n])
               next.push(n)
               markSvgDirty(n)
@@ -2116,7 +2288,7 @@ struct VSOut {
                 const p0y = s.points[1] ?? 0
                 const meta: LineMeta = { role: 'stroke', groupId: session.groupId, strokeWidth: active.strokeWidth, points: s.points, minX: p0x, minY: p0y, maxX: p0x, maxY: p0y }
                 recomputeBounds(meta, s.points)
-                const n: RenderNode = { role: 'stroke', strokeWidth: active.strokeWidth, points: s.points, meta, color: session.color }
+                const n: RenderNode = { role: 'stroke', pfh: active.pfh, strokeWidth: active.strokeWidth, points: s.points, meta, color: session.color }
                 addNodes([n])
                 next.push(n)
                 markSvgDirty(n)

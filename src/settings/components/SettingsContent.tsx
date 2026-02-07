@@ -1207,14 +1207,20 @@ function AnnotationSettings() {
             />
             <Switch
               checked={leaferSettings.postBakeOptimize ?? false}
-              onChange={(e) => persistLeaferSettings({ ...leaferSettings, postBakeOptimize: e.currentTarget.checked })}
+              onChange={(e) => {
+                const checked = e.currentTarget.checked
+                persistLeaferSettings({ ...leaferSettings, postBakeOptimize: checked, postBakeOptimizeOnce: checked ? false : leaferSettings.postBakeOptimizeOnce })
+              }}
               label="烘干后处理优化"
               size="md"
             />
             <Switch
               checked={leaferSettings.postBakeOptimizeOnce ?? false}
-              onChange={(e) => persistLeaferSettings({ ...leaferSettings, postBakeOptimizeOnce: e.currentTarget.checked })}
-              label="下一笔使用一次烘干优化"
+              onChange={(e) => {
+                const checked = e.currentTarget.checked
+                persistLeaferSettings({ ...leaferSettings, postBakeOptimizeOnce: checked, postBakeOptimize: checked ? false : leaferSettings.postBakeOptimize })
+              }}
+              label="笔迹使用一次烘干优化"
               size="md"
             />
             <Switch
