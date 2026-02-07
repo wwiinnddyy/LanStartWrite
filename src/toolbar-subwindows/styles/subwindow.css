@@ -27,7 +27,7 @@ body {
     'Segoe UI Emoji';
   background: var(--ls-surface-bg);
   border: 1px solid var(--ls-surface-border);
-  border-radius: 0;
+  border-radius: var(--ls-window-outer-radius);
   box-shadow: var(--ls-surface-shadow);
 }
 
@@ -35,6 +35,7 @@ body {
   content: '';
   position: absolute;
   inset: 0;
+  border-radius: inherit;
   background-image: var(--hyper-glass-bg);
   background-size: cover;
   background-position: center;
@@ -48,6 +49,7 @@ body {
   content: '';
   position: absolute;
   inset: 0;
+  border-radius: inherit;
   background: var(--ls-window-accent-gradient, none), var(--ls-surface-overlay);
   mix-blend-mode: var(--ls-surface-overlay-blend);
   pointer-events: none;

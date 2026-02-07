@@ -1,7 +1,6 @@
 import React, { useEffect, useRef } from 'react'
 import { Button } from '../button'
 import { motion, useReducedMotion } from '../Framer_Motion'
-import { useHyperGlassRealtimeBlur } from '../hyper_glass'
 import { markQuitting, postCommand } from '../toolbar/hooks/useBackend'
 import { useAppAppearance } from '../status'
 import { useZoomOnWheel } from '../toolbar/hooks/useZoomOnWheel'
@@ -14,8 +13,6 @@ export function SettingsMenu(props: { kind: string }) {
   const measureRef = useRef<HTMLDivElement | null>(null)
   const reduceMotion = useReducedMotion()
   const { appearance, setAppearance } = useAppAppearance()
-
-  useHyperGlassRealtimeBlur({ root: rootRef.current })
 
   useEffect(() => {
     const root = rootRef.current

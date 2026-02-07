@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { Button, ButtonGroup } from '../button'
 import { motion, useReducedMotion } from '../Framer_Motion'
-import { useHyperGlassRealtimeBlur } from '../hyper_glass'
 import {
   ERASER_SETTINGS_KV_KEY,
   PEN_SETTINGS_KV_KEY,
@@ -16,6 +15,7 @@ import {
 } from '../status'
 import { usePersistedState } from './hooks/usePersistedState'
 import { postCommand } from './hooks/useBackend'
+import { useEventsPoll } from './hooks/useEventsPoll'
 import { useToolbarWindowAutoResize } from './hooks/useToolbarWindowAutoResize'
 import { useZoomOnWheel } from './hooks/useZoomOnWheel'
 import { useAppearanceSettings } from '../settings'
@@ -306,6 +306,7 @@ function ToolbarProvider({ children }: { children: React.ReactNode }) {
   }, [setState, state])
 
   const value = useMemo<ToolbarContextValue>(() => ({ state, setState }), [state, setState])
+
   return <ToolbarContext.Provider value={value}>{children}</ToolbarContext.Provider>
 }
 
@@ -319,13 +320,48 @@ function FloatingToolbarInner() {
   const { appMode, setAppMode } = useAppMode()
   const whiteboardActive = appMode === 'whiteboard'
   const isExpanded = state.expanded !== false
+  const backendEvents = useEventsPoll(800)
+  const lastProcessedEventIdRef = useRef(0)
+  const watcherWasShownRef = useRef(false)
+  const lastWatcherClosedAtRef = useRef(0)
 
   // 应用外观设置（强调色等）
   useAppearanceSettings()
 
   useToolbarWindowAutoResize({ root: contentRef.current })
-  useHyperGlassRealtimeBlur({ root: rootRef.current })
   useZoomOnWheel()
+
+  useEffect(() => {
+    if (!backendEvents.length) return
+    const next = backendEvents.filter((e) => e.id > lastProcessedEventIdRef.current)
+    if (!next.length) return
+    lastProcessedEventIdRef.current = next[next.length - 1]!.id
+
+    for (const item of next) {
+      if (item.type === 'WINDOW_STATUS') {
+        const payload = (item.payload ?? {}) as any
+        const windowId = typeof payload.windowId === 'string' ? payload.windowId : ''
+        const event = typeof payload.event === 'string' ? payload.event : ''
+        if (windowId !== 'watcher') continue
+
+        if (event === 'show' || event === 'did-finish-load') {
+          watcherWasShownRef.current = true
+          continue
+        }
+
+        if (event === 'closed') {
+          if (!watcherWasShownRef.current) continue
+          watcherWasShownRef.current = false
+
+          const now = Date.now()
+          if (now - lastWatcherClosedAtRef.current < 800) continue
+          lastWatcherClosedAtRef.current = now
+
+          void postCommand('win.setNoticeVisible', { visible: true })
+        }
+      }
+    }
+  }, [backendEvents])
 
   useEffect(() => {
     let cancelled = false
@@ -637,8 +673,6 @@ export function FloatingToolbarHandleApp() {
 
   // 应用外观设置（强调色等）
   useAppearanceSettings()
-
-  useHyperGlassRealtimeBlur({ root: rootRef.current })
 
   useEffect(() => {
     if (!dragging) return

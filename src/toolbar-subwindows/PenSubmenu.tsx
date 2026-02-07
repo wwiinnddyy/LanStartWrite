@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { motion, useReducedMotion } from '../Framer_Motion'
-import { useHyperGlassRealtimeBlur } from '../hyper_glass'
 import { MotionButton } from '../button'
 import { postCommand } from '../toolbar/hooks/useBackend'
 import { useZoomOnWheel } from '../toolbar/hooks/useZoomOnWheel'
@@ -242,8 +241,6 @@ export function PenSubmenu(props: { kind: string }) {
   const [selectedColor, setSelectedColor] = useState('#000000')
   const [selectedPenType, setSelectedPenType] = useState<PenType>('writing')
   const [thickness, setThickness] = useState(12)
-
-  useHyperGlassRealtimeBlur({ root: rootRef.current })
 
   // 监听尺寸变化并通知主进程调整窗口大小
   useEffect(() => {

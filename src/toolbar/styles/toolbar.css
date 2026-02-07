@@ -20,14 +20,14 @@ body {
   display: flex;
   flex-direction: column;
   border: none !important;
-  border-radius: 0 8px 8px 0;
+  border-radius: 0 var(--ls-window-outer-radius-sm) var(--ls-window-outer-radius-sm) 0;
   overflow: hidden;
   background: transparent;
 }
 
 .toolbarHandleRoot::before,
 .toolbarHandleRoot::after {
-  border-radius: 0 8px 8px 0;
+  border-radius: 0 var(--ls-window-outer-radius-sm) var(--ls-window-outer-radius-sm) 0;
   inset: 0;
 }
 
@@ -63,7 +63,7 @@ body {
     'Segoe UI Emoji';
   background: var(--ls-surface-bg);
   border: 1px solid var(--ls-surface-border);
-  border-radius: 0;
+  border-radius: var(--ls-window-outer-radius);
   box-shadow: var(--ls-surface-shadow);
 }
 
@@ -71,6 +71,7 @@ body {
   content: '';
   position: absolute;
   inset: 0;
+  border-radius: inherit;
   background-image: var(--hyper-glass-bg);
   background-size: cover;
   background-position: center;
@@ -84,6 +85,7 @@ body {
   content: '';
   position: absolute;
   inset: 0;
+  border-radius: inherit;
   background: var(--ls-window-accent-gradient, none), var(--ls-surface-overlay);
   mix-blend-mode: var(--ls-surface-overlay-blend);
   pointer-events: none;
@@ -271,4 +273,64 @@ body {
 
 .eventId {
   opacity: 0.7;
+}
+
+.floatingNotificationsOverlay {
+  position: absolute;
+  z-index: 2;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 0 10px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.floatingNotificationCard {
+  pointer-events: auto;
+  -webkit-app-region: no-drag;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--ls-events-bg);
+  border: 1px solid var(--ls-events-border);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.18);
+  cursor: pointer;
+}
+
+.floatingNotificationLeft {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.floatingNotificationIcon {
+  width: 20px;
+  height: 20px;
+  opacity: 0.92;
+  flex: 0 0 auto;
+}
+
+.floatingNotificationIcon svg {
+  display: block;
+}
+
+.floatingNotificationText {
+  font-size: 12px;
+  opacity: 0.92;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.floatingNotificationClose {
+  flex: 0 0 auto;
+  margin-left: 10px;
 }

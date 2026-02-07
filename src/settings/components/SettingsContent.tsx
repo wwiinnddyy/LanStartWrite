@@ -33,6 +33,10 @@ function AppearanceSettings() {
     setAccentColor,
     nativeMicaEnabled,
     setNativeMicaEnabled,
+    legacyWindowImplementation,
+    setLegacyWindowImplementation,
+    windowBackgroundMode,
+    setWindowBackgroundMode,
     transitionPreset,
     setTransitionPreset,
     backgroundTransition,
@@ -85,14 +89,46 @@ function AppearanceSettings() {
 
       <div className="settingsSubSection">
         <h3 className="settingsSubTitle">窗口材质</h3>
-        <p className="settingsSubDescription">开启后使用 Windows 原生黑白 Mica 背景，并让窗口背景透明</p>
+        <p className="settingsSubDescription">开启后使用 Windows 原生黑白 Mica 背景，并让窗口背景透明（澎湃 OS 3 模式将强制关闭）</p>
         <Switch
-          checked={nativeMicaEnabled}
+          checked={legacyWindowImplementation && nativeMicaEnabled}
+          disabled={!legacyWindowImplementation}
           onChange={(e) => setNativeMicaEnabled(e.currentTarget.checked)}
           label="启用原生 Mica 效果"
           size="md"
         />
       </div>
+
+      <div className="settingsSubSection">
+        <h3 className="settingsSubTitle">窗口实现</h3>
+        <p className="settingsSubDescription">切换澎湃 OS 3 新圆角实现与旧实现（会自动重建浮动窗口）</p>
+        <Switch
+          checked={legacyWindowImplementation}
+          onChange={(e) => setLegacyWindowImplementation(e.currentTarget.checked)}
+          label="使用旧版窗口实现"
+          size="md"
+        />
+      </div>
+
+      {!legacyWindowImplementation && (
+        <div className="settingsSubSection">
+          <h3 className="settingsSubTitle">窗口背景</h3>
+          <p className="settingsSubDescription">仅澎湃 OS 3 新窗口实现生效</p>
+          <Select
+            value={windowBackgroundMode}
+            onChange={(v) => {
+              if (v === 'opaque' || v === 'blur' || v === 'transparent') setWindowBackgroundMode(v)
+            }}
+            data={[
+              { value: 'opaque', label: '实现（不透明）' },
+              { value: 'blur', label: '模糊（HyperGlass）' },
+              { value: 'transparent', label: '透明' },
+            ]}
+            allowDeselect={false}
+            size="md"
+          />
+        </div>
+      )}
 
       {/* 强调色设置 */}
       <div className="settingsSubSection">
@@ -969,7 +1005,8 @@ function AnnotationSettings() {
       freezeScreen: false,
       rendererEngine: 'canvas2d',
       nibMode: 'off',
-      postBakeOptimize: false
+      postBakeOptimize: false,
+      postBakeOptimizeOnce: false
     },
     { validate: isLeaferSettings }
   )
@@ -1123,12 +1160,13 @@ function AnnotationSettings() {
               value={leaferSettings.rendererEngine ?? 'canvas2d'}
               data={[
                 { value: 'canvas2d', label: 'Canvas2D（低延迟，默认）' },
+                { value: 'svg', label: 'SVG（矢量）' },
                 { value: 'webgl', label: 'WebGL' },
                 { value: 'webgpu', label: 'WebGPU（实验性）' }
               ]}
               allowDeselect={false}
               onChange={(value) => {
-                if (value !== 'canvas2d' && value !== 'webgl' && value !== 'webgpu') return
+                if (value !== 'canvas2d' && value !== 'svg' && value !== 'webgl' && value !== 'webgpu') return
                 persistLeaferSettings({ ...leaferSettings, rendererEngine: value })
               }}
             />
@@ -1171,6 +1209,12 @@ function AnnotationSettings() {
               checked={leaferSettings.postBakeOptimize ?? false}
               onChange={(e) => persistLeaferSettings({ ...leaferSettings, postBakeOptimize: e.currentTarget.checked })}
               label="烘干后处理优化"
+              size="md"
+            />
+            <Switch
+              checked={leaferSettings.postBakeOptimizeOnce ?? false}
+              onChange={(e) => persistLeaferSettings({ ...leaferSettings, postBakeOptimizeOnce: e.currentTarget.checked })}
+              label="下一笔使用一次烘干优化"
               size="md"
             />
             <Switch

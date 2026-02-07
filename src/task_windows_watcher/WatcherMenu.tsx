@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { motion, useReducedMotion, AnimatePresence } from '../Framer_Motion'
-import { useHyperGlassRealtimeBlur } from '../hyper_glass'
 import { Button, MotionButton } from '../button'
+import { WindowControls } from '../settings/components/WindowControls'
 import '../toolbar-subwindows/styles/subwindow.css'
 import './styles.css'
 
@@ -339,8 +339,6 @@ export function TaskWindowsWatcherWindow() {
   const [history, setHistory] = useState<WindowRow[]>([])
   const [processes, setProcesses] = useState<ProcessRow[]>([])
 
-  useHyperGlassRealtimeBlur({ root: rootRef.current })
-
   useEffect(() => {
     if (!collecting) return
     let cancelled = false
@@ -446,6 +444,7 @@ export function TaskWindowsWatcherWindow() {
       animate={reduceMotion ? undefined : { opacity: 1, y: 0, scale: 1 }}
       transition={reduceMotion ? undefined : { duration: 0.18, ease: [0.2, 0.8, 0.2, 1] }}
     >
+      <WindowControls windowId="watcher" />
       <div ref={cardRef} className={`subwindowCard twWatcherCard twWatcherCard--${layoutSize} animate-ls-pop-in`}>
         <div className="subwindowMeasure">
           {/* 标题和控制区 */}

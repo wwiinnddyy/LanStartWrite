@@ -3,9 +3,12 @@ import { FloatingToolbarApp, FloatingToolbarHandleApp, WINDOW_ID_FLOATING_TOOLBA
 import { useEventsPoll } from '../../toolbar/hooks/useEventsPoll'
 import { Button } from '../../button'
 import { EventsMenu, FeaturePanelMenu, PenSubmenu, EraserSubmenu, SettingsMenu } from '../../toolbar-subwindows'
+import { NotificationSubwindow } from '../../toolbar_notice/NotificationSubwindow'
 import { TaskWindowsWatcherWindow } from '../../task_windows_watcher'
 import { AnnotationOverlayApp, PaintBoardBackgroundApp } from '../../paint_board'
+import { useHyperGlassRealtimeBlur } from '../../hyper_glass'
 import { SettingsWindow, useAppearanceSettings } from '../../settings'
+import { WindowControls } from '../../settings/components/WindowControls'
 
 function useWindowParams(): { windowId: string; kind?: string } {
   return useMemo(() => {
@@ -36,6 +39,7 @@ function ChildWindow() {
 
   return (
     <div className="childRoot">
+      <WindowControls windowId="child" />
       <div className="childHeader">
         <div className="childTitle">数据库</div>
         <div className="childMeta">backend: {health}</div>
@@ -75,7 +79,10 @@ function ChildWindow() {
 }
 
 function WithAppearance(props: { children: React.ReactNode }) {
-  useAppearanceSettings()
+  const { legacyWindowImplementation, windowBackgroundMode } = useAppearanceSettings()
+  useHyperGlassRealtimeBlur({
+    root: !legacyWindowImplementation && windowBackgroundMode === 'blur' ? document.documentElement : null
+  })
   return <>{props.children}</>
 }
 
@@ -88,6 +95,7 @@ export default function App() {
   if (windowId === 'paint-board') return kind === 'annotation' ? <AnnotationOverlayApp /> : <PaintBoardBackgroundApp />
   if (windowId === 'watcher') return <WithAppearance><TaskWindowsWatcherWindow /></WithAppearance>
   if (windowId === 'settings-window') return <WithAppearance><SettingsWindow /></WithAppearance>
+  if (windowId === 'toolbar-notice') return <WithAppearance><NotificationSubwindow kind="notice" /></WithAppearance>
 
   if (windowId === 'toolbar-subwindow') {
     if (kind === 'events') return <WithAppearance><EventsMenu kind="events" /></WithAppearance>

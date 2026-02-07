@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Button } from '../button'
 import { motion, useReducedMotion } from '../Framer_Motion'
-import { useHyperGlassRealtimeBlur } from '../hyper_glass'
 import { markQuitting, postCommand } from '../toolbar/hooks/useBackend'
 import { useZoomOnWheel } from '../toolbar/hooks/useZoomOnWheel'
 import { getAppButtonVisibility, type AppButtonId } from '../toolbar/utils/constants'
@@ -87,8 +86,6 @@ export function FeaturePanelMenu(props: { kind: string }) {
   const reduceMotion = useReducedMotion()
   const [pageIndex, setPageIndex] = useState(0)
   const [pagerViewportWidth, setPagerViewportWidth] = useState(0)
-
-  useHyperGlassRealtimeBlur({ root: rootRef.current })
 
   useEffect(() => {
     const root = rootRef.current

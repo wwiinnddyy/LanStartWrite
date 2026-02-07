@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { motion, useReducedMotion } from '../Framer_Motion'
-import { useHyperGlassRealtimeBlur } from '../hyper_glass'
 import { MotionButton } from '../button'
 import { postCommand } from '../toolbar/hooks/useBackend'
 import { useZoomOnWheel } from '../toolbar/hooks/useZoomOnWheel'
@@ -176,8 +175,6 @@ export function EraserSubmenu(props: { kind: string }) {
   
   const [selectedType, setSelectedType] = useState<EraserType>('pixel')
   const [thickness, setThickness] = useState(30)
-
-  useHyperGlassRealtimeBlur({ root: rootRef.current })
 
   // 监听尺寸变化并通知主进程调整窗口大小
   useEffect(() => {

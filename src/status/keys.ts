@@ -43,7 +43,7 @@ export const CLEAR_PAGE_REV_UI_STATE_KEY = 'clearPageRev'
 export const UNDO_REV_UI_STATE_KEY = 'undoRev'
 export const REDO_REV_UI_STATE_KEY = 'redoRev'
 
-export type LeaferRendererEngine = 'canvas2d' | 'webgl' | 'webgpu'
+export type LeaferRendererEngine = 'canvas2d' | 'svg' | 'webgl' | 'webgpu'
 export type LeaferNibMode = 'off' | 'dynamic' | 'static'
 export type LeaferSettings = {
   multiTouch: boolean
@@ -53,6 +53,7 @@ export type LeaferSettings = {
   rendererEngine?: LeaferRendererEngine
   nibMode?: LeaferNibMode
   postBakeOptimize?: boolean
+  postBakeOptimizeOnce?: boolean
 }
 
 export const LEAFER_SETTINGS_KV_KEY = 'leafer-settings'
@@ -81,9 +82,10 @@ export function isEffectiveWritingBackend(v: unknown): v is EffectiveWritingBack
 export function isLeaferSettings(v: unknown): v is LeaferSettings {
   if (!v || typeof v !== 'object') return false
   const s = v as any
-  if (s.rendererEngine !== undefined && s.rendererEngine !== 'canvas2d' && s.rendererEngine !== 'webgl' && s.rendererEngine !== 'webgpu') return false
+  if (s.rendererEngine !== undefined && s.rendererEngine !== 'canvas2d' && s.rendererEngine !== 'svg' && s.rendererEngine !== 'webgl' && s.rendererEngine !== 'webgpu') return false
   if (s.nibMode !== undefined && s.nibMode !== 'off' && s.nibMode !== 'dynamic' && s.nibMode !== 'static') return false
   if (s.postBakeOptimize !== undefined && typeof s.postBakeOptimize !== 'boolean') return false
+  if (s.postBakeOptimizeOnce !== undefined && typeof s.postBakeOptimizeOnce !== 'boolean') return false
   return (
     typeof s.multiTouch === 'boolean' &&
     typeof s.inkSmoothing === 'boolean' &&

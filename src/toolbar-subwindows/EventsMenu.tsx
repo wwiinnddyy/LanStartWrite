@@ -1,6 +1,5 @@
 import React, { useEffect, useRef } from 'react'
 import { motion, useReducedMotion } from '../Framer_Motion'
-import { useHyperGlassRealtimeBlur } from '../hyper_glass'
 import { useEventsPoll } from '../toolbar/hooks/useEventsPoll'
 import { postCommand } from '../toolbar/hooks/useBackend'
 import { useZoomOnWheel } from '../toolbar/hooks/useZoomOnWheel'
@@ -13,8 +12,6 @@ export function EventsMenu(props: { kind: string }) {
   const cardRef = useRef<HTMLDivElement | null>(null)
   const measureRef = useRef<HTMLDivElement | null>(null)
   const reduceMotion = useReducedMotion()
-
-  useHyperGlassRealtimeBlur({ root: rootRef.current })
 
   useEffect(() => {
     const root = rootRef.current

@@ -16,12 +16,14 @@ const WINDOW_ID_FLOATING_TOOLBAR = '浮动工具栏'
 const WINDOW_ID_FLOATING_TOOLBAR_HANDLE = 'floating-toolbar-handle'
 const WINDOW_TITLE_FLOATING_TOOLBAR = '浮动工具栏'
 const WINDOW_ID_TOOLBAR_SUBWINDOW = 'toolbar-subwindow'
+const WINDOW_ID_TOOLBAR_NOTICE = 'toolbar-notice'
 const WINDOW_ID_WATCHER = 'watcher'
 const WINDOW_ID_SETTINGS_WINDOW = 'settings-window'
 const TOOLBAR_HANDLE_GAP = 10
 const TOOLBAR_HANDLE_WIDTH = 30
 const APPEARANCE_KV_KEY = 'app-appearance'
 const NATIVE_MICA_KV_KEY = 'native-mica-enabled'
+const LEGACY_WINDOW_IMPL_KV_KEY = 'legacy-window-implementation'
 
 type Appearance = 'light' | 'dark'
 
@@ -41,6 +43,7 @@ let currentAppearance: Appearance = 'light'
 let didApplyAppearance = false
 let toolbarUiZoom = 0
 let nativeMicaEnabled = false
+let legacyWindowImplementation = false
 let stopToolbarTopmostPolling: (() => void) | undefined
 
 type BackendRpcResponse =
@@ -114,7 +117,7 @@ function applyAppearance(appearance: Appearance): void {
   try {
     nativeTheme.themeSource = appearance
   } catch {}
-  const bg = effectiveSurfaceBackgroundColor(appearance)
+  const bg = legacyWindowImplementation ? effectiveSurfaceBackgroundColor(appearance) : '#00000000'
   for (const win of BrowserWindow.getAllWindows()) {
     if (win.isDestroyed()) continue
     try {
@@ -125,8 +128,9 @@ function applyAppearance(appearance: Appearance): void {
 }
 
 function applyNativeMica(enabled: boolean): void {
+  if (!legacyWindowImplementation) enabled = false
   nativeMicaEnabled = enabled
-  const bg = effectiveSurfaceBackgroundColor(currentAppearance)
+  const bg = legacyWindowImplementation ? effectiveSurfaceBackgroundColor(currentAppearance) : '#00000000'
 
   for (const win of BrowserWindow.getAllWindows()) {
     if (win.isDestroyed()) continue
@@ -143,10 +147,89 @@ function applyNativeMica(enabled: boolean): void {
   }
 }
 
+function applyLegacyWindowImplementation(enabled: boolean, opts?: { rebuild?: boolean }): void {
+  legacyWindowImplementation = enabled
+  if (!enabled) applyNativeMica(false)
+  if (opts?.rebuild === false) return
+
+  const prevToolbar = floatingToolbarWindow
+  const prevToolbarBounds = prevToolbar && !prevToolbar.isDestroyed() ? prevToolbar.getBounds() : undefined
+  const prevToolbarVisible = prevToolbar && !prevToolbar.isDestroyed() ? prevToolbar.isVisible() : true
+
+  const visibleSubwindows: Array<{ kind: string; placement: 'top' | 'bottom' }> = []
+  for (const [kind, item] of toolbarSubwindows.entries()) {
+    const win = item.win
+    if (win.isDestroyed()) continue
+    if (!win.isVisible()) continue
+    visibleSubwindows.push({ kind, placement: item.placement })
+  }
+
+  const windowsToClose: BrowserWindow[] = []
+  if (floatingToolbarHandleWindow && !floatingToolbarHandleWindow.isDestroyed()) windowsToClose.push(floatingToolbarHandleWindow)
+  if (toolbarNoticeWindow && !toolbarNoticeWindow.isDestroyed()) windowsToClose.push(toolbarNoticeWindow)
+  for (const item of toolbarSubwindows.values()) {
+    if (item.win.isDestroyed()) continue
+    windowsToClose.push(item.win)
+  }
+  if (floatingToolbarWindow && !floatingToolbarWindow.isDestroyed()) windowsToClose.push(floatingToolbarWindow)
+
+  for (const w of windowsToClose) {
+    try {
+      w.close()
+      continue
+    } catch {}
+    try {
+      w.destroy()
+    } catch {}
+  }
+
+  toolbarSubwindows.clear()
+  floatingToolbarWindow = undefined
+  floatingToolbarHandleWindow = undefined
+  toolbarNoticeWindow = undefined
+  toolbarNoticeItem = undefined
+
+  appWindowsManager.destroyAll()
+
+  const nextToolbar = createFloatingToolbarWindow()
+  floatingToolbarWindow = nextToolbar
+  if (prevToolbarBounds) {
+    try {
+      nextToolbar.setBounds(prevToolbarBounds, false)
+    } catch {}
+  }
+  const nextHandle = createFloatingToolbarHandleWindow(nextToolbar)
+  floatingToolbarHandleWindow = nextHandle
+
+  if (!prevToolbarVisible) {
+    try {
+      nextToolbar.hide()
+    } catch {}
+    try {
+      nextHandle.hide()
+    } catch {}
+  }
+
+  if (toolbarNoticeDesiredVisible && prevToolbarVisible) {
+    try {
+      showToolbarNoticeWindow()
+    } catch {}
+  }
+
+  if (prevToolbarVisible) {
+    for (const sub of visibleSubwindows) {
+      try {
+        toggleToolbarSubwindow(sub.kind, sub.placement)
+      } catch {}
+    }
+  }
+}
+
 function applyToolbarUiZoom(zoom: number): void {
   const targets = [
     floatingToolbarWindow,
     floatingToolbarHandleWindow,
+    toolbarNoticeWindow,
     ...Array.from(toolbarSubwindows.values()).map((v) => v.win)
   ]
   for (const win of targets) {
@@ -160,6 +243,18 @@ function applyToolbarUiZoom(zoom: number): void {
 
 let floatingToolbarWindow: BrowserWindow | undefined
 let floatingToolbarHandleWindow: BrowserWindow | undefined
+let toolbarNoticeWindow: BrowserWindow | undefined
+let toolbarNoticeDesiredVisible = false
+let toolbarNoticeItem:
+  | {
+      win: BrowserWindow
+      placement: 'top' | 'bottom'
+      effectivePlacement: 'top' | 'bottom'
+      width: number
+      height: number
+      animationTimer?: NodeJS.Timeout
+    }
+  | undefined
 let whiteboardBackgroundWindow: BrowserWindow | undefined
 let annotationOverlayWindow: BrowserWindow | undefined
 let screenAnnotationOverlayWindow: BrowserWindow | undefined
@@ -290,6 +385,7 @@ const appWindowsManager = new AppWindowsManager({
   getDevServerUrl,
   getAppearance: () => currentAppearance,
   getNativeMicaEnabled: () => nativeMicaEnabled,
+  getLegacyWindowImplementation: () => legacyWindowImplementation,
   surfaceBackgroundColor: effectiveSurfaceBackgroundColor,
   applyWindowsBackdrop,
   wireWindowDebug,
@@ -392,6 +488,12 @@ function applyWindowsBackdrop(win: BrowserWindow): void {
   if (process.platform !== 'win32') return
   const setMaterial = (win as any).setBackgroundMaterial as undefined | ((m: string) => void)
   if (typeof setMaterial !== 'function') return
+  if (!legacyWindowImplementation) {
+    try {
+      setMaterial('none')
+    } catch {}
+    return
+  }
   if (!nativeMicaEnabled) {
     try {
       setMaterial('none')
@@ -413,15 +515,17 @@ function createFloatingToolbarWindow(): BrowserWindow {
     width: 360,
     height: 160,
     frame: false,
-    transparent: false,
+    titleBarStyle: 'hidden',
+    autoHideMenuBar: true,
+    transparent: !legacyWindowImplementation,
     resizable: false,
     maximizable: false,
     fullscreenable: false,
     alwaysOnTop: true,
     skipTaskbar: true,
     title: WINDOW_TITLE_FLOATING_TOOLBAR,
-    backgroundColor: effectiveSurfaceBackgroundColor(currentAppearance),
-    backgroundMaterial: nativeMicaEnabled ? 'mica' : 'none',
+    backgroundColor: legacyWindowImplementation ? effectiveSurfaceBackgroundColor(currentAppearance) : '#00000000',
+    backgroundMaterial: legacyWindowImplementation && nativeMicaEnabled ? 'mica' : 'none',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
@@ -430,6 +534,15 @@ function createFloatingToolbarWindow(): BrowserWindow {
   })
 
   applyWindowsBackdrop(win)
+  try {
+    win.setMenu(null)
+  } catch {}
+  try {
+    win.setMenuBarVisibility(false)
+  } catch {}
+  try {
+    win.setAutoHideMenuBar(true)
+  } catch {}
   win.setAlwaysOnTop(true, 'screen-saver')
   wireWindowDebug(win, 'floating-toolbar')
   wireWindowStatus(win, WINDOW_ID_FLOATING_TOOLBAR)
@@ -442,10 +555,13 @@ function createFloatingToolbarWindow(): BrowserWindow {
     scheduleRepositionToolbarSubwindows('other')
     const handle = floatingToolbarHandleWindow
     if (handle && !handle.isDestroyed()) handle.showInactive()
+    if (toolbarNoticeDesiredVisible) showToolbarNoticeWindow()
   })
   win.on('hide', () => {
     const handle = floatingToolbarHandleWindow
     if (handle && !handle.isDestroyed() && handle.isVisible()) handle.hide()
+    const notice = toolbarNoticeWindow
+    if (notice && !notice.isDestroyed() && notice.isVisible()) notice.hide()
     for (const item of toolbarSubwindows.values()) {
       if (item.win.isDestroyed()) continue
       item.win.hide()
@@ -454,6 +570,15 @@ function createFloatingToolbarWindow(): BrowserWindow {
   win.on('closed', () => {
     const handle = floatingToolbarHandleWindow
     if (handle && !handle.isDestroyed()) handle.close()
+    floatingToolbarHandleWindow = undefined
+
+    const notice = toolbarNoticeWindow
+    if (notice && !notice.isDestroyed()) notice.close()
+    toolbarNoticeWindow = undefined
+    toolbarNoticeItem = undefined
+    toolbarNoticeDesiredVisible = false
+
+    hideAllToolbarSubwindows()
   })
 
   const devUrl = getDevServerUrl()
@@ -473,7 +598,9 @@ function createFloatingToolbarHandleWindow(owner: BrowserWindow): BrowserWindow 
     width: TOOLBAR_HANDLE_WIDTH,
     height: ownerBounds.height,
     frame: false,
-    transparent: false,
+    titleBarStyle: 'hidden',
+    autoHideMenuBar: true,
+    transparent: !legacyWindowImplementation,
     resizable: false,
     maximizable: false,
     fullscreenable: false,
@@ -481,8 +608,8 @@ function createFloatingToolbarHandleWindow(owner: BrowserWindow): BrowserWindow 
     skipTaskbar: true,
     parent: owner,
     title: '浮动工具栏拖动把手',
-    backgroundColor: effectiveSurfaceBackgroundColor(currentAppearance),
-    backgroundMaterial: nativeMicaEnabled ? 'mica' : 'none',
+    backgroundColor: legacyWindowImplementation ? effectiveSurfaceBackgroundColor(currentAppearance) : '#00000000',
+    backgroundMaterial: legacyWindowImplementation && nativeMicaEnabled ? 'mica' : 'none',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
@@ -491,6 +618,15 @@ function createFloatingToolbarHandleWindow(owner: BrowserWindow): BrowserWindow 
   })
 
   applyWindowsBackdrop(win)
+  try {
+    win.setMenu(null)
+  } catch {}
+  try {
+    win.setMenuBarVisibility(false)
+  } catch {}
+  try {
+    win.setAutoHideMenuBar(true)
+  } catch {}
   win.setAlwaysOnTop(true, 'screen-saver')
   wireWindowDebug(win, 'floating-toolbar-handle')
   wireWindowStatus(win, WINDOW_ID_FLOATING_TOOLBAR_HANDLE)
@@ -526,6 +662,79 @@ function createFloatingToolbarHandleWindow(owner: BrowserWindow): BrowserWindow 
   return win
 }
 
+function getOrCreateToolbarNoticeWindow(): BrowserWindow {
+  const existing = toolbarNoticeWindow
+  if (existing && !existing.isDestroyed()) return existing
+
+  const owner = floatingToolbarWindow
+  if (!owner || owner.isDestroyed()) throw new Error('toolbar_owner_missing')
+
+  const win = new BrowserWindow({
+    width: 340,
+    height: 64,
+    show: false,
+    frame: false,
+    titleBarStyle: 'hidden',
+    autoHideMenuBar: true,
+    transparent: !legacyWindowImplementation,
+    resizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    parent: owner,
+    title: '浮动通知',
+    backgroundColor: legacyWindowImplementation ? effectiveSurfaceBackgroundColor(currentAppearance) : '#00000000',
+    backgroundMaterial: legacyWindowImplementation && nativeMicaEnabled ? 'mica' : 'none',
+    webPreferences: {
+      preload: join(__dirname, '../preload/index.js'),
+      contextIsolation: true,
+      nodeIntegration: false
+    }
+  })
+
+  applyWindowsBackdrop(win)
+  try {
+    win.setMenu(null)
+  } catch {}
+  try {
+    win.setMenuBarVisibility(false)
+  } catch {}
+  try {
+    win.setAutoHideMenuBar(true)
+  } catch {}
+  win.setAlwaysOnTop(true, 'screen-saver')
+  wireWindowDebug(win, 'toolbar-notice')
+  wireWindowStatus(win, WINDOW_ID_TOOLBAR_NOTICE)
+  try {
+    win.webContents.setZoomLevel(toolbarUiZoom)
+  } catch {}
+
+  const devUrl = getDevServerUrl()
+  if (devUrl) {
+    win.loadURL(`${devUrl}?window=${encodeURIComponent(WINDOW_ID_TOOLBAR_NOTICE)}`)
+    if (process.env.LANSTART_OPEN_DEVTOOLS === '1') win.webContents.openDevTools({ mode: 'detach' })
+  } else {
+    win.loadFile(join(__dirname, '../renderer/index.html'), { query: { window: WINDOW_ID_TOOLBAR_NOTICE } })
+  }
+
+  win.on('closed', () => {
+    if (toolbarNoticeWindow === win) toolbarNoticeWindow = undefined
+    if (toolbarNoticeItem?.win === win) toolbarNoticeItem = undefined
+  })
+
+  toolbarNoticeWindow = win
+  toolbarNoticeItem = {
+    win,
+    placement: 'bottom',
+    effectivePlacement: 'bottom',
+    width: 340,
+    height: 64
+  }
+  scheduleRepositionToolbarSubwindows('other')
+  return win
+}
+
 function applyToolbarOnTopLevel(level: 'normal' | 'floating' | 'torn-off-menu' | 'modal-panel' | 'main-menu' | 'status' | 'pop-up-menu' | 'screen-saver') {
   const toolbar = floatingToolbarWindow
   if (toolbar && !toolbar.isDestroyed()) {
@@ -541,6 +750,12 @@ function applyToolbarOnTopLevel(level: 'normal' | 'floating' | 'torn-off-menu' |
     if (handle.isVisible()) {
       handle.moveTop()
     }
+  }
+
+  const notice = toolbarNoticeWindow
+  if (notice && !notice.isDestroyed() && notice.isVisible()) {
+    notice.setAlwaysOnTop(true, level)
+    notice.moveTop()
   }
 
   for (const item of toolbarSubwindows.values()) {
@@ -678,6 +893,44 @@ function computeToolbarSubwindowBounds(
   }
 }
 
+function computeToolbarNoticeBounds(
+  item: { effectivePlacement: 'top' | 'bottom'; width: number; height: number },
+  ownerBounds: Bounds,
+  workArea: WorkArea
+) {
+  const gap = Math.round(TOOLBAR_HANDLE_GAP * getUiZoomFactor())
+  const widthLimit = Math.max(60, workArea.width - 20)
+  const width = Math.max(60, Math.min(widthLimit, Math.round(item.width)))
+  const heightLimit = Math.max(60, workArea.height - 20)
+  const height = Math.max(60, Math.min(heightLimit, Math.round(item.height)))
+
+  let x = ownerBounds.x
+  let y =
+    item.effectivePlacement === 'bottom'
+      ? ownerBounds.y + ownerBounds.height + gap
+      : ownerBounds.y - height - gap
+
+  const xMax = workArea.x + workArea.width - width
+  x = Math.max(workArea.x, Math.min(xMax, x))
+
+  const yMax = workArea.y + workArea.height - height
+  if (y < workArea.y || y > yMax) {
+    item.effectivePlacement = item.effectivePlacement === 'bottom' ? 'top' : 'bottom'
+    y =
+      item.effectivePlacement === 'bottom'
+        ? ownerBounds.y + ownerBounds.height + gap
+        : ownerBounds.y - height - gap
+    y = Math.max(workArea.y, Math.min(yMax, y))
+  }
+
+  const xi = Math.round(x)
+  const yi = Math.round(y)
+  return {
+    bounds: { x: xi, y: yi, width, height },
+    atEdge: xi === workArea.x || xi === xMax || yi === workArea.y || yi === yMax
+  }
+}
+
 function repositionToolbarSubwindows(animate: boolean) {
   const owner = floatingToolbarWindow
   if (!owner || owner.isDestroyed()) return
@@ -707,6 +960,29 @@ function repositionToolbarSubwindows(animate: boolean) {
         setTimeout(() => {
           syncingToolbarPair = false
         }, 0)
+      }
+    }
+  }
+
+  const noticeItem = toolbarNoticeItem
+  const notice = toolbarNoticeWindow
+  if (noticeItem && notice && !notice.isDestroyed() && toolbarNoticeDesiredVisible) {
+    const prevEffectivePlacement = noticeItem.effectivePlacement
+    const { bounds, atEdge } = computeToolbarNoticeBounds(noticeItem, ownerBounds, workArea)
+    const placementChanged = noticeItem.effectivePlacement !== prevEffectivePlacement
+    const shouldAnimate = animate || placementChanged || Boolean(noticeItem.animationTimer)
+    if (shouldAnimate) {
+      animateToolbarSubwindowTo(noticeItem, bounds, atEdge)
+    } else {
+      stopToolbarSubwindowAnimation(noticeItem)
+      const current = notice.getBounds()
+      if (
+        current.x !== bounds.x ||
+        current.y !== bounds.y ||
+        current.width !== bounds.width ||
+        current.height !== bounds.height
+      ) {
+        notice.setBounds(bounds, false)
       }
     }
   }
@@ -999,7 +1275,9 @@ function getOrCreateToolbarSubwindow(kind: string, placement: 'top' | 'bottom'):
     height: 220,
     show: false,
     frame: false,
-    transparent: false,
+    titleBarStyle: 'hidden',
+    autoHideMenuBar: true,
+    transparent: !legacyWindowImplementation,
     resizable: false,
     maximizable: false,
     fullscreenable: false,
@@ -1007,8 +1285,8 @@ function getOrCreateToolbarSubwindow(kind: string, placement: 'top' | 'bottom'):
     skipTaskbar: true,
     parent: owner,
     title: `二级菜单-${kind}`,
-    backgroundColor: effectiveSurfaceBackgroundColor(currentAppearance),
-    backgroundMaterial: nativeMicaEnabled ? 'mica' : 'none',
+    backgroundColor: legacyWindowImplementation ? effectiveSurfaceBackgroundColor(currentAppearance) : '#00000000',
+    backgroundMaterial: legacyWindowImplementation && nativeMicaEnabled ? 'mica' : 'none',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
@@ -1017,6 +1295,15 @@ function getOrCreateToolbarSubwindow(kind: string, placement: 'top' | 'bottom'):
   })
 
   applyWindowsBackdrop(win)
+  try {
+    win.setMenu(null)
+  } catch {}
+  try {
+    win.setMenuBarVisibility(false)
+  } catch {}
+  try {
+    win.setAutoHideMenuBar(true)
+  } catch {}
   win.setAlwaysOnTop(true, 'screen-saver')
   wireWindowDebug(win, `subwindow-${kind}`)
   wireWindowStatus(win, `${WINDOW_ID_TOOLBAR_SUBWINDOW}:${kind}`)
@@ -1053,6 +1340,47 @@ function getOrCreateToolbarSubwindow(kind: string, placement: 'top' | 'bottom'):
   return win
 }
 
+function showToolbarNoticeWindow() {
+  const owner = floatingToolbarWindow
+  if (!owner || owner.isDestroyed()) return
+  const win = getOrCreateToolbarNoticeWindow()
+  const item = toolbarNoticeItem
+  if (!item) return
+
+  closeOtherToolbarSubwindows('__notice__')
+
+  item.placement = 'bottom'
+  item.effectivePlacement = item.placement
+
+  const ownerBounds = owner.getBounds()
+  const display = screen.getDisplayMatching(ownerBounds)
+  const { bounds } = computeToolbarNoticeBounds(item, ownerBounds, display.workArea)
+  win.setBounds(bounds, false)
+  scheduleRepositionToolbarSubwindows('other')
+
+  const doShow = () => {
+    if (win.isDestroyed()) return
+    if (win.isVisible()) return
+    win.showInactive()
+  }
+  if (win.webContents.isLoading()) win.once('ready-to-show', doShow)
+  else doShow()
+}
+
+function hideToolbarNoticeWindow() {
+  const win = toolbarNoticeWindow
+  if (!win || win.isDestroyed()) return
+  if (win.isVisible()) win.hide()
+}
+
+function setToolbarNoticeBounds(bounds: { width: number; height: number }) {
+  const item = toolbarNoticeItem
+  if (!item || item.win.isDestroyed()) return
+  item.width = bounds.width
+  item.height = bounds.height
+  scheduleRepositionToolbarSubwindows('other')
+}
+
 function closeOtherToolbarSubwindows(exceptKind: string) {
   for (const [kind, item] of toolbarSubwindows.entries()) {
     if (kind === exceptKind) continue
@@ -1074,6 +1402,9 @@ function toggleToolbarSubwindow(kind: string, placement: 'top' | 'bottom') {
     win.hide()
     return
   }
+
+  toolbarNoticeDesiredVisible = false
+  hideToolbarNoticeWindow()
 
   item.effectivePlacement = placement
   closeOtherToolbarSubwindows(kind)
@@ -1140,6 +1471,11 @@ function handleBackendControlMessage(message: any): void {
 
   if (message.type === 'SET_NATIVE_MICA') {
     applyNativeMica(Boolean((message as any).enabled))
+    return
+  }
+
+  if (message.type === 'SET_LEGACY_WINDOW_IMPLEMENTATION') {
+    applyLegacyWindowImplementation(Boolean((message as any).enabled))
     return
   }
 
@@ -1302,7 +1638,19 @@ function handleBackendControlMessage(message: any): void {
     const width = Number((message as any).width)
     const height = Number((message as any).height)
     if (!kind || !Number.isFinite(width) || !Number.isFinite(height)) return
-    setToolbarSubwindowBounds(kind, { width, height })
+    if (kind === 'notice') {
+      setToolbarNoticeBounds({ width, height })
+    } else {
+      setToolbarSubwindowBounds(kind, { width, height })
+    }
+    return
+  }
+
+  if (message.type === 'SET_NOTICE_VISIBLE') {
+    const visible = Boolean((message as any).visible)
+    toolbarNoticeDesiredVisible = visible
+    if (visible) showToolbarNoticeWindow()
+    else hideToolbarNoticeWindow()
     return
   }
 
@@ -1442,6 +1790,7 @@ if (hasSingleInstanceLock) {
 
       let loadedAppearance: Appearance | undefined
       let loadedNativeMica: boolean | undefined
+      let loadedLegacyWindowImplementation: boolean | undefined
 
       for (let attempt = 0; attempt < 3; attempt++) {
         let backendResponded = false
@@ -1464,10 +1813,21 @@ if (hasSingleInstanceLock) {
           if (String(e).includes('kv_not_found')) backendResponded = true
         }
 
+        try {
+          const raw = await backendGetKv(LEGACY_WINDOW_IMPL_KV_KEY)
+          backendResponded = true
+          if (typeof raw === 'boolean') loadedLegacyWindowImplementation = raw
+          else if (raw === 'true' || raw === 1 || raw === '1') loadedLegacyWindowImplementation = true
+          else if (raw === 'false' || raw === 0 || raw === '0') loadedLegacyWindowImplementation = false
+        } catch (e) {
+          if (String(e).includes('kv_not_found')) backendResponded = true
+        }
+
         if (backendResponded) break
         await new Promise((r) => setTimeout(r, 220))
       }
 
+      applyLegacyWindowImplementation(loadedLegacyWindowImplementation ?? false, { rebuild: false })
       applyNativeMica(loadedNativeMica ?? false)
       applyAppearance(loadedAppearance ?? currentAppearance)
 
@@ -1486,6 +1846,8 @@ if (hasSingleInstanceLock) {
             if (toolbar && !toolbar.isDestroyed()) out.push(toolbar)
             const h = floatingToolbarHandleWindow
             if (h && !h.isDestroyed()) out.push(h)
+            const notice = toolbarNoticeWindow
+            if (notice && !notice.isDestroyed()) out.push(notice)
             for (const item of toolbarSubwindows.values()) {
               const sw = item.win
               if (sw && !sw.isDestroyed()) out.push(sw)

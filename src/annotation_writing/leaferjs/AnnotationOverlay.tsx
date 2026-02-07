@@ -15,6 +15,8 @@ import {
   UNDO_REV_UI_STATE_KEY,
   UI_STATE_APP_WINDOW_ID,
   getKv,
+  putKv,
+  putUiStateKey,
   isLeaferSettings,
   postCommand,
   type LeaferSettings,
@@ -100,7 +102,8 @@ const DEFAULT_LEAFER_SETTINGS: LeaferSettings = {
   freezeScreen: false,
   rendererEngine: 'canvas2d',
   nibMode: 'off',
-  postBakeOptimize: false
+  postBakeOptimize: false,
+  postBakeOptimizeOnce: false
 }
 
 export function AnnotationOverlayApp() {
@@ -131,10 +134,12 @@ export function AnnotationOverlayApp() {
   const inkSmoothingRef = useRef(DEFAULT_LEAFER_SETTINGS.inkSmoothing)
   const nibModeRef = useRef(DEFAULT_LEAFER_SETTINGS.nibMode ?? 'off')
   const postBakeOptimizeRef = useRef(DEFAULT_LEAFER_SETTINGS.postBakeOptimize ?? false)
+  const postBakeOptimizeOnceRef = useRef(DEFAULT_LEAFER_SETTINGS.postBakeOptimizeOnce ?? false)
   const apiRef = useRef<null | { undo: () => void; redo: () => void; clear: () => void }>(null)
   const lastUndoRevRef = useRef<number | null>(null)
   const lastRedoRevRef = useRef<number | null>(null)
   const lastClearRevRef = useRef<number | null>(null)
+  const leaferSettingsRef = useRef<LeaferSettings>(DEFAULT_LEAFER_SETTINGS)
 
   const [leaferSettings, setLeaferSettings] = useState<LeaferSettings>(DEFAULT_LEAFER_SETTINGS)
   const [frozenBackgroundUrl, setFrozenBackgroundUrl] = useState('')
@@ -165,6 +170,10 @@ export function AnnotationOverlayApp() {
   }, [leaferSettingsRev])
 
   useEffect(() => {
+    leaferSettingsRef.current = leaferSettings
+  }, [leaferSettings])
+
+  useEffect(() => {
     multiTouchRef.current = leaferSettings.multiTouch
   }, [leaferSettings.multiTouch])
 
@@ -179,6 +188,10 @@ export function AnnotationOverlayApp() {
   useEffect(() => {
     postBakeOptimizeRef.current = leaferSettings.postBakeOptimize ?? false
   }, [leaferSettings.postBakeOptimize])
+
+  useEffect(() => {
+    postBakeOptimizeOnceRef.current = leaferSettings.postBakeOptimizeOnce ?? false
+  }, [leaferSettings.postBakeOptimizeOnce])
 
   useEffect(() => {
     toolRef.current = tool
@@ -1029,6 +1042,27 @@ struct VSOut {
 
     const disposeParentLayout = ensureParentLayout()
 
+    const consumePostBakeOptimizeOnce = () => {
+      if (!postBakeOptimizeOnceRef.current) return
+      postBakeOptimizeOnceRef.current = false
+      const current = leaferSettingsRef.current
+      const next: LeaferSettings = { ...current, postBakeOptimizeOnce: false }
+      leaferSettingsRef.current = next
+      setLeaferSettings(next)
+      void (async () => {
+        try {
+          await putKv(LEAFER_SETTINGS_KV_KEY, next)
+        } catch {
+          return
+        }
+        try {
+          await putUiStateKey(UI_STATE_APP_WINDOW_ID, LEAFER_SETTINGS_UI_STATE_KEY, Date.now())
+        } catch {
+          return
+        }
+      })()
+    }
+
     if (rendererEngine === 'canvas2d') {
       const rect = view.getBoundingClientRect()
       const contextSettings = { desynchronized: true } as any
@@ -1409,10 +1443,9 @@ struct VSOut {
           if (session.nibDynamic) {
             const full = inkSmoothingRef.current ? bakePolyline(session.rawPoints, session.strokeWidth) : session.rawPoints
             const widthAtT = buildNibWidthAt(session.rawPoints, session.rawTimes, session.strokeWidth) ?? undefined
+            const shouldOptimize = inkSmoothingRef.current && (postBakeOptimizeRef.current || postBakeOptimizeOnceRef.current)
             const parts =
-              inkSmoothingRef.current && postBakeOptimizeRef.current
-                ? postBakeOptimizePolyline(full, session.strokeWidth)
-                : ({ kind: 'single', points: full } as PostBakeResult)
+              shouldOptimize ? postBakeOptimizePolyline(full, session.strokeWidth) : ({ kind: 'single', points: full } as PostBakeResult)
             removeNodes([activeLine, ...session.bakedLines])
 
             const next: Line[] = []
@@ -1445,6 +1478,7 @@ struct VSOut {
               }
             }
             record({ kind: 'add', nodes: next })
+            if (postBakeOptimizeOnceRef.current && shouldOptimize) consumePostBakeOptimizeOnce()
             return
           }
 
@@ -1452,7 +1486,8 @@ struct VSOut {
             const meta = getMeta(activeLine)
             const sw = meta?.strokeWidth ?? session.strokeWidth
             const baked = bakePolyline(session.points, sw)
-            if (postBakeOptimizeRef.current) {
+            const shouldOptimize = meta?.role === 'stroke' && (postBakeOptimizeRef.current || postBakeOptimizeOnceRef.current)
+            if (shouldOptimize) {
               const post = postBakeOptimizePolyline(baked, sw)
               if (post.kind === 'split') {
                 removeNodes([activeLine])
@@ -1473,6 +1508,7 @@ struct VSOut {
                   next.push(line)
                 }
                 if (next.length) record({ kind: 'add', nodes: next })
+                if (postBakeOptimizeOnceRef.current) consumePostBakeOptimizeOnce()
                 return
               }
               if (meta) {
@@ -1480,6 +1516,7 @@ struct VSOut {
                 recomputeBounds(meta, post.points)
               }
               ;(activeLine as any).points = post.points
+              if (postBakeOptimizeOnceRef.current) consumePostBakeOptimizeOnce()
             } else {
               if (meta) {
                 meta.points = baked
@@ -1521,22 +1558,47 @@ struct VSOut {
       }
     }
 
-    const canvas = document.createElement('canvas')
-    canvas.style.position = 'absolute'
-    canvas.style.left = '0'
-    canvas.style.top = '0'
-    canvas.style.width = '100%'
-    canvas.style.height = '100%'
-    canvas.style.display = 'block'
-    view.appendChild(canvas)
+    const useSvg = rendererEngine === 'svg'
+    const svgNS = 'http://www.w3.org/2000/svg'
+    const svg = useSvg ? document.createElementNS(svgNS, 'svg') : null
+    const svgLayer = useSvg ? document.createElementNS(svgNS, 'g') : null
+    const canvas = useSvg ? null : document.createElement('canvas')
 
-    const resizeCanvas = () => {
-      const r = view.getBoundingClientRect()
-      const dpr = Math.max(1, globalThis.devicePixelRatio || 1)
-      canvas.width = Math.max(1, Math.floor(r.width * dpr))
-      canvas.height = Math.max(1, Math.floor(r.height * dpr))
+    if (canvas) {
+      canvas.style.position = 'absolute'
+      canvas.style.left = '0'
+      canvas.style.top = '0'
+      canvas.style.width = '100%'
+      canvas.style.height = '100%'
+      canvas.style.display = 'block'
+      view.appendChild(canvas)
     }
-    resizeCanvas()
+
+    if (svg && svgLayer) {
+      svg.style.position = 'absolute'
+      svg.style.left = '0'
+      svg.style.top = '0'
+      svg.style.width = '100%'
+      svg.style.height = '100%'
+      svg.style.display = 'block'
+      ;(svg.style as any).pointerEvents = 'none'
+      svg.setAttribute('preserveAspectRatio', 'none')
+      svg.appendChild(svgLayer)
+      view.appendChild(svg)
+    }
+
+    const resizeSurface = () => {
+      const r = view.getBoundingClientRect()
+      const cssW = Math.max(1, Math.floor(r.width))
+      const cssH = Math.max(1, Math.floor(r.height))
+      if (svg) svg.setAttribute('viewBox', `0 0 ${cssW} ${cssH}`)
+      if (canvas) {
+        const dpr = Math.max(1, globalThis.devicePixelRatio || 1)
+        canvas.width = Math.max(1, Math.floor(cssW * dpr))
+        canvas.height = Math.max(1, Math.floor(cssH * dpr))
+      }
+    }
+    resizeSurface()
 
     type RenderNode = {
       role: 'stroke' | 'eraserPixel'
@@ -1551,11 +1613,47 @@ struct VSOut {
     const order: RenderNode[] = []
     const history = { undo: [] as Action[], redo: [] as Action[] }
 
+    const nodeToSvgPath = useSvg ? new Map<RenderNode, SVGPathElement>() : null
+    const svgDirty = useSvg ? new Set<RenderNode>() : null
+
+    const pointsToSvgPathD = (points: number[]): string => {
+      if (points.length < 4) return ''
+      const parts: string[] = []
+      parts.push('M', String(points[0]), String(points[1]))
+      for (let i = 2; i + 1 < points.length; i += 2) parts.push('L', String(points[i]), String(points[i + 1]))
+      return parts.join(' ')
+    }
+
+    const syncSvgNode = (node: RenderNode) => {
+      if (!nodeToSvgPath || !svgLayer) return
+      if (node.role !== 'stroke') return
+      const path = nodeToSvgPath.get(node)
+      if (!path) return
+      const r = Math.round(node.color[0] * 255)
+      const g = Math.round(node.color[1] * 255)
+      const b = Math.round(node.color[2] * 255)
+      const a = Math.max(0, Math.min(1, node.color[3]))
+      path.setAttribute('fill', 'none')
+      path.setAttribute('stroke', `rgb(${r} ${g} ${b})`)
+      path.setAttribute('stroke-opacity', String(a))
+      path.setAttribute('stroke-width', String(Math.max(0.1, node.strokeWidth)))
+      path.setAttribute('stroke-linecap', 'round')
+      path.setAttribute('stroke-linejoin', 'round')
+      path.setAttribute('d', pointsToSvgPathD(node.points))
+    }
+
     const addNodes = (nodes: RenderNode[]) => {
       for (const n of nodes) {
         if (live.has(n)) continue
         live.add(n)
         order.push(n)
+        if (nodeToSvgPath && svgLayer && n.role === 'stroke') {
+          const path = document.createElementNS(svgNS, 'path')
+          nodeToSvgPath.set(n, path)
+          svgLayer.appendChild(path)
+          syncSvgNode(n)
+          svgDirty?.add?.(n)
+        }
       }
     }
 
@@ -1565,6 +1663,16 @@ struct VSOut {
       if (!set.size) return
       for (let i = order.length - 1; i >= 0; i--) {
         if (set.has(order[i])) order.splice(i, 1)
+      }
+      if (nodeToSvgPath) {
+        for (const n of set) {
+          const el = nodeToSvgPath.get(n)
+          if (!el) continue
+          nodeToSvgPath.delete(n)
+          try {
+            el.remove()
+          } catch {}
+        }
       }
     }
 
@@ -1690,6 +1798,7 @@ struct VSOut {
           node.points = baked
           node.meta.points = baked
           recomputeBounds(node.meta, baked)
+          svgDirty?.add(node)
           requestRender()
           return
         }
@@ -1702,6 +1811,7 @@ struct VSOut {
         node.points = tail
         node.meta.points = tail
         recomputeBounds(node.meta, tail)
+        svgDirty?.add(node)
 
         const widthAtT = buildNibWidthAt(current.rawPoints, current.rawTimes, current.strokeWidth) ?? undefined
         const segments = buildNibSegments(prefix, current.strokeWidth, 'dynamic', widthAtT)
@@ -1716,6 +1826,7 @@ struct VSOut {
             existing.meta.points = seg.points
             existing.meta.groupId = current.groupId
             recomputeBounds(existing.meta, seg.points)
+            svgDirty?.add(existing)
             nextNodes.push(existing)
             continue
           }
@@ -1725,6 +1836,7 @@ struct VSOut {
           recomputeBounds(meta, seg.points)
           const n: RenderNode = { role: 'stroke', strokeWidth: seg.strokeWidth, points: seg.points, meta, color: current.color }
           addNodes([n])
+          svgDirty?.add(n)
           nextNodes.push(n)
         }
 
@@ -1735,16 +1847,17 @@ struct VSOut {
 
         removeNodes([node])
         addNodes([node])
+        svgDirty?.add(node)
         requestRender()
       })
     }
 
     let cancelled = false
     let webgpu: null | { configure: () => void; draw: (nodes: RenderNode[]) => void } = null
-    const webgl = createWebGLRenderer(canvas)
+    const webgl = canvas ? createWebGLRenderer(canvas) : null
 
     const init = async () => {
-      if (rendererEngine === 'webgpu') {
+      if (canvas && rendererEngine === 'webgpu') {
         try {
           const r = await createWebGPURenderer(canvas)
           if (cancelled) return
@@ -1764,6 +1877,13 @@ struct VSOut {
       requestAnimationFrame(() => {
         scheduled = false
         if (cancelled) return
+        if (useSvg) {
+          if (svgDirty && svgDirty.size) {
+            for (const n of svgDirty) syncSvgNode(n)
+            svgDirty.clear()
+          }
+          return
+        }
         const nodes = order.slice()
         if (webgpu) {
           try {
@@ -1781,6 +1901,11 @@ struct VSOut {
       })
     }
 
+    const markSvgDirty = (n: RenderNode) => {
+      if (!svgDirty) return
+      svgDirty.add(n)
+    }
+
     let nextGroupId = 1
 
     const onPointerDown = (e: PointerEvent) => {
@@ -1795,7 +1920,7 @@ struct VSOut {
         points: [] as number[],
         rawPoints: [] as number[],
         rawTimes: [] as number[],
-        erasingStroke: toolRef.current === 'eraser' && eraserTypeRef.current === 'stroke',
+        erasingStroke: toolRef.current === 'eraser' && (useSvg || eraserTypeRef.current === 'stroke'),
         erased: [] as RenderNode[],
         erasedSet: new Set<RenderNode>(),
         erasedGroupIds: new Set<number>(),
@@ -1859,6 +1984,7 @@ struct VSOut {
       const node: RenderNode = { role, strokeWidth, points: session.points, meta, color: rgba }
       session.node = node
       addNodes([node])
+      markSvgDirty(node)
       requestRender()
     }
 
@@ -1918,6 +2044,7 @@ struct VSOut {
       if (!session.node) return
       if (!session.nibDynamic) {
         for (let i = 0; i + 1 < appended.length; i += 2) updateBounds(session.node.meta, appended[i], appended[i + 1])
+        markSvgDirty(session.node)
         requestRender()
         maybeScheduleBake(e.pointerId)
         return
@@ -1929,6 +2056,7 @@ struct VSOut {
       session.node.points = tail
       session.node.meta.points = tail
       recomputeBounds(session.node.meta, tail)
+      markSvgDirty(session.node)
       requestRender()
       maybeScheduleBake(e.pointerId)
     }
@@ -1947,10 +2075,9 @@ struct VSOut {
         if (session.nibDynamic) {
           const full = inkSmoothingRef.current ? bakePolyline(session.rawPoints, session.strokeWidth) : session.rawPoints
           const widthAtT = buildNibWidthAt(session.rawPoints, session.rawTimes, session.strokeWidth) ?? undefined
+            const shouldOptimize = inkSmoothingRef.current && (postBakeOptimizeRef.current || postBakeOptimizeOnceRef.current)
           const parts =
-            inkSmoothingRef.current && postBakeOptimizeRef.current
-              ? postBakeOptimizePolyline(full, session.strokeWidth)
-              : ({ kind: 'single', points: full } as PostBakeResult)
+              shouldOptimize ? postBakeOptimizePolyline(full, session.strokeWidth) : ({ kind: 'single', points: full } as PostBakeResult)
           removeNodes([active, ...session.bakedNodes])
 
           const next: RenderNode[] = []
@@ -1966,16 +2093,19 @@ struct VSOut {
               const n: RenderNode = { role: 'stroke', strokeWidth: seg.strokeWidth, points: seg.points, meta, color: session.color }
               addNodes([n])
               next.push(n)
+              markSvgDirty(n)
             }
           }
           record({ kind: 'add', nodes: next })
+          if (postBakeOptimizeOnceRef.current && shouldOptimize) consumePostBakeOptimizeOnce()
           requestRender()
           return
         }
 
         if (inkSmoothingRef.current) {
           const baked = bakePolyline(session.points, active.strokeWidth)
-          if (postBakeOptimizeRef.current) {
+          const shouldOptimize = active.meta.role === 'stroke' && (postBakeOptimizeRef.current || postBakeOptimizeOnceRef.current)
+          if (shouldOptimize) {
             const post = postBakeOptimizePolyline(baked, active.strokeWidth)
             if (post.kind === 'split') {
               removeNodes([active])
@@ -1989,19 +2119,24 @@ struct VSOut {
                 const n: RenderNode = { role: 'stroke', strokeWidth: active.strokeWidth, points: s.points, meta, color: session.color }
                 addNodes([n])
                 next.push(n)
+                markSvgDirty(n)
               }
               if (next.length) record({ kind: 'add', nodes: next })
+              if (postBakeOptimizeOnceRef.current) consumePostBakeOptimizeOnce()
               requestRender()
               return
             }
             active.points = post.points
             active.meta.points = post.points
             recomputeBounds(active.meta, post.points)
+            markSvgDirty(active)
+            if (postBakeOptimizeOnceRef.current) consumePostBakeOptimizeOnce()
             requestRender()
           } else {
             active.points = baked
             active.meta.points = baked
             recomputeBounds(active.meta, baked)
+            markSvgDirty(active)
             requestRender()
           }
         }
@@ -2013,7 +2148,7 @@ struct VSOut {
     const onPointerCancel = (e: PointerEvent) => finish(e)
 
     const ro = new ResizeObserver(() => {
-      resizeCanvas()
+      resizeSurface()
       try {
         webgpu?.configure?.()
       } catch {}

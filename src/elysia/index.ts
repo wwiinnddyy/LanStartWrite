@@ -187,6 +187,12 @@ async function handleCommand(command: string, payload: unknown): Promise<Command
         return { ok: true }
       }
 
+      if (action === 'setNoticeVisible') {
+        const visible = Boolean((payload as any)?.visible)
+        requestMain({ type: 'SET_NOTICE_VISIBLE', visible })
+        return { ok: true }
+      }
+
       if (action === 'quit') {
         requestMain({ type: 'QUIT_APP' })
         return { ok: true }
@@ -351,6 +357,16 @@ async function handleCommand(command: string, payload: unknown): Promise<Command
 
       if (action === 'closeSettingsWindow') {
         requestMain({ type: 'CLOSE_SETTINGS_WINDOW' })
+        return { ok: true }
+      }
+
+      if (action === 'windowControl') {
+        const windowId = coerceString((payload as any)?.windowId)
+        const controlActionRaw = coerceString((payload as any)?.action)
+        const controlAction =
+          controlActionRaw === 'minimize' ? 'minimize' : controlActionRaw === 'close' ? 'close' : controlActionRaw === 'toggleMaximize' ? 'toggleMaximize' : undefined
+        if (!windowId || !controlAction) return { ok: false, error: 'BAD_WINDOW_CONTROL' }
+        requestMain({ type: 'CONTROL_APP_WINDOW', windowId, action: controlAction })
         return { ok: true }
       }
 
@@ -539,6 +555,16 @@ stdin.on('line', (line) => {
                     ? false
                     : Boolean(raw)
               requestMain({ type: 'SET_NATIVE_MICA', enabled })
+            }
+            if (key === 'legacy-window-implementation') {
+              const raw = (params as any)?.value
+              const enabled =
+                raw === true || raw === 'true' || raw === 1 || raw === '1'
+                  ? true
+                  : raw === false || raw === 'false' || raw === 0 || raw === '0'
+                    ? false
+                    : Boolean(raw)
+              requestMain({ type: 'SET_LEGACY_WINDOW_IMPLEMENTATION', enabled })
             }
             requestMain({ type: 'RPC_RESPONSE', id, ok: true, result: null })
             return

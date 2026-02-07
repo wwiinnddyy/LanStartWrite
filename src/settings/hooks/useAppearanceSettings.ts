@@ -13,6 +13,8 @@ const ACCENT_COLOR_DARK_KEY = 'accent-color-dark'
 const TRANSITION_PRESET_KEY = 'transition-preset'
 const BACKGROUND_TRANSITION_KEY = 'background-transition'
 const NATIVE_MICA_KEY = 'native-mica-enabled'
+const LEGACY_WINDOW_IMPL_KEY = 'legacy-window-implementation'
+const WINDOW_BG_MODE_KEY = 'window-background-mode'
 
 // 默认强调色
 const DEFAULT_ACCENT_COLOR = PRESET_ACCENT_COLORS[0] // 蓝色
@@ -20,6 +22,9 @@ const DEFAULT_ACCENT_COLOR = PRESET_ACCENT_COLORS[0] // 蓝色
 // 默认过渡设置
 const DEFAULT_TRANSITION_PRESET = TRANSITION_PRESETS[0] // 流畅
 const DEFAULT_BACKGROUND_TRANSITION = BACKGROUND_TRANSITIONS[0] // 标准
+export type WindowBackgroundMode = 'opaque' | 'blur' | 'transparent'
+
+const DEFAULT_WINDOW_BG_MODE: WindowBackgroundMode = 'blur'
 
 export type AppearanceSettings = {
   // 强调色
@@ -28,6 +33,12 @@ export type AppearanceSettings = {
 
   nativeMicaEnabled: boolean
   setNativeMicaEnabled: (enabled: boolean) => void
+
+  legacyWindowImplementation: boolean
+  setLegacyWindowImplementation: (enabled: boolean) => void
+
+  windowBackgroundMode: WindowBackgroundMode
+  setWindowBackgroundMode: (mode: WindowBackgroundMode) => void
   
   // 过渡设置
   transitionPreset: TransitionPreset
@@ -50,6 +61,8 @@ export function useAppearanceSettings(): AppearanceSettings {
   const [accentColorValue, setAccentColorValue] = useState<string>(DEFAULT_ACCENT_COLOR.value)
 
   const [nativeMicaEnabledValue, setNativeMicaEnabledValue] = useState<boolean>(false)
+  const [legacyWindowImplementationValue, setLegacyWindowImplementationValue] = useState<boolean>(false)
+  const [windowBackgroundModeValue, setWindowBackgroundModeValue] = useState<WindowBackgroundMode>(DEFAULT_WINDOW_BG_MODE)
   
   // 过渡设置状态
   const [transitionPresetValue, setTransitionPresetValue] = useState<string>(DEFAULT_TRANSITION_PRESET.value)
@@ -75,6 +88,27 @@ export function useAppearanceSettings(): AppearanceSettings {
       if (typeof savedNativeMica === 'boolean') setNativeMicaEnabledValue(savedNativeMica)
       else if (savedNativeMica === 'true' || savedNativeMica === 1 || savedNativeMica === '1') setNativeMicaEnabledValue(true)
       else if (savedNativeMica === 'false' || savedNativeMica === 0 || savedNativeMica === '0') setNativeMicaEnabledValue(false)
+
+      const savedLegacyWindowImplementation = await safeGet<unknown>(LEGACY_WINDOW_IMPL_KEY)
+      if (typeof savedLegacyWindowImplementation === 'boolean') setLegacyWindowImplementationValue(savedLegacyWindowImplementation)
+      else if (
+        savedLegacyWindowImplementation === 'true' ||
+        savedLegacyWindowImplementation === 1 ||
+        savedLegacyWindowImplementation === '1'
+      ) {
+        setLegacyWindowImplementationValue(true)
+      } else if (
+        savedLegacyWindowImplementation === 'false' ||
+        savedLegacyWindowImplementation === 0 ||
+        savedLegacyWindowImplementation === '0'
+      ) {
+        setLegacyWindowImplementationValue(false)
+      }
+
+      const savedWindowBgMode = await safeGet<unknown>(WINDOW_BG_MODE_KEY)
+      if (savedWindowBgMode === 'opaque' || savedWindowBgMode === 'blur' || savedWindowBgMode === 'transparent') {
+        setWindowBackgroundModeValue(savedWindowBgMode)
+      }
       
       const savedTransitionPreset = await safeGet<string>(TRANSITION_PRESET_KEY)
       if (savedTransitionPreset) {
@@ -132,6 +166,30 @@ export function useAppearanceSettings(): AppearanceSettings {
       console.error('[useAppearanceSettings] Failed to save native mica enabled:', e)
     }
   }, [])
+
+  const setLegacyWindowImplementation = useCallback(async (enabled: boolean) => {
+    setLegacyWindowImplementationValue(enabled)
+    try {
+      await putKv(LEGACY_WINDOW_IMPL_KEY, enabled)
+    } catch (e) {
+      console.error('[useAppearanceSettings] Failed to save legacy window implementation:', e)
+    }
+  }, [])
+
+  const setWindowBackgroundMode = useCallback(async (mode: WindowBackgroundMode) => {
+    setWindowBackgroundModeValue(mode)
+    try {
+      await putKv(WINDOW_BG_MODE_KEY, mode)
+    } catch (e) {
+      console.error('[useAppearanceSettings] Failed to save window background mode:', e)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!legacyWindowImplementationValue && nativeMicaEnabledValue) {
+      setNativeMicaEnabled(false)
+    }
+  }, [legacyWindowImplementationValue, nativeMicaEnabledValue, setNativeMicaEnabled])
   
   // 设置过渡预设
   const setTransitionPreset = useCallback(async (preset: TransitionPreset) => {
@@ -177,7 +235,21 @@ export function useAppearanceSettings(): AppearanceSettings {
 
     if (nativeMicaEnabledValue) root.setAttribute('data-native-mica', 'true')
     else root.removeAttribute('data-native-mica')
-  }, [appearance, accentColor, transitionPreset, backgroundTransition, nativeMicaEnabledValue])
+
+    if (legacyWindowImplementationValue) root.setAttribute('data-window-style', 'legacy')
+    else root.setAttribute('data-window-style', 'hyperos3')
+
+    if (legacyWindowImplementationValue) root.removeAttribute('data-window-bg')
+    else root.setAttribute('data-window-bg', windowBackgroundModeValue)
+  }, [
+    appearance,
+    accentColor,
+    transitionPreset,
+    backgroundTransition,
+    nativeMicaEnabledValue,
+    legacyWindowImplementationValue,
+    windowBackgroundModeValue,
+  ])
   
   // 当设置改变时自动应用
   useEffect(() => {
@@ -189,6 +261,10 @@ export function useAppearanceSettings(): AppearanceSettings {
     setAccentColor,
     nativeMicaEnabled: nativeMicaEnabledValue,
     setNativeMicaEnabled,
+    legacyWindowImplementation: legacyWindowImplementationValue,
+    setLegacyWindowImplementation,
+    windowBackgroundMode: windowBackgroundModeValue,
+    setWindowBackgroundMode,
     transitionPreset,
     setTransitionPreset,
     backgroundTransition,

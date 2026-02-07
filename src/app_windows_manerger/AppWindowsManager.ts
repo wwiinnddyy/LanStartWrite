@@ -8,6 +8,7 @@ export type AppWindowsManagerDeps = {
   getDevServerUrl: () => string | undefined
   getAppearance: () => 'light' | 'dark'
   getNativeMicaEnabled: () => boolean
+  getLegacyWindowImplementation: () => boolean
   surfaceBackgroundColor: (appearance: 'light' | 'dark') => string
   applyWindowsBackdrop: (win: BrowserWindow) => void
   wireWindowDebug: (win: BrowserWindow, name: string) => void
@@ -141,6 +142,40 @@ export class AppWindowsManager {
       return true
     }
  
+    if (type === 'CONTROL_APP_WINDOW') {
+      const windowId = String((message as any).windowId ?? '')
+      const action = String((message as any).action ?? '')
+      const kind =
+        windowId === 'child' ? 'child' : windowId === 'watcher' ? 'watcher' : windowId === 'settings-window' ? 'settings' : undefined
+      if (!kind) return true
+      const win = this.windows.get(kind)
+      if (!win || win.isDestroyed()) return true
+
+      if (action === 'minimize') {
+        try {
+          win.minimize()
+        } catch {}
+        return true
+      }
+
+      if (action === 'close') {
+        try {
+          win.close()
+        } catch {}
+        return true
+      }
+
+      if (action === 'toggleMaximize') {
+        try {
+          if (win.isMaximized()) win.unmaximize()
+          else win.maximize()
+        } catch {}
+        return true
+      }
+
+      return true
+    }
+
     if (type === 'SET_APP_WINDOW_BOUNDS') {
       const windowId = String((message as any).windowId ?? '')
       const kind =
@@ -212,6 +247,16 @@ export class AppWindowsManager {
       } catch {}
     }
   }
+
+  destroyAll(): void {
+    for (const win of this.windows.values()) {
+      if (win.isDestroyed()) continue
+      try {
+        win.close()
+      } catch {}
+    }
+    this.windows.clear()
+  }
  
   private showWindowWhenReady(win: BrowserWindow, opts: { focus: boolean }): void {
     const doShow = () => {
@@ -231,13 +276,16 @@ export class AppWindowsManager {
  
   private createChildWindow(): BrowserWindow {
     const appearance = this.deps.getAppearance()
+    const legacy = this.deps.getLegacyWindowImplementation()
     const win = new BrowserWindow({
       width: 420,
       height: 260,
-      resizable: true,
+      resizable: legacy,
+      frame: legacy,
+      transparent: !legacy,
       title: '数据库',
-      backgroundColor: this.deps.surfaceBackgroundColor(appearance),
-      backgroundMaterial: this.deps.getNativeMicaEnabled() ? 'mica' : 'none',
+      backgroundColor: legacy ? this.deps.surfaceBackgroundColor(appearance) : '#00000000',
+      backgroundMaterial: legacy && this.deps.getNativeMicaEnabled() ? 'mica' : 'none',
       webPreferences: {
         preload: this.deps.preloadPath,
         contextIsolation: true,
@@ -258,13 +306,16 @@ export class AppWindowsManager {
  
   private createWatcherWindow(): BrowserWindow {
     const appearance = this.deps.getAppearance()
+    const legacy = this.deps.getLegacyWindowImplementation()
     const win = new BrowserWindow({
       width: 980,
       height: 720,
-      resizable: true,
+      resizable: legacy,
+      frame: legacy,
+      transparent: !legacy,
       title: '系统监视器',
-      backgroundColor: this.deps.surfaceBackgroundColor(appearance),
-      backgroundMaterial: this.deps.getNativeMicaEnabled() ? 'mica' : 'none',
+      backgroundColor: legacy ? this.deps.surfaceBackgroundColor(appearance) : '#00000000',
+      backgroundMaterial: legacy && this.deps.getNativeMicaEnabled() ? 'mica' : 'none',
       webPreferences: {
         preload: this.deps.preloadPath,
         contextIsolation: true,
@@ -288,6 +339,7 @@ export class AppWindowsManager {
     if (existing && !existing.isDestroyed()) return existing
  
     const appearance = this.deps.getAppearance()
+    const legacy = this.deps.getLegacyWindowImplementation()
     const { width: screenWidth, height: screenHeight } = screen.getPrimaryDisplay().workAreaSize
     const winWidth = 560
     const winHeight = 380
@@ -298,15 +350,15 @@ export class AppWindowsManager {
       x: Math.round((screenWidth - winWidth) / 2),
       y: Math.round((screenHeight - winHeight) / 2),
       title: '设置',
-      resizable: true,
+      resizable: legacy,
       minimizable: true,
       maximizable: true,
       fullscreenable: false,
       show: false,
       frame: false,
       transparent: true,
-      backgroundColor: this.deps.surfaceBackgroundColor(appearance),
-      backgroundMaterial: this.deps.getNativeMicaEnabled() ? 'mica' : 'none',
+      backgroundColor: legacy ? this.deps.surfaceBackgroundColor(appearance) : '#00000000',
+      backgroundMaterial: legacy && this.deps.getNativeMicaEnabled() ? 'mica' : 'none',
       webPreferences: {
         preload: this.deps.preloadPath,
         sandbox: false,
