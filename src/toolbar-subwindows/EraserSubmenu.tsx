@@ -4,10 +4,19 @@ import { useHyperGlassRealtimeBlur } from '../hyper_glass'
 import { MotionButton } from '../button'
 import { postCommand } from '../toolbar/hooks/useBackend'
 import { useZoomOnWheel } from '../toolbar/hooks/useZoomOnWheel'
+import {
+  ERASER_SETTINGS_KV_KEY,
+  ERASER_THICKNESS_UI_STATE_KEY,
+  ERASER_TYPE_UI_STATE_KEY,
+  UI_STATE_APP_WINDOW_ID,
+  getKv,
+  isEraserSettings,
+  putKv,
+  useUiStateBus,
+  type EraserType
+} from '../status'
 import './styles/subwindow.css'
 import './styles/EraserSubmenu.css'
-
-type EraserType = 'pixel' | 'stroke'
 
 // 黑板擦图标 (Pixel Eraser)
 function BlackboardEraserIcon({ isActive }: { isActive: boolean }) {
@@ -163,6 +172,7 @@ export function EraserSubmenu(props: { kind: string }) {
   const cardRef = useRef<HTMLDivElement | null>(null)
   const measureRef = useRef<HTMLDivElement | null>(null)
   const reduceMotion = useReducedMotion()
+  const bus = useUiStateBus(UI_STATE_APP_WINDOW_ID)
   
   const [selectedType, setSelectedType] = useState<EraserType>('pixel')
   const [thickness, setThickness] = useState(30)
@@ -211,12 +221,48 @@ export function EraserSubmenu(props: { kind: string }) {
     }
   }, [props.kind])
 
-  const applySettings = (newType: EraserType, newThickness: number) => {
-    void postCommand('app.setEraserSettings', {
-      type: newType,
-      thickness: newThickness
-    })
+  const sendEraserSettings = (payload: { type: EraserType; thickness: number }) => {
+    const normalized = {
+      type: payload.type,
+      thickness: Math.max(1, Math.min(240, payload.thickness))
+    }
+    void postCommand('app.setEraserSettings', normalized)
+    void putKv(ERASER_SETTINGS_KV_KEY, normalized).catch(() => undefined)
   }
+
+  const applySettings = (newType: EraserType, newThickness: number) => {
+    sendEraserSettings({ type: newType, thickness: newThickness })
+  }
+
+  const busEraserTypeRaw = bus.state[ERASER_TYPE_UI_STATE_KEY]
+  const busEraserType: EraserType | undefined =
+    busEraserTypeRaw === 'stroke' ? 'stroke' : busEraserTypeRaw === 'pixel' ? 'pixel' : undefined
+  const busEraserThicknessRaw = bus.state[ERASER_THICKNESS_UI_STATE_KEY]
+  const busEraserThickness =
+    typeof busEraserThicknessRaw === 'number' && Number.isFinite(busEraserThicknessRaw) ? busEraserThicknessRaw : undefined
+
+  useEffect(() => {
+    if (busEraserType) setSelectedType(busEraserType)
+    if (busEraserThickness !== undefined) setThickness(busEraserThickness)
+  }, [busEraserThickness, busEraserType])
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const loaded = await getKv<unknown>(ERASER_SETTINGS_KV_KEY)
+        if (cancelled) return
+        if (!isEraserSettings(loaded)) return
+        if (busEraserType || busEraserThickness !== undefined) return
+        setSelectedType(loaded.type)
+        setThickness(loaded.thickness)
+        sendEraserSettings(loaded)
+      } catch {}
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [busEraserThickness, busEraserType])
 
   const handleClearAll = () => {
     void postCommand('app.clearPage')

@@ -29,9 +29,15 @@ export const PEN_TYPE_UI_STATE_KEY = 'penType'
 export const PEN_COLOR_UI_STATE_KEY = 'penColor'
 export const PEN_THICKNESS_UI_STATE_KEY = 'penThickness'
 
+export const PEN_SETTINGS_KV_KEY = 'pen-settings'
+export type PenSettings = { type: PenType; color: string; thickness: number }
+
 export type EraserType = 'pixel' | 'stroke'
 export const ERASER_TYPE_UI_STATE_KEY = 'eraserType'
 export const ERASER_THICKNESS_UI_STATE_KEY = 'eraserThickness'
+
+export const ERASER_SETTINGS_KV_KEY = 'eraser-settings'
+export type EraserSettings = { type: EraserType; thickness: number }
 
 export const CLEAR_PAGE_REV_UI_STATE_KEY = 'clearPageRev'
 export const UNDO_REV_UI_STATE_KEY = 'undoRev'
@@ -79,4 +85,21 @@ export function isLeaferSettings(v: unknown): v is LeaferSettings {
     typeof s.showInkWhenPassthrough === 'boolean' &&
     typeof s.freezeScreen === 'boolean'
   )
+}
+
+export function isPenSettings(v: unknown): v is PenSettings {
+  if (!v || typeof v !== 'object') return false
+  const s = v as any
+  if (s.type !== 'writing' && s.type !== 'highlighter' && s.type !== 'laser') return false
+  if (typeof s.color !== 'string') return false
+  if (typeof s.thickness !== 'number' || !Number.isFinite(s.thickness)) return false
+  return true
+}
+
+export function isEraserSettings(v: unknown): v is EraserSettings {
+  if (!v || typeof v !== 'object') return false
+  const s = v as any
+  if (s.type !== 'pixel' && s.type !== 'stroke') return false
+  if (typeof s.thickness !== 'number' || !Number.isFinite(s.thickness)) return false
+  return true
 }

@@ -4,10 +4,20 @@ import { useHyperGlassRealtimeBlur } from '../hyper_glass'
 import { MotionButton } from '../button'
 import { postCommand } from '../toolbar/hooks/useBackend'
 import { useZoomOnWheel } from '../toolbar/hooks/useZoomOnWheel'
+import {
+  PEN_COLOR_UI_STATE_KEY,
+  PEN_SETTINGS_KV_KEY,
+  PEN_THICKNESS_UI_STATE_KEY,
+  PEN_TYPE_UI_STATE_KEY,
+  UI_STATE_APP_WINDOW_ID,
+  getKv,
+  isPenSettings,
+  putKv,
+  useUiStateBus,
+  type PenType
+} from '../status'
 import './styles/subwindow.css'
 import './styles/PenSubmenu.css'
-
-type PenType = 'writing' | 'highlighter' | 'laser'
 
 // 预设颜色 - 3x3 布局需要 9 个颜色
 const PRESET_COLORS = [
@@ -227,6 +237,7 @@ export function PenSubmenu(props: { kind: string }) {
   const cardRef = useRef<HTMLDivElement | null>(null)
   const measureRef = useRef<HTMLDivElement | null>(null)
   const reduceMotion = useReducedMotion()
+  const bus = useUiStateBus(UI_STATE_APP_WINDOW_ID)
   
   const [selectedColor, setSelectedColor] = useState('#000000')
   const [selectedPenType, setSelectedPenType] = useState<PenType>('writing')
@@ -276,19 +287,56 @@ export function PenSubmenu(props: { kind: string }) {
     }
   }, [props.kind])
 
-  // 应用笔设置
-  const applyPenSettings = (next?: { type?: PenType; color?: string; thickness?: number }) => {
-    const payload = {
-      type: next?.type ?? selectedPenType,
-      color: next?.color ?? selectedColor,
-      thickness: next?.thickness ?? thickness,
-    }
-    void postCommand('app.setPenSettings', {
+  const sendPenSettings = (payload: { type: PenType; color: string; thickness: number }) => {
+    const normalized = {
       type: payload.type,
       color: payload.color,
-      thickness: payload.thickness,
+      thickness: Math.max(1, Math.min(120, payload.thickness))
+    }
+    void postCommand('app.setPenSettings', normalized)
+    void putKv(PEN_SETTINGS_KV_KEY, normalized).catch(() => undefined)
+  }
+
+  const applyPenSettings = (next?: { type?: PenType; color?: string; thickness?: number }) => {
+    sendPenSettings({
+      type: next?.type ?? selectedPenType,
+      color: next?.color ?? selectedColor,
+      thickness: next?.thickness ?? thickness
     })
   }
+
+  const busPenTypeRaw = bus.state[PEN_TYPE_UI_STATE_KEY]
+  const busPenType: PenType | undefined =
+    busPenTypeRaw === 'highlighter' ? 'highlighter' : busPenTypeRaw === 'laser' ? 'laser' : busPenTypeRaw === 'writing' ? 'writing' : undefined
+  const busPenColorRaw = bus.state[PEN_COLOR_UI_STATE_KEY]
+  const busPenColor = typeof busPenColorRaw === 'string' ? busPenColorRaw : undefined
+  const busPenThicknessRaw = bus.state[PEN_THICKNESS_UI_STATE_KEY]
+  const busPenThickness = typeof busPenThicknessRaw === 'number' && Number.isFinite(busPenThicknessRaw) ? busPenThicknessRaw : undefined
+
+  useEffect(() => {
+    if (busPenType) setSelectedPenType(busPenType)
+    if (busPenColor) setSelectedColor(busPenColor)
+    if (busPenThickness !== undefined) setThickness(busPenThickness)
+  }, [busPenColor, busPenThickness, busPenType])
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const loaded = await getKv<unknown>(PEN_SETTINGS_KV_KEY)
+        if (cancelled) return
+        if (!isPenSettings(loaded)) return
+        if (busPenType || busPenColor || busPenThickness !== undefined) return
+        setSelectedPenType(loaded.type)
+        setSelectedColor(loaded.color)
+        setThickness(loaded.thickness)
+        sendPenSettings(loaded)
+      } catch {}
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [busPenColor, busPenThickness, busPenType])
 
   return (
     <motion.div

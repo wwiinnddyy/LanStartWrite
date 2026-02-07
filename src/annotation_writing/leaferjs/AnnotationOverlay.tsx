@@ -1151,6 +1151,9 @@ struct VSOut {
     }
 
     apiRef.current = { undo, redo, clear }
+    lastUndoRevRef.current = undoRev
+    lastRedoRevRef.current = redoRev
+    lastClearRevRef.current = clearRev
 
     const sessions = new Map<
       number,

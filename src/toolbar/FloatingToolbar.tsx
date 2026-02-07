@@ -2,7 +2,18 @@ import React, { createContext, useContext, useEffect, useMemo, useRef, useState 
 import { Button, ButtonGroup } from '../button'
 import { motion, useReducedMotion } from '../Framer_Motion'
 import { useHyperGlassRealtimeBlur } from '../hyper_glass'
-import { getKv, TOOLBAR_STATE_KEY, TOOLBAR_STATE_UI_STATE_KEY, UI_STATE_APP_WINDOW_ID, useAppMode, useUiStateBus } from '../status'
+import {
+  ERASER_SETTINGS_KV_KEY,
+  PEN_SETTINGS_KV_KEY,
+  TOOLBAR_STATE_KEY,
+  TOOLBAR_STATE_UI_STATE_KEY,
+  UI_STATE_APP_WINDOW_ID,
+  getKv,
+  isEraserSettings,
+  isPenSettings,
+  useAppMode,
+  useUiStateBus
+} from '../status'
 import { usePersistedState } from './hooks/usePersistedState'
 import { postCommand } from './hooks/useBackend'
 import { useToolbarWindowAutoResize } from './hooks/useToolbarWindowAutoResize'
@@ -315,6 +326,32 @@ function FloatingToolbarInner() {
   useToolbarWindowAutoResize({ root: contentRef.current })
   useHyperGlassRealtimeBlur({ root: rootRef.current })
   useZoomOnWheel()
+
+  useEffect(() => {
+    let cancelled = false
+
+    ;(async () => {
+      try {
+        const pen = await getKv<unknown>(PEN_SETTINGS_KV_KEY)
+        if (cancelled) return
+        if (isPenSettings(pen)) {
+          postCommand('app.setPenSettings', pen).catch(() => undefined)
+        }
+      } catch {}
+
+      try {
+        const eraser = await getKv<unknown>(ERASER_SETTINGS_KV_KEY)
+        if (cancelled) return
+        if (isEraserSettings(eraser)) {
+          postCommand('app.setEraserSettings', eraser).catch(() => undefined)
+        }
+      } catch {}
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const toggleExpanded = () => {
     setState({ ...state, expanded: !isExpanded })
