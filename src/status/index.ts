@@ -137,21 +137,28 @@ export async function deleteUiStateKey(windowId: string, key: string): Promise<v
 export function usePersistedState<T>(
   key: string,
   defaultValue: T,
-  options?: { validate?: (value: unknown) => value is T }
+  options?: {
+    validate?: (value: unknown) => value is T
+    mapLoad?: (value: T) => T
+    mapSave?: (value: T) => unknown
+  }
 ) {
   const [value, setValue] = useState<T>(defaultValue)
   const didHydrate = useRef(false)
 
   useEffect(() => {
     let cancelled = false
+    const validate = options?.validate
+    const mapLoad = options?.mapLoad
 
     const run = async () => {
       try {
         const loaded = await getKv<unknown>(key)
         if (cancelled) return
         if (loaded === undefined) return
-        if (options?.validate && !options.validate(loaded)) return
-        setValue(loaded as T)
+        if (validate && !validate(loaded)) return
+        const next = mapLoad ? mapLoad(loaded as T) : (loaded as T)
+        setValue(next)
       } catch {
         return
       } finally {
@@ -167,9 +174,11 @@ export function usePersistedState<T>(
 
   useEffect(() => {
     if (!didHydrate.current) return
+    const mapSave = options?.mapSave
 
     const id = window.setTimeout(() => {
-      putKv(key, value).catch(() => undefined)
+      const next = mapSave ? mapSave(value) : value
+      putKv(key, next as any).catch(() => undefined)
     }, 250)
 
     return () => window.clearTimeout(id)

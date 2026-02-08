@@ -283,6 +283,11 @@ function ToolbarSettings() {
     return true
   }
 
+  const stripToolbarTool = (value: ToolbarState): ToolbarState => {
+    const { tool: _drop, ...rest } = value as any
+    return rest as ToolbarState
+  }
+
   const [toolbarState, setToolbarState] = usePersistedState<ToolbarState>(
     TOOLBAR_STATE_KEY,
     {
@@ -296,7 +301,7 @@ function ToolbarSettings() {
       pinnedSecondaryButtonsOrder: [],
       secondaryButtonsOrder: DEFAULT_SECONDARY,
     },
-    { validate: isToolbarState }
+    { validate: isToolbarState, mapLoad: stripToolbarTool, mapSave: stripToolbarTool }
   )
 
   const allowedPrimaryButtons = normalizeAllowedPrimaryButtons((toolbarState as any).allowedPrimaryButtons)
@@ -589,10 +594,11 @@ function ToolbarSettings() {
   const canMoveNext = selectedIndex >= 0 && selectedIndex < selectedCount - 1
 
   const persistToolbarState = (next: ToolbarState) => {
-    setToolbarState(next)
+    const persisted = stripToolbarTool(next)
+    setToolbarState(persisted)
     void (async () => {
       try {
-        await putKv(TOOLBAR_STATE_KEY, next)
+        await putKv(TOOLBAR_STATE_KEY, persisted)
       } catch {
         return
       }
@@ -1220,7 +1226,7 @@ function AnnotationSettings() {
                 const checked = e.currentTarget.checked
                 persistLeaferSettings({ ...leaferSettings, postBakeOptimizeOnce: checked, postBakeOptimize: checked ? false : leaferSettings.postBakeOptimize })
               }}
-              label="笔迹使用一次烘干优化"
+              label="笔迹单次烘干"
               size="md"
             />
             <Switch

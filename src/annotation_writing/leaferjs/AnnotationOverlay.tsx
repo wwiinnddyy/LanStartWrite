@@ -889,7 +889,17 @@ void main() {
         glAny.blendFunc(glAny.ZERO, glAny.ONE_MINUS_SRC_ALPHA)
       }
 
-      const draw = (nodes: Array<{ role: 'stroke' | 'eraserPixel'; pfh?: boolean; strokeWidth: number; points: number[]; color: [number, number, number, number] }>) => {
+      const draw = (
+        nodes: Array<{
+          role: 'stroke' | 'eraserPixel'
+          pfh?: boolean
+          strokeWidth: number
+          points: number[]
+          color: [number, number, number, number]
+          fadeStartAt?: number
+          fadeDurationMs?: number
+        }>
+      ) => {
         const dpr = Math.max(1, globalThis.devicePixelRatio || 1)
         gl.viewport(0, 0, canvas.width, canvas.height)
         gl.clearColor(0, 0, 0, 0)
@@ -1026,7 +1036,17 @@ struct VSOut {
         })
       }
 
-      const draw = (nodes: Array<{ role: 'stroke' | 'eraserPixel'; pfh?: boolean; strokeWidth: number; points: number[]; color: [number, number, number, number] }>) => {
+      const draw = (
+        nodes: Array<{
+          role: 'stroke' | 'eraserPixel'
+          pfh?: boolean
+          strokeWidth: number
+          points: number[]
+          color: [number, number, number, number]
+          fadeStartAt?: number
+          fadeDurationMs?: number
+        }>
+      ) => {
         const dpr = Math.max(1, globalThis.devicePixelRatio || 1)
         const textureView = ctx.getCurrentTexture().createView()
         const encoder = device.createCommandEncoder()
@@ -1108,6 +1128,90 @@ struct VSOut {
       type Action = { kind: 'add' | 'remove'; nodes: CanvasNode[] }
       const live = new Set<CanvasNode>()
       const history = { undo: [] as Action[], redo: [] as Action[] }
+      const laserFade = new Map<CanvasNode, { startAt: number; durationMs: number; basePoints: number[]; cumLen: number[]; totalLen: number }>()
+      let laserFadeScheduled = false
+
+      const buildCumLen = (points: number[]) => {
+        const n = Math.floor(points.length / 2)
+        if (n <= 1) return { cumLen: [0], totalLen: 0 }
+        const cumLen = new Array<number>(n)
+        cumLen[0] = 0
+        let totalLen = 0
+        let lastX = points[0]
+        let lastY = points[1]
+        for (let i = 1; i < n; i++) {
+          const x = points[i * 2]
+          const y = points[i * 2 + 1]
+          totalLen += Math.hypot(x - lastX, y - lastY)
+          cumLen[i] = totalLen
+          lastX = x
+          lastY = y
+        }
+        return { cumLen, totalLen }
+      }
+
+      const findPairIndexByLen = (cumLen: number[], targetLen: number) => {
+        let lo = 0
+        let hi = cumLen.length - 1
+        while (lo < hi) {
+          const mid = (lo + hi) >> 1
+          if (cumLen[mid] < targetLen) lo = mid + 1
+          else hi = mid
+        }
+        return lo
+      }
+
+      const ensureLaserFadeTick = () => {
+        if (laserFadeScheduled) return
+        if (!laserFade.size) return
+        laserFadeScheduled = true
+        requestAnimationFrame(() => {
+          laserFadeScheduled = false
+          if (!laserFade.size) return
+          const now = performance.now()
+          const expired: CanvasNode[] = []
+          for (const [node, f] of laserFade) {
+            const t = (now - f.startAt) / f.durationMs
+            if (t >= 1) {
+              expired.push(node)
+              continue
+            }
+            if (t <= 0) continue
+            if (f.totalLen <= 0.001) continue
+            const targetLen = f.totalLen * t
+            const maxStart = Math.max(0, f.cumLen.length - 2)
+            const startPair = Math.min(maxStart, findPairIndexByLen(f.cumLen, targetLen))
+            const sliced = f.basePoints.slice(startPair * 2)
+            if (sliced.length < 4) {
+              expired.push(node)
+              continue
+            }
+            ;(node as any).points = sliced
+            const meta = getMeta(node)
+            if (meta) {
+              meta.points = sliced
+              recomputeBounds(meta, sliced)
+            }
+          }
+          if (expired.length) removeNodes(expired)
+          try {
+            ;(leafer as any).forceRender?.()
+          } catch {}
+          ensureLaserFadeTick()
+        })
+      }
+
+      const startLaserFade = (nodes: CanvasNode[]) => {
+        const now = performance.now()
+        for (const node of nodes) {
+          const points = (node as any).points as number[] | undefined
+          if (!points) continue
+          const basePoints = points.slice()
+          const { cumLen, totalLen } = buildCumLen(basePoints)
+          laserFade.set(node, { startAt: now + 200, durationMs: 1200, basePoints, cumLen, totalLen })
+        }
+        ensureLaserFadeTick()
+      }
 
       const getMeta = (node: CanvasNode): LineMeta | undefined => (node as any).__lanstartMeta as LineMeta | undefined
       const setMeta = (node: CanvasNode, meta: LineMeta): void => {
@@ -1127,6 +1231,7 @@ struct VSOut {
             ;(node as any).remove?.()
           } catch {}
           live.delete(node)
+          laserFade.delete(node)
         }
       }
 
@@ -1167,6 +1272,8 @@ struct VSOut {
         {
           groupId: number
           line: null | Line
+          glowLine: null | Line
+          laser: boolean
           bakedLines: Line[]
           points: number[]
           rawPoints: number[]
@@ -1249,6 +1356,14 @@ struct VSOut {
             m.points = baked
             recomputeBounds(m, baked)
             ;(current.line as any).points = baked
+            if (current.glowLine) {
+              const gm = getMeta(current.glowLine)
+              if (gm) {
+                gm.points = baked
+                recomputeBounds(gm, baked)
+              }
+              ;(current.glowLine as any).points = baked
+            }
             return
           }
 
@@ -1308,9 +1423,12 @@ struct VSOut {
         if (!multiTouchRef.current && sessions.size > 0) return
         view.setPointerCapture(e.pointerId)
         const { x, y } = getPoint(e)
+        const laser = toolRef.current === 'pen' && penTypeRef.current === 'laser'
         const session = {
           groupId: nextGroupId++,
           line: null as null | Line,
+          glowLine: null as null | Line,
+          laser,
           bakedLines: [] as Line[],
           points: [] as number[],
           rawPoints: [] as number[],
@@ -1374,79 +1492,117 @@ struct VSOut {
         session.strokeWidth = strokeWidth
         session.stroke = stroke
         session.nibDynamic = nibModeRef.current === 'dynamic' && toolRef.current === 'pen' && penTypeRef.current === 'writing'
-        session.line = new Line({
-          points: session.points,
-          ...stroke
-        } as any)
-        setMeta(session.line, { role, groupId: session.groupId, strokeWidth, points: session.points, minX: p0.x, minY: p0.y, maxX: p0.x, maxY: p0.y })
-        addNodes([session.line])
+        if (laser && role === 'stroke') {
+          const glowExtra = clamp(strokeWidth * 0.7, 4, 22)
+          const glowStroke = { ...stroke, stroke: '#ffffff', strokeWidth: strokeWidth + glowExtra, opacity: 0.28 }
+          session.glowLine = new Line({ points: session.points, ...glowStroke } as any)
+          session.line = new Line({ points: session.points, ...stroke } as any)
+          setMeta(session.glowLine, { role, groupId: session.groupId, strokeWidth: strokeWidth + glowExtra, points: session.points, minX: p0.x, minY: p0.y, maxX: p0.x, maxY: p0.y })
+          setMeta(session.line, { role, groupId: session.groupId, strokeWidth, points: session.points, minX: p0.x, minY: p0.y, maxX: p0.x, maxY: p0.y })
+          addNodes([session.glowLine, session.line])
+        } else {
+          session.line = new Line({
+            points: session.points,
+            ...stroke
+          } as any)
+          setMeta(session.line, { role, groupId: session.groupId, strokeWidth, points: session.points, minX: p0.x, minY: p0.y, maxX: p0.x, maxY: p0.y })
+          addNodes([session.line])
+        }
       }
 
       const onPointerMove = (e: PointerEvent) => {
         const session = sessions.get(e.pointerId)
         if (!session) return
-        const { x, y } = getPoint(e)
-        const lastX = session.points[session.points.length - 2]
-        const lastY = session.points[session.points.length - 1]
-        const dx = x - lastX
-        const dy = y - lastY
-        if (dx * dx + dy * dy < 0.6 * 0.6) return
-        const p = applySmoothing(session, x, y)
-        const maxStep = clamp(session.strokeWidth * 0.45, 1.6, 4.8)
-        const appendedRaw = appendInterpolatedPoints(session.rawPoints, p.x, p.y, maxStep, 6)
-        const appended = appendInterpolatedPoints(session.points, p.x, p.y, maxStep, 6)
+        const evs = typeof (e as any).getCoalescedEvents === 'function' ? (e as any).getCoalescedEvents() : [e]
+        let didAppend = false
+        let didErase = false
 
-        const appendedPairs = Math.floor(appendedRaw.length / 2)
-        if (appendedPairs > 0) {
-          const prevT = session.rawTimes.length ? session.rawTimes[session.rawTimes.length - 1] : p.now
-          for (let i = 1; i <= appendedPairs; i++) {
-            session.rawTimes.push(prevT + (p.dt * i) / appendedPairs)
-          }
-        }
+        for (const ev of evs as PointerEvent[]) {
+          const { x, y } = getPoint(ev)
+          const lastX = session.points[session.points.length - 2]
+          const lastY = session.points[session.points.length - 1]
+          const p = applySmoothing(session, x, y)
+          const dx = p.x - lastX
+          const dy = p.y - lastY
+          const dist = Math.hypot(dx, dy)
+          const minMove = clamp(session.strokeWidth * 0.04, 0.15, 0.45)
+          if (dist < minMove) continue
+          const speed = dist / Math.max(1, p.dt)
+          const baseStep = clamp(session.strokeWidth * 0.34, 0.7, 3.2)
+          const step = clamp(baseStep / (1 + speed * 0.08), 0.35, baseStep)
+          const cap = clamp(Math.floor(10 + speed * 8), 10, 42)
+          const appendedRaw = appendInterpolatedPoints(session.rawPoints, p.x, p.y, step, cap)
+          const appended = appendInterpolatedPoints(session.points, p.x, p.y, step, cap)
+          didAppend = true
 
-        if (session.erasing) {
-          const radius = eraserThicknessRef.current * 0.5
-          for (const node of Array.from(live)) {
-            const meta = getMeta(node)
-            if (!meta || meta.role !== 'stroke') continue
-            const gid = meta.groupId
-            if (gid !== undefined) {
-              if (session.erasedGroupIds.has(gid)) continue
-              if (!hitsLineAtPoint(meta, x, y, radius)) continue
-              session.erasedGroupIds.add(gid)
-              const groupNodes: CanvasNode[] = []
-              for (const other of Array.from(live)) {
-                const om = getMeta(other)
-                if (!om || om.role !== 'stroke') continue
-                if (om.groupId !== gid) continue
-                if (session.erasedSet.has(other)) continue
-                session.erasedSet.add(other)
-                session.erased.push(other)
-                groupNodes.push(other)
-              }
-              removeNodes(groupNodes)
-              continue
+          const appendedPairs = Math.floor(appendedRaw.length / 2)
+          if (appendedPairs > 0) {
+            const prevT = session.rawTimes.length ? session.rawTimes[session.rawTimes.length - 1] : p.now
+            for (let i = 1; i <= appendedPairs; i++) {
+              session.rawTimes.push(prevT + (p.dt * i) / appendedPairs)
             }
-            if (session.erasedSet.has(node)) continue
-            if (!hitsLineAtPoint(meta, x, y, radius)) continue
-            session.erasedSet.add(node)
-            session.erased.push(node)
-            removeNodes([node])
           }
-          return
+
+          if (session.erasing) {
+            didErase = true
+            const radius = eraserThicknessRef.current * 0.5
+            for (const node of Array.from(live)) {
+              const meta = getMeta(node)
+              if (!meta || meta.role !== 'stroke') continue
+              const gid = meta.groupId
+              if (gid !== undefined) {
+                if (session.erasedGroupIds.has(gid)) continue
+                if (!hitsLineAtPoint(meta, x, y, radius)) continue
+                session.erasedGroupIds.add(gid)
+                const groupNodes: CanvasNode[] = []
+                for (const other of Array.from(live)) {
+                  const om = getMeta(other)
+                  if (!om || om.role !== 'stroke') continue
+                  if (om.groupId !== gid) continue
+                  if (session.erasedSet.has(other)) continue
+                  session.erasedSet.add(other)
+                  session.erased.push(other)
+                  groupNodes.push(other)
+                }
+                removeNodes(groupNodes)
+                continue
+              }
+              if (session.erasedSet.has(node)) continue
+              if (!hitsLineAtPoint(meta, x, y, radius)) continue
+              session.erasedSet.add(node)
+              session.erased.push(node)
+              removeNodes([node])
+            }
+            continue
+          }
+
+          if (!session.line) continue
+          if (!session.nibDynamic) {
+            const meta = getMeta(session.line)
+            if (meta) {
+              for (let i = 0; i + 1 < appended.length; i += 2) updateBounds(meta, appended[i], appended[i + 1])
+            }
+            if (session.glowLine) {
+              const gm = getMeta(session.glowLine)
+              if (gm) for (let i = 0; i + 1 < appended.length; i += 2) updateBounds(gm, appended[i], appended[i + 1])
+            }
+          }
         }
 
+        if (didErase) return
+        if (!didAppend) return
         if (!session.line) return
-        const meta = getMeta(session.line)
+
         if (!session.nibDynamic) {
-          if (meta) {
-            for (let i = 0; i + 1 < appended.length; i += 2) updateBounds(meta, appended[i], appended[i + 1])
-          }
           ;(session.line as any).points = session.points
+          if (session.glowLine) {
+            ;(session.glowLine as any).points = session.points
+          }
           maybeScheduleBake(e.pointerId)
           return
         }
 
+        const meta = getMeta(session.line)
         const tailCoords = BAKE_TAIL_POINTS * 2
         const tailStart = session.bakedLines.length ? Math.max(0, session.points.length - tailCoords - 2) : 0
         const tail = session.points.slice(tailStart)
@@ -1470,6 +1626,13 @@ struct VSOut {
 
         if (erased.length) record({ kind: 'remove', nodes: erased })
         else if (activeLine) {
+          if (session.laser) {
+            const nodes: CanvasNode[] = []
+            if (session.glowLine) nodes.push(session.glowLine)
+            nodes.push(activeLine)
+            startLaserFade(nodes)
+            return
+          }
           if (session.nibDynamic) {
             const full = inkSmoothingRef.current ? bakePolyline(session.rawPoints, session.strokeWidth) : session.rawPoints
             const widthAtT = buildNibWidthAt(session.rawPoints, session.rawTimes, session.strokeWidth) ?? undefined
@@ -1736,15 +1899,100 @@ struct VSOut {
       points: number[]
       meta: LineMeta
       color: [number, number, number, number]
+      fadeStartAt?: number
+      fadeDurationMs?: number
     }
 
     type Action = { kind: 'add' | 'remove'; nodes: RenderNode[] }
     const live = new Set<RenderNode>()
     const order: RenderNode[] = []
     const history = { undo: [] as Action[], redo: [] as Action[] }
+    const fading = new Map<RenderNode, { startAt: number; durationMs: number; basePoints: number[]; cumLen: number[]; totalLen: number }>()
+    let fadeScheduled = false
 
     const nodeToSvgPath = useSvg ? new Map<RenderNode, SVGPathElement>() : null
     const svgDirty = useSvg ? new Set<RenderNode>() : null
+
+    const buildCumLen = (points: number[]) => {
+      const n = Math.floor(points.length / 2)
+      if (n <= 1) return { cumLen: [0], totalLen: 0 }
+      const cumLen = new Array<number>(n)
+      cumLen[0] = 0
+      let totalLen = 0
+      let lastX = points[0]
+      let lastY = points[1]
+      for (let i = 1; i < n; i++) {
+        const x = points[i * 2]
+        const y = points[i * 2 + 1]
+        totalLen += Math.hypot(x - lastX, y - lastY)
+        cumLen[i] = totalLen
+        lastX = x
+        lastY = y
+      }
+      return { cumLen, totalLen }
+    }
+
+    const findPairIndexByLen = (cumLen: number[], targetLen: number) => {
+      let lo = 0
+      let hi = cumLen.length - 1
+      while (lo < hi) {
+        const mid = (lo + hi) >> 1
+        if (cumLen[mid] < targetLen) lo = mid + 1
+        else hi = mid
+      }
+      return lo
+    }
+
+    const ensureFadeTick = () => {
+      if (fadeScheduled) return
+      if (!fading.size) return
+      fadeScheduled = true
+      requestAnimationFrame(() => {
+        fadeScheduled = false
+        if (cancelled) return
+        if (!fading.size) return
+        const now = performance.now()
+        const expired: RenderNode[] = []
+        for (const [n, f] of fading) {
+          const t = (now - f.startAt) / f.durationMs
+          if (t >= 1) {
+            fading.delete(n)
+            expired.push(n)
+            continue
+          }
+          if (t <= 0) continue
+          if (f.totalLen <= 0.001) continue
+          const targetLen = f.totalLen * t
+          const maxStart = Math.max(0, f.cumLen.length - 2)
+          const startPair = Math.min(maxStart, findPairIndexByLen(f.cumLen, targetLen))
+          const sliced = f.basePoints.slice(startPair * 2)
+          if (sliced.length < 4) {
+            fading.delete(n)
+            expired.push(n)
+            continue
+          }
+          n.points = sliced
+          n.meta.points = sliced
+          recomputeBounds(n.meta, sliced)
+          svgDirty?.add(n)
+        }
+        if (expired.length) removeNodes(expired)
+        requestRender()
+        ensureFadeTick()
+      })
+    }
+
+    const startLaserFade = (nodes: RenderNode[]) => {
+      const now = performance.now()
+      for (const n of nodes) {
+        const basePoints = n.points.slice()
+        const { cumLen, totalLen } = buildCumLen(basePoints)
+        fading.set(n, { startAt: now + 200, durationMs: 1200, basePoints, cumLen, totalLen })
+        svgDirty?.add(n)
+      }
+      requestRender()
+      ensureFadeTick()
+    }
 
     const pointsToSvgPathD = (points: number[]): string => {
       if (points.length < 4) return ''
@@ -1819,6 +2067,7 @@ struct VSOut {
       const set = new Set(nodes)
       for (const n of set) live.delete(n)
       if (!set.size) return
+      for (const n of set) fading.delete(n)
       for (let i = order.length - 1; i >= 0; i--) {
         if (set.has(order[i])) order.splice(i, 1)
       }
@@ -1875,6 +2124,8 @@ struct VSOut {
       {
         groupId: number
         node: null | RenderNode
+        glowNode: null | RenderNode
+        laser: boolean
         bakedNodes: RenderNode[]
         points: number[]
         rawPoints: number[]
@@ -1957,6 +2208,12 @@ struct VSOut {
           node.meta.points = baked
           recomputeBounds(node.meta, baked)
           svgDirty?.add(node)
+          if (current.glowNode) {
+            current.glowNode.points = baked
+            current.glowNode.meta.points = baked
+            recomputeBounds(current.glowNode.meta, baked)
+            svgDirty?.add(current.glowNode)
+          }
           requestRender()
           return
         }
@@ -2074,6 +2331,8 @@ struct VSOut {
       const session = {
         groupId: nextGroupId++,
         node: null as null | RenderNode,
+        glowNode: null as null | RenderNode,
+        laser: toolRef.current === 'pen' && penTypeRef.current === 'laser',
         bakedNodes: [] as RenderNode[],
         points: [] as number[],
         rawPoints: [] as number[],
@@ -2139,71 +2398,112 @@ struct VSOut {
       session.color = rgba
       session.nibDynamic = nibModeRef.current === 'dynamic' && toolRef.current === 'pen' && penTypeRef.current === 'writing'
       const pfh = role === 'stroke' && !session.nibDynamic && toolRef.current === 'pen' && penTypeRef.current === 'writing' && (postBakeOptimizeOnceRef.current ?? false) && !(postBakeOptimizeRef.current ?? false)
-      const meta: LineMeta = { role, groupId: session.groupId, strokeWidth, points: session.points, minX: p0.x, minY: p0.y, maxX: p0.x, maxY: p0.y }
-      const node: RenderNode = { role, pfh, strokeWidth, points: session.points, meta, color: rgba }
-      session.node = node
-      addNodes([node])
-      markSvgDirty(node)
+      if (session.laser && role === 'stroke') {
+        const glowExtra = clamp(strokeWidth * 0.7, 4, 22)
+        const glowWidth = strokeWidth + glowExtra
+        const glowMeta: LineMeta = { role, groupId: session.groupId, strokeWidth: glowWidth, points: session.points, minX: p0.x, minY: p0.y, maxX: p0.x, maxY: p0.y }
+        const glow: RenderNode = { role, pfh: false, strokeWidth: glowWidth, points: session.points, meta: glowMeta, color: [1, 1, 1, 0.22] }
+        const meta: LineMeta = { role, groupId: session.groupId, strokeWidth, points: session.points, minX: p0.x, minY: p0.y, maxX: p0.x, maxY: p0.y }
+        const node: RenderNode = { role, pfh, strokeWidth, points: session.points, meta, color: rgba }
+        session.glowNode = glow
+        session.node = node
+        addNodes([glow, node])
+        markSvgDirty(glow)
+        markSvgDirty(node)
+      } else {
+        const meta: LineMeta = { role, groupId: session.groupId, strokeWidth, points: session.points, minX: p0.x, minY: p0.y, maxX: p0.x, maxY: p0.y }
+        const node: RenderNode = { role, pfh, strokeWidth, points: session.points, meta, color: rgba }
+        session.node = node
+        addNodes([node])
+        markSvgDirty(node)
+      }
       requestRender()
     }
 
     const onPointerMove = (e: PointerEvent) => {
       const session = sessions.get(e.pointerId)
       if (!session) return
-      const { x, y } = getPoint(e)
-      const lastX = session.points[session.points.length - 2]
-      const lastY = session.points[session.points.length - 1]
-      const dx = x - lastX
-      const dy = y - lastY
-      if (dx * dx + dy * dy < 0.6 * 0.6) return
-      const p = applySmoothing(session, x, y)
-      const maxStep = clamp(session.strokeWidth * 0.45, 1.6, 4.8)
-      const appendedRaw = appendInterpolatedPoints(session.rawPoints, p.x, p.y, maxStep, 6)
-      const appended = appendInterpolatedPoints(session.points, p.x, p.y, maxStep, 6)
+      const evs = typeof (e as any).getCoalescedEvents === 'function' ? (e as any).getCoalescedEvents() : [e]
+      let didAppend = false
+      let didErase = false
 
-      const appendedPairs = Math.floor(appendedRaw.length / 2)
-      if (appendedPairs > 0) {
-        const prevT = session.rawTimes.length ? session.rawTimes[session.rawTimes.length - 1] : p.now
-        for (let i = 1; i <= appendedPairs; i++) {
-          session.rawTimes.push(prevT + (p.dt * i) / appendedPairs)
+      for (const ev of evs as PointerEvent[]) {
+        const { x, y } = getPoint(ev)
+        const lastX = session.points[session.points.length - 2]
+        const lastY = session.points[session.points.length - 1]
+        const p = applySmoothing(session, x, y)
+        const dx = p.x - lastX
+        const dy = p.y - lastY
+        const dist = Math.hypot(dx, dy)
+        const minMove = clamp(session.strokeWidth * 0.04, 0.15, 0.45)
+        if (dist < minMove) continue
+        const speed = dist / Math.max(1, p.dt)
+        const baseStep = clamp(session.strokeWidth * 0.34, 0.7, 3.2)
+        const step = clamp(baseStep / (1 + speed * 0.08), 0.35, baseStep)
+        const cap = clamp(Math.floor(10 + speed * 8), 10, 42)
+        const appendedRaw = appendInterpolatedPoints(session.rawPoints, p.x, p.y, step, cap)
+        const appended = appendInterpolatedPoints(session.points, p.x, p.y, step, cap)
+        didAppend = true
+
+        const appendedPairs = Math.floor(appendedRaw.length / 2)
+        if (appendedPairs > 0) {
+          const prevT = session.rawTimes.length ? session.rawTimes[session.rawTimes.length - 1] : p.now
+          for (let i = 1; i <= appendedPairs; i++) {
+            session.rawTimes.push(prevT + (p.dt * i) / appendedPairs)
+          }
+        }
+
+        if (session.erasingStroke) {
+          didErase = true
+          const radius = eraserThicknessRef.current * 0.5
+          for (const node of Array.from(live)) {
+            if (node.role !== 'stroke') continue
+            const gid = node.meta.groupId
+            if (gid !== undefined) {
+              if (session.erasedGroupIds.has(gid)) continue
+              if (!hitsLineAtPoint(node.meta, x, y, radius)) continue
+              session.erasedGroupIds.add(gid)
+              const groupNodes: RenderNode[] = []
+              for (const other of Array.from(live)) {
+                if (other.role !== 'stroke') continue
+                if (other.meta.groupId !== gid) continue
+                if (session.erasedSet.has(other)) continue
+                session.erasedSet.add(other)
+                session.erased.push(other)
+                groupNodes.push(other)
+              }
+              removeNodes(groupNodes)
+              continue
+            }
+            if (session.erasedSet.has(node)) continue
+            if (!hitsLineAtPoint(node.meta, x, y, radius)) continue
+            session.erasedSet.add(node)
+            session.erased.push(node)
+            removeNodes([node])
+          }
+          continue
+        }
+
+        if (!session.node) continue
+        if (!session.nibDynamic) {
+          for (let i = 0; i + 1 < appended.length; i += 2) updateBounds(session.node.meta, appended[i], appended[i + 1])
+          markSvgDirty(session.node)
+          if (session.glowNode) {
+            for (let i = 0; i + 1 < appended.length; i += 2) updateBounds(session.glowNode.meta, appended[i], appended[i + 1])
+            markSvgDirty(session.glowNode)
+          }
+          continue
         }
       }
 
-      if (session.erasingStroke) {
-        const radius = eraserThicknessRef.current * 0.5
-        for (const node of Array.from(live)) {
-          if (node.role !== 'stroke') continue
-          const gid = node.meta.groupId
-          if (gid !== undefined) {
-            if (session.erasedGroupIds.has(gid)) continue
-            if (!hitsLineAtPoint(node.meta, x, y, radius)) continue
-            session.erasedGroupIds.add(gid)
-            const groupNodes: RenderNode[] = []
-            for (const other of Array.from(live)) {
-              if (other.role !== 'stroke') continue
-              if (other.meta.groupId !== gid) continue
-              if (session.erasedSet.has(other)) continue
-              session.erasedSet.add(other)
-              session.erased.push(other)
-              groupNodes.push(other)
-            }
-            removeNodes(groupNodes)
-            continue
-          }
-          if (session.erasedSet.has(node)) continue
-          if (!hitsLineAtPoint(node.meta, x, y, radius)) continue
-          session.erasedSet.add(node)
-          session.erased.push(node)
-          removeNodes([node])
-        }
+      if (didErase) {
         requestRender()
         return
       }
-
+      if (!didAppend) return
       if (!session.node) return
+
       if (!session.nibDynamic) {
-        for (let i = 0; i + 1 < appended.length; i += 2) updateBounds(session.node.meta, appended[i], appended[i + 1])
-        markSvgDirty(session.node)
         requestRender()
         maybeScheduleBake(e.pointerId)
         return
@@ -2231,6 +2531,25 @@ struct VSOut {
       } catch {}
       if (erased.length) record({ kind: 'remove', nodes: erased })
       else if (active) {
+        if (session.laser) {
+          if (inkSmoothingRef.current) {
+            const baked = bakePolyline(session.points, active.strokeWidth)
+            active.points = baked
+            active.meta.points = baked
+            recomputeBounds(active.meta, baked)
+            markSvgDirty(active)
+            if (session.glowNode) {
+              session.glowNode.points = baked
+              session.glowNode.meta.points = baked
+              recomputeBounds(session.glowNode.meta, baked)
+              markSvgDirty(session.glowNode)
+            }
+            requestRender()
+          }
+          const nodes = session.glowNode ? [session.glowNode, active] : [active]
+          startLaserFade(nodes)
+          return
+        }
         if (active.pfh) {
           if (inkSmoothingRef.current) {
             const baked = bakePolyline(session.points, active.strokeWidth)

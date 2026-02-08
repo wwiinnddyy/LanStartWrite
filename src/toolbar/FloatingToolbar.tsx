@@ -202,6 +202,11 @@ function arraysEqual<T>(a: readonly T[] | undefined, b: readonly T[] | undefined
   return true
 }
 
+function stripToolbarTool(value: ToolbarState): ToolbarState {
+  const { tool: _drop, ...rest } = value as any
+  return rest as ToolbarState
+}
+
 function isToolbarState(value: unknown): value is ToolbarState {
   if (!value || typeof value !== 'object') return false
   const v = value as any
@@ -242,7 +247,7 @@ function ToolbarProvider({ children }: { children: React.ReactNode }) {
     primaryButtonsOrder: DEFAULT_PRIMARY_BUTTONS_ORDER,
     pinnedSecondaryButtonsOrder: [],
     secondaryButtonsOrder: DEFAULT_SECONDARY_BUTTONS_ORDER
-  }, { validate: isToolbarState })
+  }, { validate: isToolbarState, mapLoad: stripToolbarTool, mapSave: stripToolbarTool })
 
   const bus = useUiStateBus(UI_STATE_APP_WINDOW_ID)
   const revRaw = bus.state[TOOLBAR_STATE_UI_STATE_KEY]
@@ -260,7 +265,7 @@ function ToolbarProvider({ children }: { children: React.ReactNode }) {
         const loaded = await getKv<unknown>(TOOLBAR_STATE_KEY)
         if (cancelled) return
         if (!isToolbarState(loaded)) return
-        setState(loaded)
+        setState(stripToolbarTool(loaded))
       } catch {
         return
       }
@@ -330,6 +335,10 @@ function FloatingToolbarInner() {
 
   useToolbarWindowAutoResize({ root: contentRef.current })
   useZoomOnWheel()
+
+  useEffect(() => {
+    postCommand('app.setTool', { tool: 'mouse' }).catch(() => undefined)
+  }, [])
 
   useEffect(() => {
     if (!backendEvents.length) return
