@@ -9,7 +9,7 @@ on:
         description: '版本号（例如 1.2.3 或 v1.2.3；留空则自动生成 dev 版本）'
         required: false
       build:
-        description: '构建命令标记（build:win|build:all）'
+        description: '构建命令标记（build:win|build:mac|build:linux|build:all）'
         required: false
 
 permissions:
@@ -89,6 +89,12 @@ jobs:
       - name: 安装依赖
         run: pnpm install --frozen-lockfile
 
+      - name: Typecheck
+        run: pnpm -s typecheck
+
+      - name: Test
+        run: pnpm -s test
+
       - name: 构建
         run: pnpm -s build
 
@@ -107,4 +113,96 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: dist-win-${{ needs.parse.outputs.version }}
+          path: dist/**
+
+  build_mac:
+    needs: parse
+    if: ${{ needs.parse.outputs.run_mac == 'true' }}
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: 应用版本号
+        run: node scripts/ci/apply-version.mjs ${{ needs.parse.outputs.version }}
+
+      - name: 安装依赖
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm -s typecheck
+
+      - name: Test
+        run: pnpm -s test
+
+      - name: 构建
+        run: pnpm -s build
+
+      - name: 打包（macOS）
+        run: pnpm exec electron-builder --publish never
+
+      - name: 清理 unpacked 目录
+        shell: bash
+        run: |
+          if [ -d dist ]; then
+            find dist -maxdepth 1 -type d -name '*unpacked*' -print0 | xargs -0 -I {} rm -rf "{}"
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-mac-${{ needs.parse.outputs.version }}
+          path: dist/**
+
+  build_linux:
+    needs: parse
+    if: ${{ needs.parse.outputs.run_linux == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: 应用版本号
+        run: node scripts/ci/apply-version.mjs ${{ needs.parse.outputs.version }}
+
+      - name: 安装依赖
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm -s typecheck
+
+      - name: Test
+        run: pnpm -s test
+
+      - name: 构建
+        run: pnpm -s build
+
+      - name: 打包（Linux）
+        run: pnpm exec electron-builder --publish never
+
+      - name: 清理 unpacked 目录
+        shell: bash
+        run: |
+          if [ -d dist ]; then
+            find dist -maxdepth 1 -type d -name '*unpacked*' -print0 | xargs -0 -I {} rm -rf "{}"
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-linux-${{ needs.parse.outputs.version }}
           path: dist/**
