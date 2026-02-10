@@ -1,7 +1,6 @@
 /// <reference types="vite/client" />
 
 declare global {
-  const __APP_VERSION__: string
   interface Window {
     hyperGlass?: {
       captureDisplayThumbnail: (options?: { maxSide?: number }) => Promise<{
@@ -9,12 +8,6 @@ declare global {
         width: number
         height: number
         display: { id: number; scaleFactor: number; bounds: Electron.Rectangle; size: Electron.Size }
-      }>
-      captureWallpaperThumbnail: (options?: { maxSide?: number }) => Promise<{
-        dataUrl: string
-        width: number
-        height: number
-        wallpaper: { path: string; size: { width: number; height: number } }
       }>
     }
     lanstart?: {
