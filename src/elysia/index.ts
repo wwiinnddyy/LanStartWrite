@@ -285,7 +285,7 @@ async function handleCommand(command: string, payload: unknown): Promise<Command
 
       if (action === 'setAppMode') {
         const modeRaw = coerceString((payload as any)?.mode)
-        const mode = modeRaw === 'whiteboard' ? 'whiteboard' : 'toolbar'
+        const mode = modeRaw === 'whiteboard' ? 'whiteboard' : modeRaw === 'video-show' ? 'video-show' : 'toolbar'
         requestMain({ type: 'SET_APP_MODE', mode })
         return { ok: true }
       }

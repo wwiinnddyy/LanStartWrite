@@ -285,7 +285,7 @@ export function AnnotationOverlayApp() {
   }, [tool])
 
   const appModeRaw = bus.state[APP_MODE_UI_STATE_KEY]
-  const appMode = appModeRaw === 'whiteboard' ? 'whiteboard' : 'toolbar'
+  const appMode = appModeRaw === 'whiteboard' || appModeRaw === 'video-show' ? 'whiteboard' : 'toolbar'
   const shouldFreezeScreen = appMode === 'toolbar' && tool !== 'mouse' && leaferSettings.freezeScreen
   const rendererEngine = leaferSettings.rendererEngine ?? 'canvas2d'
 

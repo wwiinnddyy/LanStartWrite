@@ -6,6 +6,7 @@ import { EventsMenu, FeaturePanelMenu, PenSubmenu, EraserSubmenu, SettingsMenu }
 import { NotificationSubwindow } from '../../toolbar_notice/NotificationSubwindow'
 import { TaskWindowsWatcherWindow } from '../../task_windows_watcher'
 import { AnnotationOverlayApp, PaintBoardBackgroundApp } from '../../paint_board'
+import { VideoShowBackgroundApp } from '../../video_show'
 import { MultiPageControlWindow, PageThumbnailsMenuWindow } from '../../mut_page'
 import { useHyperGlassRealtimeBlur } from '../../hyper_glass'
 import { SettingsWindow, useAppearanceSettings } from '../../settings'
@@ -90,7 +91,11 @@ export default function App() {
   if (windowId === 'child') return <WithAppearance><ChildWindow /></WithAppearance>
   if (windowId === WINDOW_ID_FLOATING_TOOLBAR) return <WithAppearance><FloatingToolbarApp /></WithAppearance>
   if (windowId === WINDOW_ID_FLOATING_TOOLBAR_HANDLE) return <WithAppearance><FloatingToolbarHandleApp /></WithAppearance>
-  if (windowId === 'paint-board') return kind === 'annotation' ? <AnnotationOverlayApp /> : <PaintBoardBackgroundApp />
+  if (windowId === 'paint-board') {
+    if (kind === 'annotation') return <AnnotationOverlayApp />
+    if (kind === 'video-show') return <VideoShowBackgroundApp />
+    return <PaintBoardBackgroundApp />
+  }
   if (windowId === 'watcher') return <WithAppearance><TaskWindowsWatcherWindow /></WithAppearance>
   if (windowId === 'settings-window') return <WithAppearance><SettingsWindow /></WithAppearance>
   if (windowId === 'toolbar-notice') return <WithAppearance><NotificationSubwindow kind="notice" /></WithAppearance>

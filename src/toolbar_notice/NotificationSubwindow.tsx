@@ -146,7 +146,7 @@ export function NotificationSubwindow(props: { kind: 'notice' }) {
 
   const restoreNotes = async () => {
     const appModeRaw = bus.state[APP_MODE_UI_STATE_KEY]
-    const mode = appModeRaw === 'whiteboard' ? 'whiteboard' : 'toolbar'
+    const mode = appModeRaw === 'whiteboard' || appModeRaw === 'video-show' ? 'whiteboard' : 'toolbar'
     const notesKvKey = mode === 'whiteboard' ? 'annotation-notes-whiteboard' : 'annotation-notes-toolbar'
     const notesHistoryKvKey = `${notesKvKey}-prev`
     try {

@@ -1410,7 +1410,7 @@ function repositionToolbarSubwindows(animate: boolean) {
   }
 }
 
-function createPaintBoardWindow(): BrowserWindow {
+function createPaintBoardWindow(kind?: 'video-show'): BrowserWindow {
   const owner = floatingToolbarWindow
   const ownerBounds = owner && !owner.isDestroyed() ? owner.getBounds() : screen.getPrimaryDisplay().bounds
   const display = screen.getDisplayMatching(ownerBounds)
@@ -1428,8 +1428,8 @@ function createPaintBoardWindow(): BrowserWindow {
     maximizable: false,
     fullscreenable: false,
     skipTaskbar: true,
-    title: '白板',
-    backgroundColor: '#ffffffff',
+    title: kind === 'video-show' ? '视频展台' : '白板',
+    backgroundColor: kind === 'video-show' ? '#000000ff' : '#ffffffff',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
@@ -1442,10 +1442,12 @@ function createPaintBoardWindow(): BrowserWindow {
 
   const devUrl = getDevServerUrl()
   if (devUrl) {
-    win.loadURL(`${devUrl}?window=${encodeURIComponent('paint-board')}`)
+    win.loadURL(
+      `${devUrl}?window=${encodeURIComponent('paint-board')}${kind ? `&kind=${encodeURIComponent(kind)}` : ''}`
+    )
     if (process.env.LANSTART_OPEN_DEVTOOLS === '1') win.webContents.openDevTools({ mode: 'detach' })
   } else {
-    win.loadFile(join(__dirname, '../renderer/index.html'), { query: { window: 'paint-board' } })
+    win.loadFile(join(__dirname, '../renderer/index.html'), { query: kind ? { window: 'paint-board', kind } : { window: 'paint-board' } })
   }
 
   const applyWhiteboardZOrder = () => {
@@ -1813,13 +1815,15 @@ async function maybeShowRestoreNotesNotice(): Promise<void> {
   const owner = floatingToolbarWindow
   if (!owner || owner.isDestroyed()) return
 
-  let mode: 'toolbar' | 'whiteboard' = 'toolbar'
+  let mode: 'toolbar' | 'whiteboard' | 'video-show' = 'toolbar'
   try {
     const raw = await backendGetKv('app-mode')
     if (raw === 'whiteboard') mode = 'whiteboard'
+    if (raw === 'video-show') mode = 'video-show'
   } catch {}
 
-  const notesHistoryKvKey = mode === 'whiteboard' ? 'annotation-notes-whiteboard-prev' : 'annotation-notes-toolbar-prev'
+  const notesHistoryKvKey =
+    mode === 'whiteboard' || mode === 'video-show' ? 'annotation-notes-whiteboard-prev' : 'annotation-notes-toolbar-prev'
   try {
     await backendGetKv(notesHistoryKvKey)
   } catch (e) {
@@ -1981,8 +1985,8 @@ function handleBackendControlMessage(message: any): void {
 
   if (message.type === 'SET_APP_MODE') {
     const modeRaw = String((message as any).mode ?? '')
-    const mode = modeRaw === 'whiteboard' ? 'whiteboard' : 'toolbar'
-    if (mode === 'whiteboard') {
+    const mode = modeRaw === 'whiteboard' ? 'whiteboard' : modeRaw === 'video-show' ? 'video-show' : 'toolbar'
+    if (mode === 'whiteboard' || mode === 'video-show') {
       const screenOverlay = screenAnnotationOverlayWindow
       if (screenOverlay && !screenOverlay.isDestroyed()) {
         try {
@@ -1995,8 +1999,23 @@ function handleBackendControlMessage(message: any): void {
       hideAllToolbarSubwindows()
       appWindowsManager.hideAll()
       if (!whiteboardBackgroundWindow || whiteboardBackgroundWindow.isDestroyed()) {
-        whiteboardBackgroundWindow = createPaintBoardWindow()
+        whiteboardBackgroundWindow = createPaintBoardWindow(mode === 'video-show' ? 'video-show' : undefined)
       } else {
+        try {
+          const devUrl = getDevServerUrl()
+          if (devUrl) {
+            whiteboardBackgroundWindow.loadURL(
+              `${devUrl}?window=${encodeURIComponent('paint-board')}${mode === 'video-show' ? `&kind=${encodeURIComponent('video-show')}` : ''}`
+            )
+          } else {
+            whiteboardBackgroundWindow.loadFile(join(__dirname, '../renderer/index.html'), {
+              query: mode === 'video-show' ? { window: 'paint-board', kind: 'video-show' } : { window: 'paint-board' }
+            })
+          }
+        } catch {}
+        try {
+          whiteboardBackgroundWindow.setTitle(mode === 'video-show' ? '视频展台' : '白板')
+        } catch {}
         whiteboardBackgroundWindow.show()
       }
       if (!annotationOverlayWindow || annotationOverlayWindow.isDestroyed()) {

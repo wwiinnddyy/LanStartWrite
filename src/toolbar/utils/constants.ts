@@ -9,6 +9,7 @@ export type AppButtonId =
   | 'pen'
   | 'eraser'
   | 'whiteboard'
+  | 'video-show'
   | 'toggle-expanded'
   | 'undo'
   | 'redo'
@@ -30,6 +31,7 @@ export const APP_BUTTON_DISPLAY_TAGS: Record<AppButtonId, readonly ButtonDisplay
   pen: [ButtonDisplayTag.ALLOW_FLOATING_TOOLBAR],
   eraser: [ButtonDisplayTag.ALLOW_FLOATING_TOOLBAR],
   whiteboard: [ButtonDisplayTag.ALLOW_FLOATING_TOOLBAR],
+  'video-show': [ButtonDisplayTag.ALLOW_FLOATING_TOOLBAR],
   'toggle-expanded': [ButtonDisplayTag.ALLOW_FLOATING_TOOLBAR],
   undo: [ButtonDisplayTag.ALLOW_FLOATING_TOOLBAR],
   redo: [ButtonDisplayTag.ALLOW_FLOATING_TOOLBAR],

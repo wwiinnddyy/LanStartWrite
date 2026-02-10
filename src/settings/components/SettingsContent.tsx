@@ -167,7 +167,7 @@ function AppearanceSettings() {
 
 // 各选项卡的内容占位组件
 function ToolbarSettings() {
-  type PrimaryButtonId = 'mouse' | 'pen' | 'eraser' | 'whiteboard'
+  type PrimaryButtonId = 'mouse' | 'pen' | 'eraser' | 'whiteboard' | 'video-show'
   type SecondaryButtonId = 'undo' | 'redo' | 'feature-panel' | 'events' | 'watcher'
   type SelectedButton =
     | { group: 'primary'; id: PrimaryButtonId }
@@ -187,7 +187,7 @@ function ToolbarSettings() {
     secondaryButtonsOrder?: SecondaryButtonId[]
   }
 
-  const DEFAULT_PRIMARY: PrimaryButtonId[] = ['mouse', 'pen', 'eraser', 'whiteboard']
+  const DEFAULT_PRIMARY: PrimaryButtonId[] = ['mouse', 'pen', 'eraser', 'whiteboard', 'video-show']
   const DEFAULT_SECONDARY: SecondaryButtonId[] = ['undo', 'redo', 'feature-panel']
   const ALL_SECONDARY: SecondaryButtonId[] = ['undo', 'redo', 'feature-panel', 'events', 'watcher']
   const DEFAULT_SECONDARY_ORDER: SecondaryButtonId[] = ['undo', 'redo', 'feature-panel']
@@ -197,7 +197,7 @@ function ToolbarSettings() {
     const allowed = new Set(DEFAULT_PRIMARY)
     const unique: PrimaryButtonId[] = []
     for (const item of input) {
-      if (item !== 'mouse' && item !== 'pen' && item !== 'eraser' && item !== 'whiteboard') continue
+      if (item !== 'mouse' && item !== 'pen' && item !== 'eraser' && item !== 'whiteboard' && item !== 'video-show') continue
       if (!allowed.has(item)) continue
       if (unique.includes(item)) continue
       unique.push(item)
@@ -223,7 +223,7 @@ function ToolbarSettings() {
     const unique: PrimaryButtonId[] = []
     if (Array.isArray(input)) {
       for (const item of input) {
-        if (item !== 'mouse' && item !== 'pen' && item !== 'eraser' && item !== 'whiteboard') continue
+        if (item !== 'mouse' && item !== 'pen' && item !== 'eraser' && item !== 'whiteboard' && item !== 'video-show') continue
         if (!allowed.has(item)) continue
         if (unique.includes(item)) continue
         unique.push(item)
@@ -329,6 +329,7 @@ function ToolbarSettings() {
     if (id === 'pen') return '笔'
     if (id === 'eraser') return '橡皮'
     if (id === 'whiteboard') return '白板'
+    if (id === 'video-show') return '视频展台'
     if (id === 'undo') return '撤销'
     if (id === 'redo') return '重做'
     if (id === 'events') return '事件'
@@ -344,7 +345,9 @@ function ToolbarSettings() {
           ? 'M17.18 2.926a2.975 2.975 0 0 0-4.26-.054l-9.375 9.375a2.44 2.44 0 0 0-.655 1.194l-.878 3.95a.5.5 0 0 0 .597.597l3.926-.873a2.5 2.5 0 0 0 1.234-.678l7.98-7.98l.337.336a1 1 0 0 1 0 1.414l-.94.94a.5.5 0 0 0 .708.706l.939-.94a2 2 0 0 0 0-2.828l-.336-.336l.67-.67a2.975 2.975 0 0 0 .052-4.153m-3.553.653a1.975 1.975 0 0 1 2.793 2.793L7.062 15.73a1.5 1.5 0 0 1-.744.409l-3.16.702l.708-3.183a1.43 1.43 0 0 1 .387-.704z'
           : props.kind === 'eraser'
             ? 'M2.44 11.2a1.5 1.5 0 0 0 0 2.122l4.242 4.242a1.5 1.5 0 0 0 2.121 0l.72-.72a5.5 5.5 0 0 1-.369-1.045l-1.058 1.058a.5.5 0 0 1-.707 0l-4.243-4.242a.5.5 0 0 1 0-.707l1.69-1.69l4.165 4.164q.015-.645.17-1.245L5.543 9.51l6.364-6.364a.5.5 0 0 1 .707 0l4.242 4.243a.5.5 0 0 1 0 .707L15.8 9.154a5.5 5.5 0 0 1 1.045.37l.72-.72a1.5 1.5 0 0 0 0-2.122l-4.242-4.243a1.5 1.5 0 0 0-2.122 0zM14.5 19a4.5 4.5 0 1 0 0-9a4.5 4.5 0 0 0 0 9'
-            : 'm17.331 3.461l.11.102l.102.11a1.93 1.93 0 0 1-.103 2.606l-3.603 3.617a1.9 1.9 0 0 1-.794.477l-1.96.591a.84.84 0 0 1-1.047-.567a.85.85 0 0 1 .005-.503l.621-1.942c.093-.289.252-.55.465-.765l3.612-3.625a1.904 1.904 0 0 1 2.592-.1m-1.884.806l-3.611 3.626a.9.9 0 0 0-.221.363l-.533 1.664l1.672-.505c.14-.042.27-.12.374-.224l3.603-3.617a.93.93 0 0 0 .06-1.24l-.06-.065l-.064-.06a.904.904 0 0 0-1.22.058M12.891 4H5a3 3 0 0 0-3 3v6a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3V7.134l-1 1.004V13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9.23c.573-.486 1.34-1.11 2.074-1.535c.41-.237.772-.39 1.062-.439c.281-.048.423.01.51.098a.33.33 0 0 1 .106.185a.6.6 0 0 1-.04.276c-.093.276-.31.602-.602 1.01l-.094.132c-.252.35-.538.747-.736 1.144c-.225.447-.392.995-.204 1.557c.17.508.498.845.926 1.011c.402.156.844.144 1.236.073c.785-.14 1.584-.552 2.02-.813a.5.5 0 0 0-.515-.858c-.399.24-1.075.578-1.681.687c-.303.054-.537.042-.698-.021c-.136-.053-.26-.153-.34-.395c-.062-.188-.03-.435.15-.793c.16-.32.396-.649.656-1.01l.093-.131c.276-.386.587-.832.737-1.273c.077-.229.122-.486.08-.753a1.32 1.32 0 0 0-.386-.736c-.397-.396-.914-.456-1.386-.376c-.462.079-.945.3-1.394.559c-.546.315-1.096.722-1.574 1.104V7a2 2 0 0 1 2-2h6.895z'
+            : props.kind === 'whiteboard'
+              ? 'm17.331 3.461l.11.102l.102.11a1.93 1.93 0 0 1-.103 2.606l-3.603 3.617a1.9 1.9 0 0 1-.794.477l-1.96.591a.84.84 0 0 1-1.047-.567a.85.85 0 0 1 .005-.503l.621-1.942c.093-.289.252-.55.465-.765l3.612-3.625a1.904 1.904 0 0 1 2.592-.1m-1.884.806l-3.611 3.626a.9.9 0 0 0-.221.363l-.533 1.664l1.672-.505c.14-.042.27-.12.374-.224l3.603-3.617a.93.93 0 0 0 .06-1.24l-.06-.065l-.064-.06a.904.904 0 0 0-1.22.058M12.891 4H5a3 3 0 0 0-3 3v6a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3V7.134l-1 1.004V13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9.23c.573-.486 1.34-1.11 2.074-1.535c.41-.237.772-.39 1.062-.439c.281-.048.423.01.51.098a.33.33 0 0 1 .106.185a.6.6 0 0 1-.04.276c-.093.276-.31.602-.602 1.01l-.094.132c-.252.35-.538.747-.736 1.144c-.225.447-.392.995-.204 1.557c.17.508.498.845.926 1.011c.402.156.844.144 1.236.073c.785-.14 1.584-.552 2.02-.813a.5.5 0 0 0-.515-.858c-.399.24-1.075.578-1.681.687c-.303.054-.537.042-.698-.021c-.136-.053-.26-.153-.34-.395c-.062-.188-.03-.435.15-.793c.16-.32.396-.649.656-1.01l.093-.131c.276-.386.587-.832.737-1.273c.077-.229.122-.486.08-.753a1.32 1.32 0 0 0-.386-.736c-.397-.396-.914-.456-1.386-.376c-.462.079-.945.3-1.394.559c-.546.315-1.096.722-1.574 1.104V7a2 2 0 0 1 2-2h6.895z'
+              : 'M5 4a3 3 0 0 0-3 3v6a3 3 0 0 0 3 3h5a3 3 0 0 0 3-3v-.321l3.037 2.097a1.25 1.25 0 0 0 1.96-1.029V6.252a1.25 1.25 0 0 0-1.96-1.028L13 7.32V7a3 3 0 0 0-3-3zm8 4.536l3.605-2.49a.25.25 0 0 1 .392.206v7.495a.25.25 0 0 1-.392.206L13 11.463zM3 7a2 2 0 0 1 2-2h5a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z'
 
     return (
       <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20">
@@ -503,6 +506,7 @@ function ToolbarSettings() {
     if (id === 'pen') return <ToolbarToolIcon kind="pen" />
     if (id === 'eraser') return <ToolbarToolIcon kind="eraser" />
     if (id === 'whiteboard') return <ToolbarToolIcon kind="whiteboard" />
+    if (id === 'video-show') return <ToolbarToolIcon kind="video-show" />
     if (id === 'undo') return <UndoIcon />
     if (id === 'redo') return <RedoIcon />
     if (id === 'events') return <EventsIcon />
@@ -515,6 +519,7 @@ function ToolbarSettings() {
     if (id === 'pen') return '切换到笔工具（再次点击可打开设置）'
     if (id === 'eraser') return '切换到橡皮工具'
     if (id === 'whiteboard') return '进入/退出白板模式'
+    if (id === 'video-show') return '进入/退出视频展台模式'
     if (id === 'undo') return '撤销上一步操作'
     if (id === 'redo') return '重做上一步操作'
     if (id === 'events') return '打开事件列表窗口'

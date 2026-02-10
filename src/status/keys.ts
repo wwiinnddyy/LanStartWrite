@@ -5,7 +5,7 @@ export const UI_STATE_APP_WINDOW_ID = 'app'
 export const APPEARANCE_UI_STATE_KEY = 'appearance'
 export const APPEARANCE_KV_KEY = 'app-appearance'
 
-export type AppMode = 'toolbar' | 'whiteboard'
+export type AppMode = 'toolbar' | 'whiteboard' | 'video-show'
 export const APP_MODE_UI_STATE_KEY = 'mode'
 export const APP_MODE_KV_KEY = 'app-mode'
 
@@ -82,7 +82,7 @@ export function isAppearance(v: unknown): v is Appearance {
 }
 
 export function isAppMode(v: unknown): v is AppMode {
-  return v === 'toolbar' || v === 'whiteboard'
+  return v === 'toolbar' || v === 'whiteboard' || v === 'video-show'
 }
 
 export function isWritingFramework(v: unknown): v is WritingFramework {

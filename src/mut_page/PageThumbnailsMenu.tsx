@@ -275,7 +275,7 @@ export function PageThumbnailsMenuWindow() {
     return { index: i, total: t }
   }, [pageIndexRaw, pageTotalRaw])
 
-  const notesKvKey = appMode === 'whiteboard' ? 'annotation-notes-whiteboard' : 'annotation-notes-toolbar'
+  const notesKvKey = appMode === 'whiteboard' || appMode === 'video-show' ? 'annotation-notes-whiteboard' : 'annotation-notes-toolbar'
 
   const [pages, setPages] = useState<PersistedAnnotationDocV1[]>([])
   const [canvasPages, setCanvasPages] = useState<WhiteboardCanvasPageV1[]>([])
