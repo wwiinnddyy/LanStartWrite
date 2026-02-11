@@ -402,6 +402,26 @@ async function handleCommand(command: string, payload: unknown): Promise<Command
         return { ok: true }
       }
 
+      if (action === 'setAppWindowBounds') {
+        const windowId = coerceString((payload as any)?.windowId)
+        const width = Number((payload as any)?.width)
+        const height = Number((payload as any)?.height)
+        const x = (payload as any)?.x
+        const y = (payload as any)?.y
+        const hasWidth = Number.isFinite(width)
+        const hasHeight = Number.isFinite(height)
+        if (!windowId || (!hasWidth && !hasHeight)) return { ok: false, error: 'BAD_BOUNDS' }
+        requestMain({
+          type: 'SET_APP_WINDOW_BOUNDS',
+          windowId,
+          ...(hasWidth ? { width } : {}),
+          ...(hasHeight ? { height } : {}),
+          ...(Number.isFinite(Number(x)) ? { x: Number(x) } : {}),
+          ...(Number.isFinite(Number(y)) ? { y: Number(y) } : {})
+        })
+        return { ok: true }
+      }
+
       if (action === 'setUiZoom') {
         const zoom = Number((payload as any)?.zoom)
         if (!Number.isFinite(zoom)) return { ok: false, error: 'BAD_ZOOM' }
@@ -757,6 +777,26 @@ async function handleCommand(command: string, payload: unknown): Promise<Command
     const height = Number((payload as any)?.height)
     if (!Number.isFinite(width) || !Number.isFinite(height)) return { ok: false, error: 'BAD_BOUNDS' }
     requestMain({ type: 'SET_TOOLBAR_BOUNDS', width, height })
+    return { ok: true }
+  }
+
+  if (command === 'set-app-window-bounds') {
+    const windowId = coerceString((payload as any)?.windowId)
+    const width = Number((payload as any)?.width)
+    const height = Number((payload as any)?.height)
+    const x = (payload as any)?.x
+    const y = (payload as any)?.y
+    const hasWidth = Number.isFinite(width)
+    const hasHeight = Number.isFinite(height)
+    if (!windowId || (!hasWidth && !hasHeight)) return { ok: false, error: 'BAD_BOUNDS' }
+    requestMain({
+      type: 'SET_APP_WINDOW_BOUNDS',
+      windowId,
+      ...(hasWidth ? { width } : {}),
+      ...(hasHeight ? { height } : {}),
+      ...(Number.isFinite(Number(x)) ? { x: Number(x) } : {}),
+      ...(Number.isFinite(Number(y)) ? { y: Number(y) } : {})
+    })
     return { ok: true }
   }
 

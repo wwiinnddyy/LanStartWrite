@@ -245,12 +245,21 @@ export class AppWindowsManager {
     const win = this.getOrCreate(kind)
     if (win.isDestroyed()) return
     const current = win.getBounds()
-    const next = {
-      x: typeof input.x === 'number' ? Math.round(input.x) : current.x,
-      y: typeof input.y === 'number' ? Math.round(input.y) : current.y,
-      width: typeof input.width === 'number' ? Math.max(100, Math.round(input.width)) : current.width,
-      height: typeof input.height === 'number' ? Math.max(80, Math.round(input.height)) : current.height,
-    }
+    const nextWidth = typeof input.width === 'number' ? Math.max(100, Math.round(input.width)) : current.width
+    const nextHeight = typeof input.height === 'number' ? Math.max(80, Math.round(input.height)) : current.height
+    const nextX = typeof input.x === 'number' ? Math.round(input.x) : current.x
+    const nextY = typeof input.y === 'number' ? Math.round(input.y) : current.y
+
+    const display = screen.getDisplayMatching({ x: nextX, y: nextY, width: nextWidth, height: nextHeight })
+    const workArea = display.workArea
+    const width = Math.max(100, Math.min(nextWidth, workArea.width))
+    const height = Math.max(80, Math.min(nextHeight, workArea.height))
+    const maxX = workArea.x + workArea.width - width
+    const maxY = workArea.y + workArea.height - height
+    const x = Math.max(workArea.x, Math.min(maxX, nextX))
+    const y = Math.max(workArea.y, Math.min(maxY, nextY))
+
+    const next = { x, y, width, height }
     try {
       win.setBounds(next, false)
     } catch {}
@@ -332,6 +341,7 @@ export class AppWindowsManager {
       x: opts.x,
       y: opts.y,
       title: opts.title,
+      useContentSize: true,
       resizable: opts.resizable,
       minimizable: opts.minimizable,
       maximizable: opts.maximizable,
@@ -371,37 +381,57 @@ export class AppWindowsManager {
 
   private createChildWindow(): BrowserWindow {
     const legacy = this.deps.getLegacyWindowImplementation()
+    const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint())
+    const workArea = display.workArea
+    const width = Math.max(320, Math.min(420, workArea.width))
+    const height = Math.max(220, Math.min(260, workArea.height))
+    const x = workArea.x + Math.round((workArea.width - width) / 2)
+    const y = workArea.y + Math.round((workArea.height - height) / 2)
     return this.createAppWindow({
       kind: 'child',
       title: '数据库',
       windowId: WINDOW_ID_BY_KIND.child,
-      width: 420,
-      height: 260,
+      width,
+      height,
+      x,
+      y,
       resizable: legacy,
       minimizable: true,
       maximizable: false,
       fullscreenable: false,
       show: false,
       frame: legacy,
-      transparent: !legacy
+      transparent: !legacy,
+      adjustForDpi: { baseWidth: width, baseHeight: height }
     })
   }
  
   private createWatcherWindow(): BrowserWindow {
     const legacy = this.deps.getLegacyWindowImplementation()
+    const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint())
+    const workArea = display.workArea
+    const preferredWidth = Math.round(workArea.width * 0.86)
+    const preferredHeight = Math.round(workArea.height * 0.82)
+    const width = Math.max(720, Math.min(980, Math.min(preferredWidth, workArea.width)))
+    const height = Math.max(520, Math.min(720, Math.min(preferredHeight, workArea.height)))
+    const x = workArea.x + Math.round((workArea.width - width) / 2)
+    const y = workArea.y + Math.round((workArea.height - height) / 2)
     return this.createAppWindow({
       kind: 'watcher',
       title: '系统监视器',
       windowId: WINDOW_ID_BY_KIND.watcher,
-      width: 980,
-      height: 720,
+      width,
+      height,
+      x,
+      y,
       resizable: legacy,
       minimizable: true,
       maximizable: true,
       fullscreenable: false,
       show: false,
       frame: legacy,
-      transparent: !legacy
+      transparent: !legacy,
+      adjustForDpi: { baseWidth: width, baseHeight: height }
     })
   }
  
@@ -410,17 +440,20 @@ export class AppWindowsManager {
     if (existing && !existing.isDestroyed()) return existing
  
     const legacy = this.deps.getLegacyWindowImplementation()
-    const { width: screenWidth, height: screenHeight } = screen.getPrimaryDisplay().workAreaSize
-    const winWidth = 560
-    const winHeight = 380
+    const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint())
+    const workArea = display.workArea
+    const preferredWidth = Math.round(workArea.width * 0.86)
+    const preferredHeight = Math.round(workArea.height * 0.82)
+    const winWidth = Math.max(560, Math.min(980, Math.min(preferredWidth, workArea.width)))
+    const winHeight = Math.max(420, Math.min(760, Math.min(preferredHeight, workArea.height)))
     return this.createAppWindow({
       kind: 'settings',
       title: '设置',
       windowId: WINDOW_ID_BY_KIND.settings,
       width: winWidth,
       height: winHeight,
-      x: Math.round((screenWidth - winWidth) / 2),
-      y: Math.round((screenHeight - winHeight) / 2),
+      x: workArea.x + Math.round((workArea.width - winWidth) / 2),
+      y: workArea.y + Math.round((workArea.height - winHeight) / 2),
       resizable: legacy,
       minimizable: true,
       maximizable: true,

@@ -111,8 +111,8 @@ body {
   display: flex;
   width: 100%;
   height: calc(100% - 40px);
-  min-width: 800px;
-  min-height: 460px;
+  min-width: 0;
+  min-height: 0;
 }
 
 /* 深色主题适配 */

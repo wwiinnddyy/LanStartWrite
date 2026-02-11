@@ -3,6 +3,7 @@ import { motion, useReducedMotion } from '../Framer_Motion'
 import { AppWindowTitlebar } from '../app_windows_manerger/renderer'
 import { SettingsSidebar } from './components/SettingsSidebar'
 import { SettingsContent } from './components/SettingsContent'
+import { postCommand } from '../status'
 import type { SettingsTab } from './types'
 import './SettingsWindow.css'
 
@@ -39,6 +40,7 @@ export function SettingsWindow() {
   const reduceMotion = useReducedMotion()
 
   const [activeTab, setActiveTab] = useState<SettingsTab>('appearance')
+  const resizeStateRef = useRef({ rafId: 0, lastWidth: 0, lastHeight: 0 })
 
   // 监听容器大小
   const { width: containerWidth } = useContainerSize(cardRef)
@@ -49,6 +51,42 @@ export function SettingsWindow() {
     if (containerWidth < 900) return 'comfortable'
     return 'spacious'
   }, [containerWidth])
+
+  useEffect(() => {
+    const state = resizeStateRef.current
+    const card = cardRef.current
+    if (!card) return
+
+    const send = () => {
+      state.rafId = 0
+      const sidebar = card.querySelector('.settingsSidebar') as HTMLElement | null
+      const content = card.querySelector('.settingsContent') as HTMLElement | null
+      if (!sidebar || !content) return
+
+      const titlebarHeight = 40
+      const bodyHeight = Math.max(sidebar.scrollHeight, content.scrollHeight)
+      const height = Math.ceil(bodyHeight + titlebarHeight)
+      if (height === state.lastHeight) return
+      state.lastHeight = height
+      postCommand('set-app-window-bounds', { windowId: 'settings-window', height }).catch(() => undefined)
+    }
+
+    const schedule = () => {
+      if (state.rafId) return
+      state.rafId = window.requestAnimationFrame(send)
+    }
+
+    const contentInner = card.querySelector('.settingsContentInner')
+    const observer = new ResizeObserver(schedule)
+    if (contentInner) observer.observe(contentInner)
+    schedule()
+
+    return () => {
+      if (state.rafId) window.cancelAnimationFrame(state.rafId)
+      state.rafId = 0
+      observer.disconnect()
+    }
+  }, [activeTab])
 
   return (
     <motion.div
