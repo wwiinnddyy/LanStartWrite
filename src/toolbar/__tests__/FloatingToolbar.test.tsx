@@ -23,6 +23,7 @@ describe('FloatingToolbar', () => {
       putUiStateKey: async () => null,
       deleteUiStateKey: async () => null,
       apiRequest: async () => ({ status: 200, body: { ok: true } }),
+      clipboardWriteText: async () => null,
       setZoomLevel: (level: number) => {},
       getZoomLevel: () => 1
     }
@@ -51,6 +52,7 @@ describe('FloatingToolbar', () => {
       putUiStateKey: async () => null,
       deleteUiStateKey: async () => null,
       apiRequest: async () => ({ status: 200, body: { ok: true } }),
+      clipboardWriteText: async () => null,
       setZoomLevel: (level: number) => {},
       getZoomLevel: () => 1
     }
@@ -78,6 +80,7 @@ describe('FloatingToolbar', () => {
       },
       deleteUiStateKey: async () => null,
       apiRequest: async () => ({ status: 200, body: { ok: true } }),
+      clipboardWriteText: async () => null,
       setZoomLevel: (level: number) => {},
       getZoomLevel: () => 1
     }
@@ -103,6 +106,7 @@ describe('FloatingToolbar', () => {
       putUiStateKey: async () => null,
       deleteUiStateKey: async () => null,
       apiRequest: async () => ({ status: 200, body: { ok: true } }),
+      clipboardWriteText: async () => null,
       setZoomLevel: (level: number) => {},
       getZoomLevel: () => 1
     }

@@ -1,4 +1,4 @@
-import { BrowserWindow, Menu, Tray, app, dialog, ipcMain, nativeImage, nativeTheme, screen, type OpenDialogOptions } from 'electron'
+import { BrowserWindow, Menu, Tray, app, dialog, ipcMain, nativeImage, nativeTheme, screen, session, type OpenDialogOptions } from 'electron'
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
@@ -986,8 +986,8 @@ function repositionMutPageThumbnailsMenuWindow(): void {
   const display = screen.getDisplayMatching(ownerBounds)
   const area = display.workArea
 
-  const width = 560
-  const height = 420
+  const width = 800
+  const height = 520
   const gap = 10
   const x = Math.round(ownerBounds.x + (ownerBounds.width - width) / 2)
   const y = Math.round(ownerBounds.y - height - gap)
@@ -1006,8 +1006,8 @@ function getOrCreateMutPageThumbnailsMenuWindow(owner: BrowserWindow): BrowserWi
 
   const win = new BrowserWindow({
     ...(APP_ICON_PATH ? { icon: APP_ICON_PATH } : {}),
-    width: 560,
-    height: 420,
+    width: 800,
+    height: 520,
     show: false,
     frame: false,
     autoHideMenuBar: true,
@@ -2353,6 +2353,44 @@ if (hasSingleInstanceLock) {
       } catch (e) {
         process.stderr.write(String(e))
       }
+
+      try {
+        const ses = session.defaultSession
+        if (ses) {
+          const isTrustedUrl = (url: string) =>
+            url.startsWith('file://') ||
+            url.startsWith('http://localhost:5173') ||
+            url.startsWith('http://127.0.0.1:5173') ||
+            url.startsWith('http://[::1]:5173')
+
+          ses.setPermissionRequestHandler((webContents, permission, callback, details) => {
+            try {
+              const url = webContents.getURL()
+              if (!isTrustedUrl(url)) return callback(false)
+              if (permission !== 'media') return callback(false)
+              const mediaTypes = Array.isArray((details as any)?.mediaTypes) ? (details as any).mediaTypes.map(String) : []
+              if (mediaTypes.length && !mediaTypes.includes('video')) return callback(false)
+              return callback(true)
+            } catch {
+              return callback(false)
+            }
+          })
+
+          ses.setPermissionCheckHandler((webContents, permission, requestingOrigin, details) => {
+            try {
+              const url = webContents?.getURL?.() ?? ''
+              const origin = typeof requestingOrigin === 'string' && requestingOrigin ? requestingOrigin : url
+              if (!isTrustedUrl(origin)) return false
+              if (permission !== 'media') return false
+              const mediaTypes = Array.isArray((details as any)?.mediaTypes) ? (details as any).mediaTypes.map(String) : []
+              if (mediaTypes.length && !mediaTypes.includes('video')) return false
+              return true
+            } catch {
+              return false
+            }
+          })
+        }
+      } catch {}
 
       lanstartwriteLink.flush().catch(() => undefined)
 

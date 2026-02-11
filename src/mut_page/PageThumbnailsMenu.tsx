@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
+import * as QRCode from 'qrcode'
 import {
   APP_MODE_UI_STATE_KEY,
   NOTES_PAGE_INDEX_UI_STATE_KEY,
@@ -11,8 +12,11 @@ import {
   VIDEO_SHOW_LIVE_THUMB_UI_STATE_KEY,
   VIDEO_SHOW_PAGES_KV_KEY,
   VIDEO_SHOW_DEVICE_ID_UI_STATE_KEY,
+  VIDEO_SHOW_SOURCE_UI_STATE_KEY,
   VIDEO_SHOW_QUALITY_PRESETS_UI_STATE_KEY,
   VIDEO_SHOW_QUALITY_UI_STATE_KEY,
+  VIDEO_SHOW_WEBRTC_SESSION_ID_UI_STATE_KEY,
+  VIDEO_SHOW_WEBRTC_STATUS_UI_STATE_KEY,
   getKv,
   isFileOrDataUrl,
   isAppMode,
@@ -376,6 +380,75 @@ export function PageThumbnailsMenuWindow() {
   }, [videoQualityPresetsRaw])
 
   const [videoDevices, setVideoDevices] = useState<{ deviceId: string; label: string }[]>([])
+  const [castInfo, setCastInfo] = useState<{ sessionId: string; urls: string[]; port: number } | null>(null)
+  const [phoneQrDataUrl, setPhoneQrDataUrl] = useState<string>('')
+  const webrtcInitOnceRef = useRef(false)
+
+  const videoSource = useMemo(() => {
+    const raw = bus.state[VIDEO_SHOW_SOURCE_UI_STATE_KEY]
+    return raw === 'phone-webrtc' ? ('phone-webrtc' as const) : ('camera' as const)
+  }, [bus.state])
+
+  const webrtcSessionId = useMemo(() => {
+    const raw = bus.state[VIDEO_SHOW_WEBRTC_SESSION_ID_UI_STATE_KEY]
+    return typeof raw === 'string' ? raw : ''
+  }, [bus.state])
+
+  const webrtcStatus = useMemo(() => {
+    const raw = bus.state[VIDEO_SHOW_WEBRTC_STATUS_UI_STATE_KEY]
+    return typeof raw === 'string' ? raw : ''
+  }, [bus.state])
+
+  const ensureWebrtcSession = async () => {
+    try {
+      const res = await window.lanstart?.apiRequest({ method: 'POST', path: '/webrtc/session', body: {} })
+      const body = (res as any)?.body as any
+      const sessionId = typeof body?.sessionId === 'string' ? body.sessionId : ''
+      const hostAddrs = Array.isArray(body?.hostAddrs) ? body.hostAddrs.map((v: any) => String(v)).filter(Boolean) : []
+      const port = Number.isFinite(Number(body?.port)) ? Number(body.port) : 3132
+      if (!sessionId) return
+      await bus.setKey(VIDEO_SHOW_WEBRTC_SESSION_ID_UI_STATE_KEY, sessionId)
+      const urls = hostAddrs.length ? hostAddrs.map((a: string) => `http://${a}:${port}/webrtc/?session=${encodeURIComponent(sessionId)}`) : []
+      setCastInfo({ sessionId, urls, port })
+    } catch {}
+  }
+
+  useEffect(() => {
+    if (appMode !== 'video-show') {
+      webrtcInitOnceRef.current = false
+      setCastInfo(null)
+      setPhoneQrDataUrl('')
+      return
+    }
+    if (webrtcInitOnceRef.current) return
+    webrtcInitOnceRef.current = true
+    ensureWebrtcSession().catch(() => undefined)
+  }, [appMode])
+
+  const phoneCastUrl = useMemo(() => {
+    const url = castInfo?.urls?.[0]
+    return typeof url === 'string' ? url : ''
+  }, [castInfo])
+
+  useEffect(() => {
+    if (appMode !== 'video-show') return
+    if (!phoneCastUrl) {
+      setPhoneQrDataUrl('')
+      return
+    }
+    let cancelled = false
+    ;(async () => {
+      try {
+        const dataUrl = await QRCode.toDataURL(phoneCastUrl, { width: 220, margin: 1 })
+        if (!cancelled) setPhoneQrDataUrl(dataUrl)
+      } catch {
+        if (!cancelled) setPhoneQrDataUrl('')
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [appMode, phoneCastUrl])
 
   useEffect(() => {
     if (appMode !== 'video-show') return
@@ -384,6 +457,13 @@ export function PageThumbnailsMenuWindow() {
       bus.setKey(VIDEO_SHOW_QUALITY_UI_STATE_KEY, '0').catch(() => undefined)
     }
   }, [appMode, bus, videoQualityRaw])
+
+  useEffect(() => {
+    if (appMode !== 'video-show') return
+    const raw = bus.state[VIDEO_SHOW_SOURCE_UI_STATE_KEY]
+    if (raw === 'camera' || raw === 'phone-webrtc') return
+    bus.setKey(VIDEO_SHOW_SOURCE_UI_STATE_KEY, 'camera').catch(() => undefined)
+  }, [appMode, bus, bus.state])
 
   useEffect(() => {
     if (appMode !== 'video-show') return
@@ -417,6 +497,7 @@ export function PageThumbnailsMenuWindow() {
 
   useEffect(() => {
     if (appMode !== 'video-show') return
+    if (videoSource !== 'camera') return
     if (!videoDevices.length) return
     const current = typeof videoDeviceIdRaw === 'string' ? videoDeviceIdRaw : ''
     const ok = current && videoDevices.some((d) => d.deviceId === current)
@@ -525,72 +606,87 @@ export function PageThumbnailsMenuWindow() {
 
   return (
     <div style={{ width: '100%', height: '100%', padding: 10, boxSizing: 'border-box', background: 'transparent' }}>
-      <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {appMode === 'video-show' ? (
-          <div className="subwindowRoot" style={{ width: '100%', height: 'auto', boxShadow: 'none' }}>
-            <div style={{ position: 'relative', zIndex: 2, width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: 12 }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0, flex: 1 }}>
-                <div style={{ fontSize: 11, opacity: 0.9 }}>摄像头</div>
-                <select
-                  value={typeof videoDeviceIdRaw === 'string' ? videoDeviceIdRaw : ''}
-                  disabled={!videoDevices.length}
-                  onChange={(e) => {
-                    const v = String(e.target.value || '')
-                    if (!v) return
-                    bus.setKey(VIDEO_SHOW_DEVICE_ID_UI_STATE_KEY, v).catch(() => undefined)
-                  }}
-                  style={{
-                    height: 30,
-                    borderRadius: 10,
-                    border: '1px solid rgba(0,0,0,0.16)',
-                    background: 'rgba(0,0,0,0.22)',
-                    color: 'rgba(255,255,255,0.92)',
-                    padding: '0 10px',
-                    outline: 'none',
-                    maxWidth: '100%'
-                  }}
-                >
-                  {videoDevices.length ? (
-                    videoDevices.map((d) => (
-                      <option key={d.deviceId} value={d.deviceId}>
-                        {d.label}
-                      </option>
-                    ))
-                  ) : (
-                    <option value="">未检测到摄像头</option>
-                  )}
-                </select>
-              </div>
+      <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'row', gap: 10 }}>
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {appMode === 'video-show' ? (
+            <div className="subwindowRoot" style={{ width: '100%', height: 'auto', boxShadow: 'none' }}>
+              <div
+                style={{
+                  position: 'relative',
+                  zIndex: 2,
+                  width: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                  padding: 12
+                }}
+              >
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0, flex: 1 }}>
+                  <div style={{ fontSize: 11, opacity: 0.9 }}>视频源</div>
+                  <select
+                    value={videoSource === 'phone-webrtc' ? '__phone_webrtc__' : typeof videoDeviceIdRaw === 'string' ? videoDeviceIdRaw : ''}
+                    onChange={(e) => {
+                      const v = String(e.target.value || '')
+                      if (!v) return
+                      if (v === '__phone_webrtc__') {
+                        bus.setKey(VIDEO_SHOW_SOURCE_UI_STATE_KEY, 'phone-webrtc').catch(() => undefined)
+                        ensureWebrtcSession().catch(() => undefined)
+                        return
+                      }
+                      bus.setKey(VIDEO_SHOW_SOURCE_UI_STATE_KEY, 'camera').catch(() => undefined)
+                      bus.setKey(VIDEO_SHOW_DEVICE_ID_UI_STATE_KEY, v).catch(() => undefined)
+                    }}
+                    style={{
+                      height: 30,
+                      borderRadius: 10,
+                      border: '1px solid rgba(0,0,0,0.16)',
+                      background: 'rgba(0,0,0,0.22)',
+                      color: 'rgba(255,255,255,0.92)',
+                      padding: '0 10px',
+                      outline: 'none',
+                      maxWidth: '100%'
+                    }}
+                  >
+                    <option value="__phone_webrtc__">手机摄像头（扫码添加）</option>
+                    {videoDevices.length
+                      ? videoDevices.map((d) => (
+                          <option key={d.deviceId} value={d.deviceId}>
+                            {d.label}
+                          </option>
+                        ))
+                      : null}
+                  </select>
+                </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0, flex: '0 0 160px' }}>
-                <div style={{ fontSize: 11, opacity: 0.9 }}>清晰度</div>
-                <select
-                  value={String(videoQualityIdx)}
-                  onChange={(e) => {
-                    const v = String(e.target.value || '0')
-                    bus.setKey(VIDEO_SHOW_QUALITY_UI_STATE_KEY, v).catch(() => undefined)
-                  }}
-                  style={{
-                    height: 30,
-                    borderRadius: 10,
-                    border: '1px solid rgba(0,0,0,0.16)',
-                    background: 'rgba(0,0,0,0.22)',
-                    color: 'rgba(255,255,255,0.92)',
-                    padding: '0 10px',
-                    outline: 'none',
-                    maxWidth: '100%'
-                  }}
-                >
-                  <option value="0">最高（{videoQualityPresets.heights[0]}p）</option>
-                  <option value="1">中等（{videoQualityPresets.heights[1]}p）</option>
-                  <option value="2">流畅（{videoQualityPresets.heights[2]}p）</option>
-                </select>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0, flex: '0 0 160px' }}>
+                  <div style={{ fontSize: 11, opacity: 0.9 }}>清晰度</div>
+                  <select
+                    value={String(videoQualityIdx)}
+                    onChange={(e) => {
+                      const v = String(e.target.value || '0')
+                      bus.setKey(VIDEO_SHOW_QUALITY_UI_STATE_KEY, v).catch(() => undefined)
+                    }}
+                    style={{
+                      height: 30,
+                      borderRadius: 10,
+                      border: '1px solid rgba(0,0,0,0.16)',
+                      background: 'rgba(0,0,0,0.22)',
+                      color: 'rgba(255,255,255,0.92)',
+                      padding: '0 10px',
+                      outline: 'none',
+                      maxWidth: '100%'
+                    }}
+                  >
+                    <option value="0">最高（{videoQualityPresets.heights[0]}p）</option>
+                    <option value="1">中等（{videoQualityPresets.heights[1]}p）</option>
+                    <option value="2">流畅（{videoQualityPresets.heights[2]}p）</option>
+                  </select>
+                </div>
               </div>
             </div>
-          </div>
-        ) : null}
+          ) : null}
 
-        <div className="subwindowRoot" style={{ width: '100%', flex: 1, minHeight: 0, boxShadow: 'none' }}>
+          <div className="subwindowRoot" style={{ width: '100%', flex: 1, minHeight: 0, boxShadow: 'none' }}>
           <div style={{ position: 'relative', zIndex: 1, width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: 12 }}>
               <div style={{ fontSize: 13, fontWeight: 650 }}>页面缩略图查看菜单</div>
@@ -654,6 +750,97 @@ export function PageThumbnailsMenuWindow() {
             </div>
           </div>
         </div>
+        </div>
+
+        {appMode === 'video-show' ? (
+          <div className="subwindowRoot" style={{ width: 240, height: '100%', boxShadow: 'none' }}>
+            <div
+              style={{
+                width: '100%',
+                height: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 8,
+                padding: 12,
+                boxSizing: 'border-box'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                <div style={{ fontSize: 11, opacity: 0.92, fontWeight: 650 }}>扫码添加手机摄像头</div>
+                <Button
+                  size="sm"
+                  kind="text"
+                  ariaLabel="重新生成"
+                  title="重新生成"
+                  onClick={() => {
+                    bus.deleteKey(VIDEO_SHOW_WEBRTC_SESSION_ID_UI_STATE_KEY).catch(() => undefined)
+                    setCastInfo(null)
+                    ensureWebrtcSession().catch(() => undefined)
+                  }}
+                >
+                  重新生成
+                </Button>
+              </div>
+
+              <div style={{ fontSize: 11, opacity: 0.76 }}>
+                会话：{webrtcSessionId || '-'} {webrtcStatus ? `（${webrtcStatus}）` : ''}
+              </div>
+
+              <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                {phoneQrDataUrl ? (
+                  <img
+                    src={phoneQrDataUrl}
+                    style={{
+                      width: 180,
+                      height: 180,
+                      borderRadius: 12,
+                      background: '#fff',
+                      padding: 8,
+                      boxSizing: 'border-box',
+                      display: 'block'
+                    }}
+                  />
+                ) : (
+                  <div
+                    style={{
+                      width: 180,
+                      height: 180,
+                      borderRadius: 12,
+                      background: 'rgba(255,255,255,0.06)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: 12,
+                      opacity: 0.8
+                    }}
+                  >
+                    正在生成二维码…
+                  </div>
+                )}
+              </div>
+
+              <div style={{ fontSize: 11, opacity: 0.86, wordBreak: 'break-all', textAlign: 'center' }}>
+                {phoneCastUrl || '正在生成投屏链接…'}
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'center' }}>
+                <Button
+                  size="sm"
+                  kind="text"
+                  ariaLabel="复制链接"
+                  title="复制链接"
+                  onClick={() => {
+                    if (!phoneCastUrl) return
+                    window.lanstart?.clipboardWriteText?.(phoneCastUrl).catch(() => undefined)
+                    navigator.clipboard?.writeText?.(phoneCastUrl).catch(() => undefined)
+                  }}
+                >
+                  复制链接
+                </Button>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>
   )

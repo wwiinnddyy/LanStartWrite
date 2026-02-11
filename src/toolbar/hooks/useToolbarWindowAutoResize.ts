@@ -19,8 +19,8 @@ export function useToolbarWindowAutoResize(options: { root: HTMLElement | null }
     const send = () => {
       rafId = 0
       const rect = root.getBoundingClientRect()
-      const width = clampInt(Math.max(rect.width, root.scrollWidth), 1, 1200)
-      const height = clampInt(Math.max(rect.height, root.scrollHeight), 1, 600)
+      const width = clampInt(rect.width, 1, 1200)
+      const height = clampInt(rect.height, 1, 600)
 
       if (width === lastWidth && height === lastHeight) return
       lastWidth = width

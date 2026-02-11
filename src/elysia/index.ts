@@ -1,6 +1,8 @@
 import { Elysia, t } from 'elysia'
 import { node } from '@elysiajs/node'
 import { createInterface } from 'node:readline'
+import { randomUUID } from 'node:crypto'
+import { networkInterfaces } from 'node:os'
 import { deleteByPrefix, deleteValue, getValue, openLeavelDb, putValue } from '../LeavelDB'
 import {
   ACTIVE_APP_UI_STATE_KEY,
@@ -53,8 +55,59 @@ const host = String(process.env.LANSTART_BACKEND_HOST ?? '127.0.0.1')
 const dbPath = process.env.LANSTART_DB_PATH ?? './leveldb'
 const transport = String(process.env.LANSTART_BACKEND_TRANSPORT ?? 'stdio')
 const csBaseUrl = String(process.env.LANSTART_CS_BASE_URL ?? '')
+const castPort = Number(process.env.LANSTART_CAST_PORT ?? 3132)
+const castHost = String(process.env.LANSTART_CAST_HOST ?? '0.0.0.0')
 
 const db = openLeavelDb(dbPath)
+
+type WebRtcSdp = { type: string; sdp: string }
+type WebRtcSession = {
+  id: string
+  createdAt: number
+  updatedAt: number
+  offer?: WebRtcSdp
+  answer?: WebRtcSdp
+}
+
+const webrtcSessions = new Map<string, WebRtcSession>()
+const WEBRTC_SESSION_TTL_MS = 10 * 60 * 1000
+
+function nowMs(): number {
+  return Date.now()
+}
+
+function cleanupWebrtcSessions(): void {
+  const now = nowMs()
+  for (const [id, s] of webrtcSessions.entries()) {
+    if (now - s.updatedAt > WEBRTC_SESSION_TTL_MS) webrtcSessions.delete(id)
+  }
+}
+
+setInterval(() => cleanupWebrtcSessions(), 60 * 1000).unref?.()
+
+function createWebrtcSession(): WebRtcSession {
+  cleanupWebrtcSessions()
+  const id = randomUUID?.() ?? `${Math.random().toString(16).slice(2)}${Math.random().toString(16).slice(2)}`
+  const ts = nowMs()
+  const session: WebRtcSession = { id, createdAt: ts, updatedAt: ts }
+  webrtcSessions.set(id, session)
+  return session
+}
+
+function getLocalIpv4Addrs(): string[] {
+  const ifaces = networkInterfaces()
+  const out: string[] = []
+  for (const infos of Object.values(ifaces)) {
+    for (const info of infos ?? []) {
+      if (!info) continue
+      if ((info as any).family !== 'IPv4') continue
+      if ((info as any).internal) continue
+      const addr = String((info as any).address ?? '')
+      if (addr) out.push(addr)
+    }
+  }
+  return Array.from(new Set(out)).sort()
+}
 
 let nextEventId = 1
 const events: EventItem[] = []
@@ -1190,6 +1243,60 @@ const api = new Elysia({ adapter: node() })
     const watcher = runtimeProcesses.get('task-watcher')
     return { ok: true, watcher, processes, foreground }
   })
+  .group('/webrtc', (app) =>
+    app
+      .get('/local-addrs', () => ({ ok: true, hostAddrs: getLocalIpv4Addrs(), port: castPort }))
+      .post('/session', () => {
+        const s = createWebrtcSession()
+        return { ok: true, sessionId: s.id, ttlMs: WEBRTC_SESSION_TTL_MS, hostAddrs: getLocalIpv4Addrs(), port: castPort }
+      })
+      .get(
+        '/session/:id/offer',
+        ({ params, set }) => {
+          const s = webrtcSessions.get(params.id)
+          if (!s?.offer) {
+            set.status = 404
+            return { ok: false, error: 'OFFER_NOT_FOUND' }
+          }
+          return { ok: true, offer: s.offer }
+        },
+        { params: t.Object({ id: t.String() }) }
+      )
+      .post(
+        '/session/:id/offer',
+        ({ params, body }) => {
+          const s = webrtcSessions.get(params.id) ?? { id: params.id, createdAt: nowMs(), updatedAt: nowMs() }
+          s.offer = body
+          s.updatedAt = nowMs()
+          webrtcSessions.set(params.id, s)
+          return { ok: true }
+        },
+        { params: t.Object({ id: t.String() }), body: t.Object({ type: t.String(), sdp: t.String() }) }
+      )
+      .get(
+        '/session/:id/answer',
+        ({ params, set }) => {
+          const s = webrtcSessions.get(params.id)
+          if (!s?.answer) {
+            set.status = 404
+            return { ok: false, error: 'ANSWER_NOT_FOUND' }
+          }
+          return { ok: true, answer: s.answer }
+        },
+        { params: t.Object({ id: t.String() }) }
+      )
+      .post(
+        '/session/:id/answer',
+        ({ params, body }) => {
+          const s = webrtcSessions.get(params.id)
+          if (!s?.offer) return { ok: false, error: 'OFFER_NOT_FOUND' }
+          s.answer = body
+          s.updatedAt = nowMs()
+          return { ok: true }
+        },
+        { params: t.Object({ id: t.String() }), body: t.Object({ type: t.String(), sdp: t.String() }) }
+      )
+  )
   .all('/cs/*', async ({ request, set, params }) => {
     if (!csBaseUrl) {
       set.status = 503
@@ -1320,10 +1427,231 @@ const api = new Elysia({ adapter: node() })
     { query: t.Object({ since: t.Optional(t.String()) }) }
   )
 
+const senderHtml = `<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>LanStartWrite 手机投屏</title>
+    <style>
+      :root { color-scheme: dark; }
+      body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; background: #0b0b0f; color: rgba(255,255,255,.92); }
+      .wrap { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+      .card { border: 1px solid rgba(255,255,255,.12); border-radius: 14px; background: rgba(255,255,255,.06); padding: 12px; }
+      .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+      button { height: 38px; border-radius: 12px; border: 1px solid rgba(255,255,255,.18); background: rgba(255,255,255,.08); color: rgba(255,255,255,.92); padding: 0 12px; font-weight: 600; }
+      video { width: 100%; border-radius: 14px; background: #000; }
+      .muted { opacity: .72; font-size: 12px; }
+      .ok { color: #7fffb1; }
+      .bad { color: #ff9aa0; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="card">
+        <div class="row">
+          <div>
+            <div style="font-size: 13px; font-weight: 700;">手机摄像头投屏</div>
+            <div class="muted">请保持手机与电脑在同一局域网</div>
+          </div>
+          <button id="btnStart">开始投屏</button>
+        </div>
+        <div style="height: 10px;"></div>
+        <div class="row">
+          <div class="muted">会话</div>
+          <div id="session" class="mono muted">-</div>
+        </div>
+        <div class="row">
+          <div class="muted">状态</div>
+          <div id="status" class="mono muted">idle</div>
+        </div>
+      </div>
+      <video id="preview" autoplay playsinline muted></video>
+      <div class="muted">若提示不支持摄像头权限，请尝试使用 HTTPS 或在浏览器中允许相机权限。</div>
+    </div>
+    <script>
+      const $ = (id) => document.getElementById(id);
+      const elSession = $('session');
+      const elStatus = $('status');
+      const btnStart = $('btnStart');
+      const video = $('preview');
+      const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+      async function ensureSessionId() {
+        const u = new URL(location.href);
+        let sid = u.searchParams.get('session') || '';
+        if (sid) return sid;
+        const res = await fetch('/webrtc/session', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
+        const json = await res.json().catch(() => ({}));
+        sid = String(json.sessionId || '');
+        if (!sid) throw new Error('no_session_id');
+        u.searchParams.set('session', sid);
+        history.replaceState(null, '', u.toString());
+        return sid;
+      }
+
+      async function waitIceComplete(pc, timeoutMs) {
+        if (pc.iceGatheringState === 'complete') return;
+        await Promise.race([
+          new Promise((resolve) => {
+            const onChange = () => {
+              if (pc.iceGatheringState === 'complete') {
+                pc.removeEventListener('icegatheringstatechange', onChange);
+                resolve();
+              }
+            };
+            pc.addEventListener('icegatheringstatechange', onChange);
+          }),
+          sleep(timeoutMs || 2000)
+        ]);
+      }
+
+      async function start() {
+        btnStart.disabled = true;
+        const sid = await ensureSessionId();
+        elSession.textContent = sid;
+        elStatus.textContent = 'requesting_camera';
+
+        let stream;
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false });
+        } catch {
+          stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        }
+
+        video.srcObject = stream;
+        await video.play().catch(() => undefined);
+
+        const pc = new RTCPeerConnection({ iceServers: [] });
+        for (const track of stream.getTracks()) pc.addTrack(track, stream);
+
+        pc.onconnectionstatechange = () => {
+          const s = pc.connectionState || 'unknown';
+          elStatus.textContent = s;
+          elStatus.className = 'mono ' + (s === 'connected' ? 'ok' : s === 'failed' || s === 'disconnected' ? 'bad' : 'muted');
+        };
+
+        elStatus.textContent = 'creating_offer';
+        const offer = await pc.createOffer({ offerToReceiveAudio: false, offerToReceiveVideo: true });
+        await pc.setLocalDescription(offer);
+        await waitIceComplete(pc, 2500);
+
+        const finalOffer = pc.localDescription;
+        if (!finalOffer) throw new Error('no_local_description');
+        elStatus.textContent = 'sending_offer';
+        await fetch('/webrtc/session/' + encodeURIComponent(sid) + '/offer', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ type: finalOffer.type, sdp: finalOffer.sdp })
+        });
+
+        elStatus.textContent = 'waiting_answer';
+        for (;;) {
+          const res = await fetch('/webrtc/session/' + encodeURIComponent(sid) + '/answer');
+          if (res.ok) {
+            const json = await res.json().catch(() => ({}));
+            const answer = json && json.answer ? json.answer : null;
+            if (answer && answer.type && answer.sdp) {
+              await pc.setRemoteDescription(answer);
+              elStatus.textContent = 'connected';
+              return;
+            }
+          }
+          await sleep(800);
+        }
+      }
+
+      btnStart.addEventListener('click', () => start().catch((e) => {
+        elStatus.textContent = 'error:' + (e && e.message ? e.message : String(e));
+        elStatus.className = 'mono bad';
+        btnStart.disabled = false;
+      }));
+
+      ensureSessionId().then((sid) => { elSession.textContent = sid; }).catch(() => undefined);
+    </script>
+  </body>
+</html>`;
+
+const castApi = new Elysia({ adapter: node() })
+  .onRequest(({ request, set }) => {
+    set.headers['Access-Control-Allow-Origin'] = '*'
+    set.headers['Access-Control-Allow-Methods'] = 'GET,POST,PUT,DELETE,OPTIONS'
+    set.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+    if (request.method === 'OPTIONS') {
+      set.status = 204
+      return ''
+    }
+  })
+  .group('/webrtc', (app) =>
+    app
+      .get('/', ({ set }) => {
+        set.headers['content-type'] = 'text/html; charset=utf-8'
+        return senderHtml
+      })
+      .get('/local-addrs', () => ({ ok: true, hostAddrs: getLocalIpv4Addrs(), port: castPort }))
+      .post('/session', () => {
+        const s = createWebrtcSession()
+        return { ok: true, sessionId: s.id, ttlMs: WEBRTC_SESSION_TTL_MS }
+      })
+      .get(
+        '/session/:id/offer',
+        ({ params, set }) => {
+          const s = webrtcSessions.get(params.id)
+          if (!s?.offer) {
+            set.status = 404
+            return { ok: false, error: 'OFFER_NOT_FOUND' }
+          }
+          return { ok: true, offer: s.offer }
+        },
+        { params: t.Object({ id: t.String() }) }
+      )
+      .post(
+        '/session/:id/offer',
+        ({ params, body }) => {
+          const s = webrtcSessions.get(params.id) ?? { id: params.id, createdAt: nowMs(), updatedAt: nowMs() }
+          s.offer = body
+          s.updatedAt = nowMs()
+          webrtcSessions.set(params.id, s)
+          return { ok: true }
+        },
+        { params: t.Object({ id: t.String() }), body: t.Object({ type: t.String(), sdp: t.String() }) }
+      )
+      .get(
+        '/session/:id/answer',
+        ({ params, set }) => {
+          const s = webrtcSessions.get(params.id)
+          if (!s?.answer) {
+            set.status = 404
+            return { ok: false, error: 'ANSWER_NOT_FOUND' }
+          }
+          return { ok: true, answer: s.answer }
+        },
+        { params: t.Object({ id: t.String() }) }
+      )
+      .post(
+        '/session/:id/answer',
+        ({ params, body }) => {
+          const s = webrtcSessions.get(params.id)
+          if (!s?.offer) return { ok: false, error: 'OFFER_NOT_FOUND' }
+          s.answer = body
+          s.updatedAt = nowMs()
+          return { ok: true }
+        },
+        { params: t.Object({ id: t.String() }), body: t.Object({ type: t.String(), sdp: t.String() }) }
+      )
+  )
+
 async function bootstrap(): Promise<void> {
   try {
     await cleanupLegacyPersistedMonitoringData()
   } catch {}
+
+  try {
+    await castApi.listen({ hostname: castHost, port: castPort })
+  } catch (e) {
+    emitEvent('CAST_HTTP_LISTEN_FAILED', { host: castHost, port: castPort, error: String(e) })
+  }
 
   if (transport === 'http') {
     try {
@@ -1333,7 +1661,7 @@ async function bootstrap(): Promise<void> {
     }
   }
 
-  emitEvent('BACKEND_STARTED', { transport, host, port, dbPath, csBaseUrl: csBaseUrl || undefined })
+  emitEvent('BACKEND_STARTED', { transport, host, port, castHost, castPort, dbPath, csBaseUrl: csBaseUrl || undefined })
 }
 
 bootstrap().catch((e) => {

@@ -40,6 +40,7 @@ function getFallbackLanstart() {
       return null
     },
     apiRequest: async () => ({ status: 503, body: { ok: false, error: 'lanstart_unavailable' } }),
+    clipboardWriteText: async () => null,
     setZoomLevel: () => undefined,
     getZoomLevel: () => 0
   }

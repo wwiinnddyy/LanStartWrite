@@ -332,6 +332,11 @@ function FloatingToolbarInner() {
   const lastProcessedEventIdRef = useRef(0)
   const watcherWasShownRef = useRef(false)
   const lastWatcherClosedAtRef = useRef(0)
+  const uiWidthPx = useMemo(() => {
+    const raw = Number(state.uiWidth)
+    if (!Number.isFinite(raw)) return 360
+    return Math.max(260, Math.min(620, Math.round(raw)))
+  }, [state.uiWidth])
 
   // 应用外观设置（强调色等）
   useAppearanceSettings()

@@ -43,6 +43,7 @@ body {
   opacity: var(--ls-window-wallpaper-opacity, 0.32);
   filter: saturate(1.12) contrast(1.04);
   will-change: transform, opacity;
+  pointer-events: none;
 }
 
 .subwindowRoot::after {

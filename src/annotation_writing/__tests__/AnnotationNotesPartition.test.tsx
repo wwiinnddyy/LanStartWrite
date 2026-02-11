@@ -81,6 +81,7 @@ describe('Annotation notes partition', () => {
       putUiStateKey: async () => null,
       deleteUiStateKey: async () => null,
       apiRequest: async () => ({ status: 200, body: { ok: true } }),
+      clipboardWriteText: async () => null,
       setZoomLevel: () => {},
       getZoomLevel: () => 1
     }
@@ -215,6 +216,7 @@ describe('Annotation notes partition', () => {
       putUiStateKey: async () => null,
       deleteUiStateKey: async () => null,
       apiRequest: async () => ({ status: 200, body: { ok: true } }),
+      clipboardWriteText: async () => null,
       setZoomLevel: () => {},
       getZoomLevel: () => 1
     }

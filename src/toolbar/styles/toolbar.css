@@ -52,8 +52,9 @@ body {
   display: flex;
   justify-content: center;
   align-items: center;
-  --toolbar-gap: 10px;
-  --toolbar-padding: 10px;
+  --toolbar-gap: 8px;
+  --toolbar-padding: 8px;
+  --toolbar-ui-width: 360px;
   box-sizing: border-box;
   padding: 0;
   margin: 0;
@@ -108,6 +109,9 @@ body {
   display: flex;
   align-items: center;
   gap: var(--toolbar-gap);
+  flex-wrap: nowrap;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .toolbarBarRow {
@@ -115,6 +119,13 @@ body {
   align-items: center;
   justify-content: flex-start;
   gap: var(--toolbar-gap);
+  max-width: 100%;
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+.toolbarBarRow .lsButtonGroup {
+  max-width: 100%;
 }
 
 .toolbarDragHandleButton {
@@ -203,12 +214,15 @@ body {
   align-items: center;
   overflow: hidden;
   white-space: nowrap;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .toolbarCollapsibleContent {
   display: flex;
   align-items: center;
   gap: var(--toolbar-gap);
+  min-width: 0;
 }
 
 .toolbarHeader {

@@ -67,6 +67,7 @@ contextBridge.exposeInMainWorld('lanstart', {
     ipcRenderer.invoke('lanstart:putUiStateKey', { windowId, key, value }),
   deleteUiStateKey: (windowId: string, key: string) => ipcRenderer.invoke('lanstart:deleteUiStateKey', { windowId, key }),
   apiRequest: (input: { method: string; path: string; body?: unknown }) => ipcRenderer.invoke('lanstart:apiRequest', input),
+  clipboardWriteText: (text: string) => ipcRenderer.invoke('lanstart:clipboardWriteText', { text }),
   setZoomLevel: (level: number) => require('electron').webFrame.setZoomLevel(level),
   getZoomLevel: () => require('electron').webFrame.getZoomLevel()
 })

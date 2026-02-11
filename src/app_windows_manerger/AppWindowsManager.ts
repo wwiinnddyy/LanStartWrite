@@ -1,4 +1,4 @@
-import { BrowserWindow, app, screen, type IpcMain } from 'electron'
+import { BrowserWindow, app, clipboard, screen, type IpcMain } from 'electron'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
  
@@ -128,6 +128,12 @@ export class AppWindowsManager {
         body?: unknown
       }
       return { status: Number(res?.status ?? 200), body: (res as any)?.body }
+    })
+
+    ipcMain.handle('lanstart:clipboardWriteText', async (_event, input: { text?: unknown }) => {
+      const text = coerceString(input?.text)
+      clipboard.writeText(text ?? '')
+      return null
     })
 
   }

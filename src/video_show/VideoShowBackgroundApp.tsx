@@ -11,7 +11,10 @@ import {
   VIDEO_SHOW_PAGES_KV_KEY,
   VIDEO_SHOW_QUALITY_UI_STATE_KEY,
   VIDEO_SHOW_QUALITY_PRESETS_UI_STATE_KEY,
+  VIDEO_SHOW_SOURCE_UI_STATE_KEY,
   VIDEO_SHOW_VIEW_UI_STATE_KEY,
+  VIDEO_SHOW_WEBRTC_SESSION_ID_UI_STATE_KEY,
+  VIDEO_SHOW_WEBRTC_STATUS_UI_STATE_KEY,
   getKv,
   putKv,
   useUiStateBus
@@ -172,6 +175,25 @@ export function VideoShowBackgroundApp() {
     return { x, y, scale: Math.max(0.0001, scale), rot }
   }, [viewRaw])
 
+  useEffect(() => {
+    if (!view) return
+    const w = Math.max(1, Math.floor(window.innerWidth || 1))
+    const h = Math.max(1, Math.floor(window.innerHeight || 1))
+    const maxSide = Math.max(w, h)
+    const maxTranslate = maxSide * 8
+    const minScale = 0.05
+    const maxScale = 8
+    const maxRot = Math.PI * 4
+    const bad =
+      Math.abs(view.x) > maxTranslate ||
+      Math.abs(view.y) > maxTranslate ||
+      view.scale < minScale ||
+      view.scale > maxScale ||
+      Math.abs(view.rot) > maxRot
+    if (!bad) return
+    setUiStateKeyRef.current(VIDEO_SHOW_VIEW_UI_STATE_KEY, { x: 0, y: 0, scale: 1, rot: 0 }).catch(() => undefined)
+  }, [viewRaw])
+
   const viewTransform = useMemo(() => {
     const x = view?.x ?? 0
     const y = view?.y ?? 0
@@ -186,6 +208,12 @@ export function VideoShowBackgroundApp() {
   const qualityRaw = bus.state[VIDEO_SHOW_QUALITY_UI_STATE_KEY]
   const deviceId = typeof deviceIdRaw === 'string' ? deviceIdRaw : ''
   const qualityIdx = useMemo(() => parseVideoShowQualityIndex(qualityRaw), [qualityRaw])
+
+  const sourceRaw = bus.state[VIDEO_SHOW_SOURCE_UI_STATE_KEY]
+  const videoSource = useMemo(() => (sourceRaw === 'phone-webrtc' ? ('phone-webrtc' as const) : ('camera' as const)), [sourceRaw])
+
+  const webrtcSessionIdRaw = bus.state[VIDEO_SHOW_WEBRTC_SESSION_ID_UI_STATE_KEY]
+  const webrtcSessionId = useMemo(() => (typeof webrtcSessionIdRaw === 'string' ? webrtcSessionIdRaw : ''), [webrtcSessionIdRaw])
 
   const mergeLayersRaw = bus.state[VIDEO_SHOW_MERGE_LAYERS_UI_STATE_KEY]
   const [mergeLayers, setMergeLayers] = useState(true)
@@ -244,10 +272,10 @@ export function VideoShowBackgroundApp() {
   const lastCaptureRevRef = useRef(0)
 
   const overlayText = useMemo(() => {
-    if (status.kind === 'requesting') return '正在请求摄像头权限…'
     if (status.kind === 'error') return status.message
+    if (status.kind === 'requesting') return videoSource === 'camera' ? '正在启动摄像头…' : '正在连接手机…'
     return ''
-  }, [status])
+  }, [status, videoSource])
 
   useEffect(() => {
     if (rotatedVideoShowPages) return
@@ -276,6 +304,7 @@ export function VideoShowBackgroundApp() {
   useEffect(() => {
     let stopped = false
     const run = async () => {
+      if (videoSource !== 'camera') return
       if (!navigator.mediaDevices?.getUserMedia) {
         setStatus({ kind: 'error', message: '当前环境不支持摄像头' })
         return
@@ -290,7 +319,20 @@ export function VideoShowBackgroundApp() {
         baseVideo.width = { ideal: idealW }
         baseVideo.height = { ideal: idealH }
 
-        const stream = await navigator.mediaDevices.getUserMedia({ video: Object.keys(baseVideo).length ? baseVideo : true, audio: false })
+        const p = navigator.mediaDevices.getUserMedia({ video: Object.keys(baseVideo).length ? baseVideo : true, audio: false })
+        p.then((stream) => {
+          if (!stopped) return
+          for (const t of stream.getTracks()) {
+            try {
+              t.stop()
+            } catch {}
+          }
+        }).catch(() => undefined)
+
+        const stream = await Promise.race([
+          p,
+          new Promise<MediaStream>((_resolve, reject) => window.setTimeout(() => reject(new Error('摄像头启动超时')), 9000))
+        ])
         if (stopped) {
           for (const t of stream.getTracks()) t.stop()
           return
@@ -306,15 +348,134 @@ export function VideoShowBackgroundApp() {
     return () => {
       stopped = true
     }
-  }, [deviceId, desiredHeight, desiredWidth, qualityIdx])
+  }, [deviceId, desiredHeight, desiredWidth, qualityIdx, videoSource])
+
+  useEffect(() => {
+    if (videoSource !== 'phone-webrtc') return
+    let cancelled = false
+    let pc: RTCPeerConnection | null = null
+    let stream: MediaStream | null = null
+
+    const sleep = (ms: number) => new Promise((r) => window.setTimeout(r, ms))
+
+    const setRtcStatus = (text: string) => {
+      setUiStateKeyRef.current(VIDEO_SHOW_WEBRTC_STATUS_UI_STATE_KEY, text).catch(() => undefined)
+    }
+
+    const waitIceComplete = async (peer: RTCPeerConnection, timeoutMs: number) => {
+      if (peer.iceGatheringState === 'complete') return
+      await Promise.race([
+        new Promise<void>((resolve) => {
+          const onChange = () => {
+            if (peer.iceGatheringState === 'complete') {
+              peer.removeEventListener('icegatheringstatechange', onChange)
+              resolve()
+            }
+          }
+          peer.addEventListener('icegatheringstatechange', onChange)
+        }),
+        sleep(timeoutMs)
+      ])
+    }
+
+    const run = async () => {
+      setStatus({ kind: 'requesting' })
+      setRtcStatus('初始化')
+
+      let sessionId = webrtcSessionId
+      if (!sessionId) {
+        setRtcStatus('创建会话')
+        const res = await window.lanstart?.apiRequest({ method: 'POST', path: '/webrtc/session', body: {} })
+        const body = (res as any)?.body as any
+        sessionId = typeof body?.sessionId === 'string' ? body.sessionId : ''
+        if (!sessionId) {
+          setRtcStatus('创建会话失败')
+          setStatus({ kind: 'error', message: '创建投屏会话失败' })
+          return
+        }
+        await setUiStateKeyRef.current(VIDEO_SHOW_WEBRTC_SESSION_ID_UI_STATE_KEY, sessionId).catch(() => undefined)
+      }
+
+      if (cancelled) return
+      setRtcStatus('等待手机连接')
+
+      let offer: RTCSessionDescriptionInit | null = null
+      for (;;) {
+        if (cancelled) return
+        const res = await window.lanstart?.apiRequest({ method: 'GET', path: `/webrtc/session/${encodeURIComponent(sessionId)}/offer` })
+        const statusCode = Number((res as any)?.status ?? 0)
+        const body = (res as any)?.body as any
+        const o = body?.offer as any
+        if (statusCode === 200 && o && typeof o.type === 'string' && typeof o.sdp === 'string') {
+          offer = { type: o.type, sdp: o.sdp }
+          break
+        }
+        await sleep(700)
+      }
+
+      if (cancelled || !offer) return
+
+      stream = new MediaStream()
+      pc = new RTCPeerConnection({ iceServers: [] })
+      pc.ontrack = (ev) => {
+        const track = ev.track
+        if (!track) return
+        try {
+          const existed = stream?.getTracks().some((t) => t.id === track.id)
+          if (!existed) stream?.addTrack(track)
+        } catch {}
+        if (!cancelled && stream) setStatus({ kind: 'ready', stream })
+      }
+      pc.onconnectionstatechange = () => setRtcStatus(pc?.connectionState ?? '')
+
+      setRtcStatus('建立连接')
+      await pc.setRemoteDescription(offer)
+      const answer = await pc.createAnswer()
+      await pc.setLocalDescription(answer)
+      await waitIceComplete(pc, 2500)
+      const finalAnswer = pc.localDescription
+      if (!finalAnswer) throw new Error('no_local_description')
+      await window.lanstart?.apiRequest({
+        method: 'POST',
+        path: `/webrtc/session/${encodeURIComponent(sessionId)}/answer`,
+        body: { type: finalAnswer.type, sdp: finalAnswer.sdp }
+      })
+      setRtcStatus('等待连通')
+    }
+
+    run().catch((e) => {
+      if (cancelled) return
+      const msg = e instanceof Error ? e.message : '手机投屏连接失败'
+      setRtcStatus(`错误：${msg}`)
+      setStatus({ kind: 'error', message: msg })
+    })
+
+    return () => {
+      cancelled = true
+      setRtcStatus('')
+      try {
+        pc?.close()
+      } catch {}
+      for (const t of stream?.getTracks?.() ?? []) {
+        try {
+          t.stop()
+        } catch {}
+      }
+    }
+  }, [videoSource, webrtcSessionId])
 
   useEffect(() => {
     if (status.kind !== 'ready') return
     const video = videoRef.current
     if (!video) return
     video.srcObject = status.stream
-    void video.play().catch(() => undefined)
+    const tryPlay = () => void video.play().catch(() => undefined)
+    video.addEventListener('loadedmetadata', tryPlay)
+    video.addEventListener('canplay', tryPlay)
+    tryPlay()
     return () => {
+      video.removeEventListener('loadedmetadata', tryPlay)
+      video.removeEventListener('canplay', tryPlay)
       try {
         video.pause()
       } catch {}
@@ -331,6 +492,7 @@ export function VideoShowBackgroundApp() {
 
   useEffect(() => {
     if (status.kind !== 'ready') return
+    if (videoSource !== 'camera') return
     const track = status.stream.getVideoTracks()[0]
     if (!track) return
     const getMaxHeight = () => {
@@ -360,7 +522,7 @@ export function VideoShowBackgroundApp() {
     try {
       ;(track as any).applyConstraints?.({ width: { ideal: wantW }, height: { ideal: wantH } })
     } catch {}
-  }, [status.kind, qualityIdx, deviceId])
+  }, [status.kind, qualityIdx, deviceId, videoSource])
 
   useEffect(() => {
     let cancelled = false
@@ -522,11 +684,11 @@ export function VideoShowBackgroundApp() {
           muted
           playsInline
           style={{
-            width: mergeLayers ? 1 : '100%',
-            height: mergeLayers ? 1 : '100%',
+            width: mergeLayers ? 2 : '100%',
+            height: mergeLayers ? 2 : '100%',
             objectFit: 'contain',
             position: mergeLayers ? 'absolute' : 'static',
-            left: mergeLayers ? -10000 : undefined,
+            left: mergeLayers ? 0 : undefined,
             top: mergeLayers ? 0 : undefined,
             opacity: mergeLayers ? 0 : 1,
             pointerEvents: 'none',
@@ -553,7 +715,8 @@ export function VideoShowBackgroundApp() {
             justifyContent: 'center',
             color: 'rgba(255,255,255,0.85)',
             fontSize: 14,
-            userSelect: 'none'
+            userSelect: 'none',
+            pointerEvents: 'none'
           }}
         >
           {overlayText}

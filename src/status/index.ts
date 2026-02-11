@@ -41,7 +41,10 @@ import {
   VIDEO_SHOW_PAGES_KV_KEY,
   VIDEO_SHOW_QUALITY_UI_STATE_KEY,
   VIDEO_SHOW_QUALITY_PRESETS_UI_STATE_KEY,
+  VIDEO_SHOW_SOURCE_UI_STATE_KEY,
   VIDEO_SHOW_VIEW_UI_STATE_KEY,
+  VIDEO_SHOW_WEBRTC_SESSION_ID_UI_STATE_KEY,
+  VIDEO_SHOW_WEBRTC_STATUS_UI_STATE_KEY,
   WRITING_FRAMEWORK_KV_KEY,
   WRITING_FRAMEWORK_UI_STATE_KEY,
   isAppearance,
@@ -65,6 +68,7 @@ import {
   type LeaferSettings,
   type PenType,
   type PenSettings,
+  type VideoShowSource,
   type VideoShowViewTransform,
   type WritingFramework
 } from './keys'
@@ -111,7 +115,10 @@ export {
   VIDEO_SHOW_PAGES_KV_KEY,
   VIDEO_SHOW_QUALITY_UI_STATE_KEY,
   VIDEO_SHOW_QUALITY_PRESETS_UI_STATE_KEY,
+  VIDEO_SHOW_SOURCE_UI_STATE_KEY,
   VIDEO_SHOW_VIEW_UI_STATE_KEY,
+  VIDEO_SHOW_WEBRTC_SESSION_ID_UI_STATE_KEY,
+  VIDEO_SHOW_WEBRTC_STATUS_UI_STATE_KEY,
   WRITING_FRAMEWORK_KV_KEY,
   WRITING_FRAMEWORK_UI_STATE_KEY,
   isAppearance,
@@ -135,6 +142,7 @@ export {
   type LeaferSettings,
   type PenType,
   type PenSettings,
+  type VideoShowSource,
   type VideoShowViewTransform,
   type WritingFramework
 } from './keys'
@@ -179,6 +187,7 @@ function getFallbackLanstart() {
       return null
     },
     apiRequest: async () => ({ status: 503, body: { ok: false, error: 'lanstart_unavailable' } }),
+    clipboardWriteText: async () => null,
     setZoomLevel: () => undefined,
     getZoomLevel: () => 0
   }
