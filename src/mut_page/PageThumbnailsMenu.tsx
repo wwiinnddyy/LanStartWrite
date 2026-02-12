@@ -382,6 +382,7 @@ export function PageThumbnailsMenuWindow() {
   const [videoDevices, setVideoDevices] = useState<{ deviceId: string; label: string }[]>([])
   const [castInfo, setCastInfo] = useState<{ sessionId: string; urls: string[]; port: number } | null>(null)
   const [phoneQrDataUrl, setPhoneQrDataUrl] = useState<string>('')
+  const [phoneConnectCollapsed, setPhoneConnectCollapsed] = useState(false)
   const webrtcInitOnceRef = useRef(false)
 
   const videoSource = useMemo(() => {
@@ -418,6 +419,7 @@ export function PageThumbnailsMenuWindow() {
       webrtcInitOnceRef.current = false
       setCastInfo(null)
       setPhoneQrDataUrl('')
+      setPhoneConnectCollapsed(false)
       return
     }
     if (webrtcInitOnceRef.current) return
@@ -765,79 +767,198 @@ export function PageThumbnailsMenuWindow() {
                 boxSizing: 'border-box'
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-                <div style={{ fontSize: 11, opacity: 0.92, fontWeight: 650 }}>扫码添加手机摄像头</div>
-                <Button
-                  size="sm"
-                  kind="text"
-                  ariaLabel="重新生成"
-                  title="重新生成"
-                  onClick={() => {
-                    bus.deleteKey(VIDEO_SHOW_WEBRTC_SESSION_ID_UI_STATE_KEY).catch(() => undefined)
-                    setCastInfo(null)
-                    ensureWebrtcSession().catch(() => undefined)
+                <div
+                  style={{
+                    position: 'relative',
+                    width: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    height: 34
                   }}
                 >
-                  重新生成
-                </Button>
-              </div>
+                  <div style={{ fontSize: 16, fontWeight: 700, opacity: 0.95 }}>扫码连接手机摄像头</div>
+                </div>
 
-              <div style={{ fontSize: 11, opacity: 0.76 }}>
-                会话：{webrtcSessionId || '-'} {webrtcStatus ? `（${webrtcStatus}）` : ''}
-              </div>
-
-              <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                {phoneQrDataUrl ? (
-                  <img
-                    src={phoneQrDataUrl}
-                    style={{
-                      width: 180,
-                      height: 180,
-                      borderRadius: 12,
-                      background: '#fff',
-                      padding: 8,
-                      boxSizing: 'border-box',
-                      display: 'block'
-                    }}
-                  />
-                ) : (
-                  <div
-                    style={{
-                      width: 180,
-                      height: 180,
-                      borderRadius: 12,
-                      background: 'rgba(255,255,255,0.06)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: 12,
-                      opacity: 0.8
-                    }}
-                  >
-                    正在生成二维码…
+                {phoneConnectCollapsed ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 4 }}>
+                    <div style={{ fontSize: 11, opacity: 0.76, wordBreak: 'break-all' }}>
+                      会话：{webrtcSessionId || '-'} {webrtcStatus ? `（${webrtcStatus}）` : ''}
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'center' }}>
+                      <Button
+                        size="sm"
+                        kind="text"
+                        ariaLabel="复制链接"
+                        title="复制链接"
+                        appRegion="no-drag"
+                        onClick={() => {
+                          if (!phoneCastUrl) return
+                          window.lanstart?.clipboardWriteText?.(phoneCastUrl).catch(() => undefined)
+                          navigator.clipboard?.writeText?.(phoneCastUrl).catch(() => undefined)
+                        }}
+                      >
+                        复制链接
+                      </Button>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'center' }}>
+                      <Button
+                        size="sm"
+                        kind="custom"
+                        ariaLabel="展开连接信息"
+                        title="展开"
+                        appRegion="no-drag"
+                        onClick={() => setPhoneConnectCollapsed(false)}
+                        style={{
+                          width: 34,
+                          height: 34,
+                          borderRadius: 14,
+                          padding: 0,
+                          background: 'rgba(255,255,255,0.08)',
+                          border: '1px solid rgba(255,255,255,0.12)',
+                          color: 'rgba(255,255,255,0.86)',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}
+                      >
+                        <span style={{ fontSize: 14, lineHeight: 1, fontWeight: 900 }}>▾</span>
+                      </Button>
+                    </div>
                   </div>
+                ) : (
+                  <>
+                    <div style={{ position: 'relative', width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        {phoneQrDataUrl ? (
+                          <img
+                            src={phoneQrDataUrl}
+                            style={{
+                              width: 180,
+                              height: 180,
+                              borderRadius: 12,
+                              background: '#fff',
+                              padding: 8,
+                              boxSizing: 'border-box',
+                              display: 'block'
+                            }}
+                          />
+                        ) : (
+                          <div
+                            style={{
+                              width: 180,
+                              height: 180,
+                              borderRadius: 12,
+                              background: 'rgba(255,255,255,0.06)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontSize: 12,
+                              opacity: 0.8
+                            }}
+                          >
+                            正在生成二维码…
+                          </div>
+                        )}
+                      </div>
+                      
+                      <div style={{ position: 'absolute', right: 0, top: 0 }}>
+                        <Button
+                          size="sm"
+                          kind="custom"
+                          ariaLabel="折叠连接信息"
+                          title="折叠"
+                          appRegion="no-drag"
+                          onClick={() => setPhoneConnectCollapsed(true)}
+                          style={{
+                            width: 34,
+                            height: 34,
+                            borderRadius: 14,
+                            padding: 0,
+                            background: 'rgba(255,255,255,0.08)',
+                            border: '1px solid rgba(255,255,255,0.12)',
+                            color: 'rgba(255,255,255,0.86)',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                          }}
+                        >
+                          <span style={{ fontSize: 14, lineHeight: 1, fontWeight: 900 }}>▴</span>
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div style={{ fontSize: 11, opacity: 0.76, textAlign: 'center', wordBreak: 'break-all' }}>
+                      会话：{webrtcSessionId || '-'} {webrtcStatus ? `（${webrtcStatus}）` : ''}
+                    </div>
+
+                    <div style={{ fontSize: 11, opacity: 0.86, wordBreak: 'break-all', textAlign: 'center' }}>
+                      {phoneCastUrl || '正在生成投屏链接…'}
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 4 }}>
+                      <Button
+                        size="sm"
+                        kind="custom"
+                        ariaLabel="复制链接"
+                        title="复制链接"
+                        appRegion="no-drag"
+                        onClick={() => {
+                          if (!phoneCastUrl) return
+                          window.lanstart?.clipboardWriteText?.(phoneCastUrl).catch(() => undefined)
+                          navigator.clipboard?.writeText?.(phoneCastUrl).catch(() => undefined)
+                        }}
+                        style={{
+                          width: '100%',
+                          height: 42,
+                          borderRadius: 14,
+                          padding: '0 12px',
+                          background: 'var(--ls-accent-gradient, var(--ls-accent-primary, #3b82f6))',
+                          border: '1px solid rgba(255,255,255,0.2)',
+                          boxShadow: '0 4px 12px rgba(0,0,0,0.15), 0 0 0 2px var(--ls-accent-light, rgba(59, 130, 246, 0.15))',
+                          color: '#fff',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: 14,
+                          fontWeight: 600
+                        }}
+                      >
+                        复制链接
+                      </Button>
+
+                      <Button
+                        size="sm"
+                        kind="custom"
+                        ariaLabel="重新生成"
+                        title="重新生成"
+                        appRegion="no-drag"
+                        onClick={() => {
+                          bus.deleteKey(VIDEO_SHOW_WEBRTC_SESSION_ID_UI_STATE_KEY).catch(() => undefined)
+                          setCastInfo(null)
+                          ensureWebrtcSession().catch(() => undefined)
+                        }}
+                        style={{
+                          width: '100%',
+                          height: 42,
+                          borderRadius: 14,
+                          padding: '0 12px',
+                          background: 'rgba(255,255,255,0.08)',
+                          border: '1px solid rgba(255,255,255,0.12)',
+                          boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+                          color: 'var(--ls-surface-fg, rgba(255,255,255,0.9))',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: 14,
+                          fontWeight: 500
+                        }}
+                      >
+                        重新生成
+                      </Button>
+                    </div>
+                  </>
                 )}
-              </div>
-
-              <div style={{ fontSize: 11, opacity: 0.86, wordBreak: 'break-all', textAlign: 'center' }}>
-                {phoneCastUrl || '正在生成投屏链接…'}
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'center' }}>
-                <Button
-                  size="sm"
-                  kind="text"
-                  ariaLabel="复制链接"
-                  title="复制链接"
-                  onClick={() => {
-                    if (!phoneCastUrl) return
-                    window.lanstart?.clipboardWriteText?.(phoneCastUrl).catch(() => undefined)
-                    navigator.clipboard?.writeText?.(phoneCastUrl).catch(() => undefined)
-                  }}
-                >
-                  复制链接
-                </Button>
-              </div>
             </div>
           </div>
         ) : null}

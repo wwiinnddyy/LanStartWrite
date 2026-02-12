@@ -27,6 +27,7 @@ const TOOLBAR_HANDLE_WIDTH = 30
 const APPEARANCE_KV_KEY = 'app-appearance'
 const NATIVE_MICA_KV_KEY = 'native-mica-enabled'
 const LEGACY_WINDOW_IMPL_KV_KEY = 'legacy-window-implementation'
+const VIDEO_SHOW_MERGE_LAYERS_KV_KEY = 'video-show-merge-layers'
 
 type Appearance = 'light' | 'dark'
 
@@ -2013,19 +2014,40 @@ function handleBackendControlMessage(message: any): void {
         } catch {}
         whiteboardBackgroundWindow.show()
       }
-      if (!annotationOverlayWindow || annotationOverlayWindow.isDestroyed()) {
-        const bg = whiteboardBackgroundWindow
-        if (bg && !bg.isDestroyed()) annotationOverlayWindow = createAnnotationOverlayWindow(bg)
+      const ensureOverlayVisible = () => {
+        if (!annotationOverlayWindow || annotationOverlayWindow.isDestroyed()) {
+          const bg = whiteboardBackgroundWindow
+          if (bg && !bg.isDestroyed()) annotationOverlayWindow = createAnnotationOverlayWindow(bg)
+        } else {
+          annotationOverlayWindow.show()
+        }
+        try {
+          const overlay = annotationOverlayWindow
+          if (overlay && !overlay.isDestroyed()) overlay.setAlwaysOnTop(true, 'floating')
+        } catch {}
+      }
+      const ensureOverlayHidden = () => {
+        const overlay = annotationOverlayWindow
+        if (overlay && !overlay.isDestroyed()) {
+          try {
+            if (overlay.isVisible()) overlay.hide()
+          } catch {}
+        }
+      }
+
+      if (mode === 'video-show') {
+        backendGetKv(VIDEO_SHOW_MERGE_LAYERS_KV_KEY)
+          .then((v) => {
+            if (v === true) ensureOverlayHidden()
+            else ensureOverlayVisible()
+          })
+          .catch(() => ensureOverlayVisible())
       } else {
-        annotationOverlayWindow.show()
+        ensureOverlayVisible()
       }
       try {
         const bg = whiteboardBackgroundWindow
         if (bg && !bg.isDestroyed()) bg.setAlwaysOnTop(true, 'normal')
-      } catch {}
-      try {
-        const overlay = annotationOverlayWindow
-        if (overlay && !overlay.isDestroyed()) overlay.setAlwaysOnTop(true, 'floating')
       } catch {}
       applyToolbarOnTopLevel('screen-saver')
 

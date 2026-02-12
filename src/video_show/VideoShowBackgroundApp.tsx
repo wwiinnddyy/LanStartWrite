@@ -19,6 +19,7 @@ import {
   putKv,
   useUiStateBus
 } from '../status'
+import { AnnotationOverlayApp } from '../annotation_writing/leaferjs'
 
 type VideoStatus =
   | { kind: 'idle' }
@@ -191,6 +192,38 @@ export function VideoShowBackgroundApp() {
       view.scale > maxScale ||
       Math.abs(view.rot) > maxRot
     if (!bad) return
+    setUiStateKeyRef.current(VIDEO_SHOW_VIEW_UI_STATE_KEY, { x: 0, y: 0, scale: 1, rot: 0 }).catch(() => undefined)
+  }, [viewRaw])
+
+  useEffect(() => {
+    if (!view) return
+    const w = Math.max(1, Math.floor(window.innerWidth || 1))
+    const h = Math.max(1, Math.floor(window.innerHeight || 1))
+
+    const scale = view.scale
+    const rot = view.rot
+    const a = Math.cos(rot) * scale
+    const b = Math.sin(rot) * scale
+    const c = -Math.sin(rot) * scale
+    const d = Math.cos(rot) * scale
+    const e = view.x
+    const f = view.y
+
+    const map = (x: number, y: number) => ({ x: a * x + c * y + e, y: b * x + d * y + f })
+    const p0 = map(0, 0)
+    const p1 = map(w, 0)
+    const p2 = map(0, h)
+    const p3 = map(w, h)
+
+    const minX = Math.min(p0.x, p1.x, p2.x, p3.x)
+    const maxX = Math.max(p0.x, p1.x, p2.x, p3.x)
+    const minY = Math.min(p0.y, p1.y, p2.y, p3.y)
+    const maxY = Math.max(p0.y, p1.y, p2.y, p3.y)
+
+    const margin = Math.max(32, Math.floor(Math.min(w, h) * 0.06))
+    const offscreen = maxX < -margin || minX > w + margin || maxY < -margin || minY > h + margin
+    if (!offscreen) return
+
     setUiStateKeyRef.current(VIDEO_SHOW_VIEW_UI_STATE_KEY, { x: 0, y: 0, scale: 1, rot: 0 }).catch(() => undefined)
   }, [viewRaw])
 
@@ -705,6 +738,11 @@ export function VideoShowBackgroundApp() {
         />
         {frozenUrl ? <img src={frozenUrl} style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} /> : null}
       </div>
+      {mergeLayers ? (
+        <div style={{ position: 'absolute', inset: 0 }}>
+          <AnnotationOverlayApp />
+        </div>
+      ) : null}
       {overlayText ? (
         <div
           style={{

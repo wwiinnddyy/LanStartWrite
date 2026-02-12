@@ -321,7 +321,7 @@ function FloatingToolbarInner() {
   const { state, setState } = useToolbar()
   const rootRef = useRef<HTMLDivElement | null>(null)
   const contentRef = useRef<HTMLDivElement | null>(null)
-  const uiButtonSize: 'sm' = 'sm'
+  const uiButtonSize = state.uiButtonSize || 'sm'
   const reduceMotion = useReducedMotion()
   const tool: 'mouse' | 'pen' | 'eraser' = state.tool === 'pen' ? 'pen' : state.tool === 'eraser' ? 'eraser' : 'mouse'
   const { appMode, setAppMode } = useAppMode()
@@ -332,11 +332,6 @@ function FloatingToolbarInner() {
   const lastProcessedEventIdRef = useRef(0)
   const watcherWasShownRef = useRef(false)
   const lastWatcherClosedAtRef = useRef(0)
-  const uiWidthPx = useMemo(() => {
-    const raw = Number(state.uiWidth)
-    if (!Number.isFinite(raw)) return 360
-    return Math.max(260, Math.min(620, Math.round(raw)))
-  }, [state.uiWidth])
 
   // 应用外观设置（强调色等）
   useAppearanceSettings()
