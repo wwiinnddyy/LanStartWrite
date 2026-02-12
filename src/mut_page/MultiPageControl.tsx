@@ -26,6 +26,17 @@ function AddIcon() {
   )
 }
 
+function CaptureIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20">
+      <path
+        fill="currentColor"
+        d="M10 4.25a5.75 5.75 0 1 0 0 11.5a5.75 5.75 0 0 0 0-11.5m0 1.5a4.25 4.25 0 1 1 0 8.5a4.25 4.25 0 0 1 0-8.5"
+      />
+    </svg>
+  )
+}
+
 export function MultiPageControlWindow() {
   useZoomOnWheel()
   const bus = useUiStateBus(UI_STATE_APP_WINDOW_ID)
@@ -165,34 +176,68 @@ export function MultiPageControlWindow() {
                 ›
               </Button>
             </div>
-
-            <div className="toolbarBarRow" style={{ display: 'inline-flex', alignItems: 'center' }}>
-            {activeApp === 'ppt' ? (
-              isPpt ? (
-              <Button
-                size="sm"
-                kind="icon"
-                ariaLabel="结束放映"
-                title="结束放映"
-                onClick={() => postCommand('app.endPptSlideShow', {}).catch(() => undefined)}
-              >
-                <span style={{ width: 20, height: 20, display: 'inline-flex', lineHeight: 0 }} dangerouslySetInnerHTML={{ __html: exitIconSvgRaw }} />
-              </Button>
-              ) : null
-            ) : (
-              <Button
-                size="sm"
-                kind="icon"
-                ariaLabel={appMode === 'video-show' ? '拍摄按钮' : '新建页面'}
-                title={appMode === 'video-show' ? '拍摄按钮' : '新建页面'}
-                onClick={() => postCommand('app.newPage', {}).catch(() => undefined)}
-              >
-                <AddIcon />
-              </Button>
-            )}
-            </div>
           </div>
         </div>
+      </div>
+    </div>
+  )
+}
+
+export function MultiPageControlHandleWindow() {
+  useZoomOnWheel()
+  const bus = useUiStateBus(UI_STATE_APP_WINDOW_ID)
+  const activeAppRaw = bus.state[ACTIVE_APP_UI_STATE_KEY]
+  const activeApp = isActiveApp(activeAppRaw) ? activeAppRaw : 'unknown'
+  const pptFullscreen = bus.state[PPT_FULLSCREEN_UI_STATE_KEY] === true
+  const isPpt = activeApp === 'ppt' && pptFullscreen
+  const appModeRaw = bus.state[APP_MODE_UI_STATE_KEY]
+  const appMode = isAppMode(appModeRaw) ? appModeRaw : 'toolbar'
+
+  const action = useMemo(() => {
+    if (activeApp === 'ppt') {
+      if (!isPpt) return { visible: false as const }
+      return {
+        visible: true as const,
+        ariaLabel: '结束放映',
+        title: '结束放映',
+        onClick: () => postCommand('app.endPptSlideShow', {}).catch(() => undefined),
+        icon: <span style={{ width: 20, height: 20, display: 'inline-flex', lineHeight: 0 }} dangerouslySetInnerHTML={{ __html: exitIconSvgRaw }} />
+      }
+    }
+    if (appMode === 'video-show') {
+      return {
+        visible: true as const,
+        ariaLabel: '拍摄按钮',
+        title: '拍摄按钮',
+        onClick: () => postCommand('app.newPage', {}).catch(() => undefined),
+        icon: <CaptureIcon />
+      }
+    }
+    return {
+      visible: true as const,
+      ariaLabel: '新建页面',
+      title: '新建页面',
+      onClick: () => postCommand('app.newPage', {}).catch(() => undefined),
+      icon: <AddIcon />
+    }
+  }, [activeApp, isPpt, appMode])
+
+  return (
+    <div className="toolbarRoot">
+      <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 10, boxSizing: 'border-box' }}>
+        {action.visible ? (
+          <Button
+            size="sm"
+            kind="icon"
+            ariaLabel={action.ariaLabel}
+            title={action.title}
+            onClick={action.onClick}
+          >
+            {action.icon}
+          </Button>
+        ) : (
+          <div style={{ width: 40, height: 40 }} />
+        )}
       </div>
     </div>
   )

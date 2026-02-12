@@ -25,9 +25,11 @@ const WINDOW_ID_TOOLBAR_NOTICE = 'toolbar-notice'
 const WINDOW_ID_WATCHER = 'watcher'
 const WINDOW_ID_SETTINGS_WINDOW = 'settings-window'
 const WINDOW_ID_MUT_PAGE = 'mut-page'
+const WINDOW_ID_MUT_PAGE_HANDLE = 'mut-page-handle'
 const WINDOW_ID_MUT_PAGE_THUMBNAILS_MENU = 'mut-page-thumbnails-menu'
 const TOOLBAR_HANDLE_GAP = 10
 const TOOLBAR_HANDLE_WIDTH = 30
+const MUT_PAGE_HANDLE_WIDTH = 60
 const APPEARANCE_KV_KEY = 'app-appearance'
 const NATIVE_MICA_KV_KEY = 'native-mica-enabled'
 const LEGACY_WINDOW_IMPL_KV_KEY = 'legacy-window-implementation'
@@ -334,6 +336,7 @@ function applyLegacyWindowImplementation(enabled: boolean, opts?: { rebuild?: bo
   if (floatingToolbarHandleWindow && !floatingToolbarHandleWindow.isDestroyed()) windowsToClose.push(floatingToolbarHandleWindow)
   if (toolbarNoticeWindow && !toolbarNoticeWindow.isDestroyed()) windowsToClose.push(toolbarNoticeWindow)
   if (multiPageControlWindow && !multiPageControlWindow.isDestroyed()) windowsToClose.push(multiPageControlWindow)
+  if (mutPageHandleWindow && !mutPageHandleWindow.isDestroyed()) windowsToClose.push(mutPageHandleWindow)
   for (const item of toolbarSubwindows.values()) {
     if (item.win.isDestroyed()) continue
     windowsToClose.push(item.win)
@@ -355,6 +358,7 @@ function applyLegacyWindowImplementation(enabled: boolean, opts?: { rebuild?: bo
   floatingToolbarHandleWindow = undefined
   toolbarNoticeWindow = undefined
   toolbarNoticeItem = undefined
+  mutPageHandleWindow = undefined
 
   appWindowsManager.destroyAll()
 
@@ -398,6 +402,7 @@ function applyToolbarUiZoom(zoom: number): void {
     floatingToolbarHandleWindow,
     toolbarNoticeWindow,
     multiPageControlWindow,
+    mutPageHandleWindow,
     mutPageThumbnailsMenuWindow,
     ...Array.from(toolbarSubwindows.values()).map((v) => v.win)
   ]
@@ -425,6 +430,7 @@ let toolbarNoticeItem:
     }
   | undefined
 let multiPageControlWindow: BrowserWindow | undefined
+let mutPageHandleWindow: BrowserWindow | undefined
 let mutPageThumbnailsMenuWindow: BrowserWindow | undefined
 let mutPageDesiredFromAppMode = false
 let mutPageDesiredFromPpt = false
@@ -931,8 +937,79 @@ function repositionMultiPageControlWindow(): void {
   try {
     win.setBounds({ x, y, width, height }, false)
   } catch {}
+
+  const handle = mutPageHandleWindow
+  if (handle && !handle.isDestroyed()) {
+    const hx = x + width + TOOLBAR_HANDLE_GAP
+    try {
+      handle.setBounds({ x: hx, y, width: MUT_PAGE_HANDLE_WIDTH, height }, false)
+    } catch {}
+  }
+
   const menu = mutPageThumbnailsMenuWindow
   if (menu && !menu.isDestroyed() && menu.isVisible()) repositionMutPageThumbnailsMenuWindow()
+}
+
+function getOrCreateMutPageHandleWindow(owner: BrowserWindow): BrowserWindow {
+  const existing = mutPageHandleWindow
+  if (existing && !existing.isDestroyed()) return existing
+
+  const ownerBounds = owner.getBounds()
+  const win = new BrowserWindow({
+    ...(APP_ICON_PATH ? { icon: APP_ICON_PATH } : {}),
+    width: MUT_PAGE_HANDLE_WIDTH,
+    height: ownerBounds.height,
+    show: false,
+    frame: false,
+    autoHideMenuBar: true,
+    transparent: !legacyWindowImplementation,
+    resizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    parent: owner,
+    title: '页面控制器把手',
+    backgroundColor: legacyWindowImplementation ? effectiveSurfaceBackgroundColor(currentAppearance) : '#00000000',
+    backgroundMaterial: legacyWindowImplementation && nativeMicaEnabled ? 'mica' : 'none',
+    webPreferences: {
+      preload: join(__dirname, '../preload/index.js'),
+      contextIsolation: true,
+      nodeIntegration: false
+    }
+  })
+
+  applyWindowsBackdrop(win)
+  try {
+    win.setMenu(null)
+  } catch {}
+  try {
+    win.setMenuBarVisibility(false)
+  } catch {}
+  try {
+    win.setAutoHideMenuBar(true)
+  } catch {}
+  win.setAlwaysOnTop(true, 'screen-saver')
+  wireWindowDebug(win, WINDOW_ID_MUT_PAGE_HANDLE)
+  wireWindowStatus(win, WINDOW_ID_MUT_PAGE_HANDLE)
+  try {
+    win.webContents.setZoomLevel(toolbarUiZoom)
+  } catch {}
+
+  const devUrl = getDevServerUrl()
+  if (devUrl) {
+    win.loadURL(`${devUrl}?window=${encodeURIComponent(WINDOW_ID_MUT_PAGE_HANDLE)}`)
+    if (process.env.LANSTART_OPEN_DEVTOOLS === '1') win.webContents.openDevTools({ mode: 'detach' })
+  } else {
+    win.loadFile(join(__dirname, '../renderer/index.html'), { query: { window: WINDOW_ID_MUT_PAGE_HANDLE } })
+  }
+
+  win.on('closed', () => {
+    if (mutPageHandleWindow === win) mutPageHandleWindow = undefined
+  })
+
+  mutPageHandleWindow = win
+  return win
 }
 
 function getOrCreateMultiPageControlWindow(): BrowserWindow {
@@ -1003,9 +1080,22 @@ function getOrCreateMultiPageControlWindow(): BrowserWindow {
         menu.hide()
       } catch {}
     }
+    const handle = mutPageHandleWindow
+    if (handle && !handle.isDestroyed() && handle.isVisible()) {
+      try {
+        handle.hide()
+      } catch {}
+    }
   })
   win.on('closed', () => {
     if (multiPageControlWindow === win) multiPageControlWindow = undefined
+    const handle = mutPageHandleWindow
+    if (handle && !handle.isDestroyed()) {
+      try {
+        handle.close()
+      } catch {}
+    }
+    mutPageHandleWindow = undefined
     const menu = mutPageThumbnailsMenuWindow
     if (menu && !menu.isDestroyed()) {
       try {
@@ -1024,6 +1114,7 @@ function applyMutPageVisibility(): void {
   if (desired) {
     try {
       const mp = getOrCreateMultiPageControlWindow()
+      const handle = getOrCreateMutPageHandleWindow(mp)
       repositionMultiPageControlWindow()
       const doShow = () => {
         if (mp.isDestroyed()) return
@@ -1040,6 +1131,22 @@ function applyMutPageVisibility(): void {
         try {
           mp.moveTop()
         } catch {}
+
+        if (!handle.isDestroyed()) {
+          try {
+            if (!handle.isVisible()) handle.showInactive()
+          } catch {
+            try {
+              if (!handle.isVisible()) handle.show()
+            } catch {}
+          }
+          try {
+            handle.setAlwaysOnTop(true, 'screen-saver')
+          } catch {}
+          try {
+            handle.moveTop()
+          } catch {}
+        }
       }
       if (mp.webContents.isLoading()) mp.once('ready-to-show', doShow)
       else doShow()
@@ -1051,6 +1158,12 @@ function applyMutPageVisibility(): void {
   if (mp && !mp.isDestroyed()) {
     try {
       if (mp.isVisible()) mp.hide()
+    } catch {}
+  }
+  const handle = mutPageHandleWindow
+  if (handle && !handle.isDestroyed()) {
+    try {
+      if (handle.isVisible()) handle.hide()
     } catch {}
   }
 }
@@ -1195,6 +1308,21 @@ function applyToolbarOnTopLevel(level: 'normal' | 'floating' | 'torn-off-menu' |
     }
   }
 
+  const mp = multiPageControlWindow
+  if (mp && !mp.isDestroyed()) {
+    mp.setAlwaysOnTop(true, level, rel)
+    if (mp.isVisible()) {
+      mp.moveTop()
+    }
+  }
+  const mph = mutPageHandleWindow
+  if (mph && !mph.isDestroyed()) {
+    mph.setAlwaysOnTop(true, level, rel)
+    if (mph.isVisible()) {
+      mph.moveTop()
+    }
+  }
+
   const notice = toolbarNoticeWindow
   if (notice && !notice.isDestroyed() && notice.isVisible()) {
     notice.setAlwaysOnTop(true, level, rel)
@@ -1235,6 +1363,7 @@ function refreshToolbarWindowsLayoutAndSurface() {
   }
 
   reapplyVisibleBounds(multiPageControlWindow)
+  reapplyVisibleBounds(mutPageHandleWindow)
 
   const refBounds =
     (floatingToolbarWindow && !floatingToolbarWindow.isDestroyed() ? floatingToolbarWindow.getBounds() : undefined) ??
@@ -2724,6 +2853,8 @@ if (hasSingleInstanceLock) {
             if (notice && !notice.isDestroyed()) out.push(notice)
             const mp = multiPageControlWindow
             if (mp && !mp.isDestroyed()) out.push(mp)
+            const mph = mutPageHandleWindow
+            if (mph && !mph.isDestroyed()) out.push(mph)
             for (const item of toolbarSubwindows.values()) {
               const sw = item.win
               if (sw && !sw.isDestroyed()) out.push(sw)

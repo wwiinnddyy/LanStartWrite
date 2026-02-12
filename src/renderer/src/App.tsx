@@ -7,7 +7,7 @@ import { NotificationSubwindow } from '../../toolbar_notice/NotificationSubwindo
 import { TaskWindowsWatcherWindow } from '../../task_windows_watcher'
 import { AnnotationOverlayApp, PaintBoardBackgroundApp } from '../../paint_board'
 import { VideoShowBackgroundApp } from '../../video_show'
-import { MultiPageControlWindow, PageThumbnailsMenuWindow } from '../../mut_page'
+import { MultiPageControlHandleWindow, MultiPageControlWindow, PageThumbnailsMenuWindow } from '../../mut_page'
 import { useHyperGlassRealtimeBlur } from '../../hyper_glass'
 import { SettingsWindow, useAppearanceSettings } from '../../settings'
 import { AppWindowTitlebar } from '../../app_windows_manerger/renderer'
@@ -100,6 +100,7 @@ export default function App() {
   if (windowId === 'settings-window') return <WithAppearance><SettingsWindow /></WithAppearance>
   if (windowId === 'toolbar-notice') return <WithAppearance><NotificationSubwindow kind="notice" /></WithAppearance>
   if (windowId === 'mut-page') return <WithAppearance><MultiPageControlWindow /></WithAppearance>
+  if (windowId === 'mut-page-handle') return <WithAppearance><MultiPageControlHandleWindow /></WithAppearance>
   if (windowId === 'mut-page-thumbnails-menu') return <WithAppearance><PageThumbnailsMenuWindow /></WithAppearance>
 
   if (windowId === 'toolbar-subwindow') {
