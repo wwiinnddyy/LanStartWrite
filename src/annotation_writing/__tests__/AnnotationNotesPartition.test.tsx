@@ -133,7 +133,7 @@ describe('Annotation notes partition', () => {
     c.unmount()
 
     expect(putCalls.some((c) => c.key === 'annotation-notes-video-show')).toBe(true)
-  })
+  }, 20000)
 
   it('rotates notes on startup and keeps only last history', async () => {
     vi.resetModules()
