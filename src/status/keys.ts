@@ -18,6 +18,9 @@ export const WRITING_FRAMEWORK_KV_KEY = 'writing-framework'
 export type ActiveApp = 'unknown' | 'word' | 'ppt'
 export const ACTIVE_APP_UI_STATE_KEY = 'activeApp'
 export const PPT_FULLSCREEN_UI_STATE_KEY = 'pptFullscreen'
+export const PPT_PAGE_INDEX_UI_STATE_KEY = 'pptPageIndex'
+export const PPT_PAGE_TOTAL_UI_STATE_KEY = 'pptPageTotal'
+export const PPT_SLIDE_NAME_UI_STATE_KEY = 'pptSlideName'
 
 export type EffectiveWritingBackend = 'konva' | 'qt' | 'leafer' | 'word' | 'ppt'
 export const EFFECTIVE_WRITING_BACKEND_UI_STATE_KEY = 'effectiveWritingBackend'
@@ -76,6 +79,15 @@ export const VIDEO_SHOW_MERGE_LAYERS_UI_STATE_KEY = 'videoShowMergeLayers'
 export type VideoShowViewTransform = { x: number; y: number; scale: number; rot: number }
 
 export const NOTICE_KIND_UI_STATE_KEY = 'noticeKind'
+
+export type OfficePptMode = 'inkeys' | 'based' | 'vsto'
+export const OFFICE_PPT_MODE_KV_KEY = 'office-ppt-mode'
+export const OFFICE_PPT_MODE_UI_STATE_KEY = 'officePptMode'
+
+export const SYSTEM_UIA_TOPMOST_KV_KEY = 'system-uia-topmost'
+export const SYSTEM_UIA_TOPMOST_UI_STATE_KEY = 'systemUiaTopmost'
+
+export const ADMIN_STATUS_UI_STATE_KEY = 'isAdmin'
 
 export type LeaferRendererEngine = 'canvas2d' | 'svg' | 'webgl' | 'webgpu'
 export type LeaferNibMode = 'off' | 'dynamic' | 'static'

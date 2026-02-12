@@ -1,6 +1,7 @@
 import { BrowserWindow, Menu, Tray, app, dialog, ipcMain, nativeImage, nativeTheme, screen, session, type OpenDialogOptions } from 'electron'
-import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
+import { execFile, spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { existsSync } from 'node:fs'
+import { createServer } from 'node:net'
 import { join } from 'node:path'
 import { platform } from 'node:process'
 import { pathToFileURL } from 'node:url'
@@ -10,6 +11,9 @@ import { TaskWindowsWatcher } from '../task_windows_watcher/TaskWindowsWatcher'
 import { createLanstartwriteLinkController } from '../url_http_link'
 
 let backendProcess: ChildProcessWithoutNullStreams | undefined
+let pptWrapperProcess: ChildProcessWithoutNullStreams | undefined
+let pptWrapperRestartTimer: NodeJS.Timeout | undefined
+let pptWrapperPort: number | undefined
 
 const BACKEND_PORT = 3131
 const BACKEND_STDIO_PREFIX = '__LANSTART__'
@@ -28,6 +32,9 @@ const APPEARANCE_KV_KEY = 'app-appearance'
 const NATIVE_MICA_KV_KEY = 'native-mica-enabled'
 const LEGACY_WINDOW_IMPL_KV_KEY = 'legacy-window-implementation'
 const VIDEO_SHOW_MERGE_LAYERS_KV_KEY = 'video-show-merge-layers'
+const SYSTEM_UIA_TOPMOST_KV_KEY = 'system-uia-topmost'
+const SYSTEM_UIA_TOPMOST_UI_STATE_KEY = 'systemUiaTopmost'
+const ADMIN_STATUS_UI_STATE_KEY = 'isAdmin'
 
 type Appearance = 'light' | 'dark'
 
@@ -48,6 +55,9 @@ let didApplyAppearance = false
 let toolbarUiZoom = Math.log(0.8) / Math.log(1.2)
 let nativeMicaEnabled = false
 let legacyWindowImplementation = false
+let systemUiaTopmostEnabled = true
+let isRunningAsAdmin = false
+let topmostRelativeLevel = 0
 let stopToolbarTopmostPolling: (() => void) | undefined
 
 function resolveAppIconPath(): string | undefined {
@@ -63,6 +73,29 @@ function resolveAppIconPath(): string | undefined {
     } catch {}
   }
   return undefined
+}
+
+function detectWindowsAdmin(): Promise<boolean> {
+  if (process.platform !== 'win32') return Promise.resolve(false)
+  return new Promise((resolve) => {
+    execFile(
+      'powershell.exe',
+      [
+        '-NoProfile',
+        '-NonInteractive',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-Command',
+        '[bool]([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltinRole]::Administrator)'
+      ],
+      { windowsHide: true },
+      (err, stdout) => {
+        if (err) return resolve(false)
+        const s = String(stdout ?? '').trim().toLowerCase()
+        resolve(s === 'true')
+      }
+    )
+  })
 }
 
 const APP_ICON_PATH = resolveAppIconPath()
@@ -393,6 +426,10 @@ let toolbarNoticeItem:
   | undefined
 let multiPageControlWindow: BrowserWindow | undefined
 let mutPageThumbnailsMenuWindow: BrowserWindow | undefined
+let mutPageDesiredFromAppMode = false
+let mutPageDesiredFromPpt = false
+let mutPageAnchorBounds: { x: number; y: number; width: number; height: number } | undefined
+let mutPageUiBounds: { width: number; height: number } | undefined
 let whiteboardBackgroundWindow: BrowserWindow | undefined
 let annotationOverlayWindow: BrowserWindow | undefined
 let screenAnnotationOverlayWindow: BrowserWindow | undefined
@@ -878,11 +915,15 @@ function repositionMultiPageControlWindow(): void {
 
   const owner = whiteboardBackgroundWindow ?? floatingToolbarWindow
   const ownerBounds = owner && !owner.isDestroyed() ? owner.getBounds() : screen.getPrimaryDisplay().bounds
-  const display = screen.getDisplayMatching(ownerBounds)
-  const area = owner === whiteboardBackgroundWindow && owner && !owner.isDestroyed() ? display.bounds : display.workArea
+  const anchor = mutPageAnchorBounds
+  const display = screen.getDisplayMatching(anchor ?? ownerBounds)
+  const area = anchor ? display.workArea : owner === whiteboardBackgroundWindow && owner && !owner.isDestroyed() ? display.bounds : display.workArea
 
-  const width = 360
-  const height = 66
+  const base = mutPageUiBounds
+  const widthLimit = Math.max(140, area.width - 20)
+  const heightLimit = Math.max(40, area.height - 20)
+  const width = Math.max(140, Math.min(widthLimit, Math.round(base?.width ?? 360)))
+  const height = Math.max(40, Math.min(heightLimit, Math.round(base?.height ?? 66)))
   const margin = 14
   const x = area.x + margin
   const y = area.y + area.height - height - margin
@@ -901,10 +942,11 @@ function getOrCreateMultiPageControlWindow(): BrowserWindow {
   const owner = whiteboardBackgroundWindow ?? floatingToolbarWindow
   if (!owner || owner.isDestroyed()) throw new Error('mut_page_owner_missing')
 
+  const base = mutPageUiBounds
   const win = new BrowserWindow({
     ...(APP_ICON_PATH ? { icon: APP_ICON_PATH } : {}),
-    width: 360,
-    height: 66,
+    width: Math.max(140, Math.round(base?.width ?? 360)),
+    height: Math.max(40, Math.round(base?.height ?? 66)),
     show: false,
     frame: false,
     autoHideMenuBar: true,
@@ -977,6 +1019,42 @@ function getOrCreateMultiPageControlWindow(): BrowserWindow {
   return win
 }
 
+function applyMutPageVisibility(): void {
+  const desired = mutPageDesiredFromAppMode || mutPageDesiredFromPpt
+  if (desired) {
+    try {
+      const mp = getOrCreateMultiPageControlWindow()
+      repositionMultiPageControlWindow()
+      const doShow = () => {
+        if (mp.isDestroyed()) return
+        try {
+          if (!mp.isVisible()) mp.showInactive()
+        } catch {
+          try {
+            if (!mp.isVisible()) mp.show()
+          } catch {}
+        }
+        try {
+          mp.setAlwaysOnTop(true, 'screen-saver')
+        } catch {}
+        try {
+          mp.moveTop()
+        } catch {}
+      }
+      if (mp.webContents.isLoading()) mp.once('ready-to-show', doShow)
+      else doShow()
+    } catch {}
+    return
+  }
+
+  const mp = multiPageControlWindow
+  if (mp && !mp.isDestroyed()) {
+    try {
+      if (mp.isVisible()) mp.hide()
+    } catch {}
+  }
+}
+
 function repositionMutPageThumbnailsMenuWindow(): void {
   const win = mutPageThumbnailsMenuWindow
   const owner = multiPageControlWindow
@@ -987,8 +1065,11 @@ function repositionMutPageThumbnailsMenuWindow(): void {
   const display = screen.getDisplayMatching(ownerBounds)
   const area = display.workArea
 
-  const width = 800
-  const height = 520
+  const z = getUiZoomFactor()
+  const widthLimit = Math.max(320, area.width - 16)
+  const heightLimit = Math.max(240, area.height - 16)
+  const width = Math.max(320, Math.min(widthLimit, Math.round(800 * z)))
+  const height = Math.max(240, Math.min(heightLimit, Math.round(520 * z)))
   const gap = 10
   const x = Math.round(ownerBounds.x + (ownerBounds.width - width) / 2)
   const y = Math.round(ownerBounds.y - height - gap)
@@ -1005,10 +1086,11 @@ function getOrCreateMutPageThumbnailsMenuWindow(owner: BrowserWindow): BrowserWi
   const existing = mutPageThumbnailsMenuWindow
   if (existing && !existing.isDestroyed()) return existing
 
+  const z = getUiZoomFactor()
   const win = new BrowserWindow({
     ...(APP_ICON_PATH ? { icon: APP_ICON_PATH } : {}),
-    width: 800,
-    height: 520,
+    width: Math.max(320, Math.round(800 * z)),
+    height: Math.max(240, Math.round(520 * z)),
     show: false,
     frame: false,
     autoHideMenuBar: true,
@@ -1096,9 +1178,10 @@ function toggleMutPageThumbnailsMenuWindow(): void {
 }
 
 function applyToolbarOnTopLevel(level: 'normal' | 'floating' | 'torn-off-menu' | 'modal-panel' | 'main-menu' | 'status' | 'pop-up-menu' | 'screen-saver') {
+  const rel = topmostRelativeLevel
   const toolbar = floatingToolbarWindow
   if (toolbar && !toolbar.isDestroyed()) {
-    toolbar.setAlwaysOnTop(true, level)
+    toolbar.setAlwaysOnTop(true, level, rel)
     if (toolbar.isVisible()) {
       toolbar.moveTop()
     }
@@ -1106,7 +1189,7 @@ function applyToolbarOnTopLevel(level: 'normal' | 'floating' | 'torn-off-menu' |
 
   const handle = floatingToolbarHandleWindow
   if (handle && !handle.isDestroyed()) {
-    handle.setAlwaysOnTop(true, level)
+    handle.setAlwaysOnTop(true, level, rel)
     if (handle.isVisible()) {
       handle.moveTop()
     }
@@ -1114,7 +1197,7 @@ function applyToolbarOnTopLevel(level: 'normal' | 'floating' | 'torn-off-menu' |
 
   const notice = toolbarNoticeWindow
   if (notice && !notice.isDestroyed() && notice.isVisible()) {
-    notice.setAlwaysOnTop(true, level)
+    notice.setAlwaysOnTop(true, level, rel)
     notice.moveTop()
   }
 
@@ -1122,7 +1205,7 @@ function applyToolbarOnTopLevel(level: 'normal' | 'floating' | 'torn-off-menu' |
     const win = item.win
     if (win.isDestroyed()) continue
     if (!win.isVisible()) continue
-    win.setAlwaysOnTop(true, level)
+    win.setAlwaysOnTop(true, level, rel)
     win.moveTop()
   }
 }
@@ -1968,6 +2051,11 @@ function handleBackendControlMessage(message: any): void {
     return
   }
 
+  if (message.type === 'SET_SYSTEM_UIA_TOPMOST') {
+    systemUiaTopmostEnabled = Boolean((message as any).enabled)
+    return
+  }
+
   if (message.type === 'SET_UI_ZOOM') {
     const zoom = Number(message.zoom)
     if (Number.isFinite(zoom)) {
@@ -1979,10 +2067,45 @@ function handleBackendControlMessage(message: any): void {
 
   if (appWindowsManager.handleBackendControlMessage(message)) return
 
+  if (message.type === 'SET_MUT_PAGE_VISIBLE') {
+    const source = String((message as any).source ?? '')
+    const visible = Boolean((message as any).visible)
+    if (source === 'ppt') {
+      mutPageDesiredFromPpt = visible
+      applyMutPageVisibility()
+    }
+    return
+  }
+
+  if (message.type === 'SET_MUT_PAGE_ANCHOR') {
+    const source = String((message as any).source ?? '')
+    const b = (message as any).bounds
+    if (source === 'ppt') {
+      if (b && Number.isFinite(b.x) && Number.isFinite(b.y) && Number.isFinite(b.width) && Number.isFinite(b.height)) {
+        mutPageAnchorBounds = { x: Number(b.x), y: Number(b.y), width: Number(b.width), height: Number(b.height) }
+      } else {
+        mutPageAnchorBounds = undefined
+      }
+      repositionMultiPageControlWindow()
+    }
+    return
+  }
+
+  if (message.type === 'SET_MUT_PAGE_BOUNDS') {
+    const width = Number((message as any).width)
+    const height = Number((message as any).height)
+    if (Number.isFinite(width) && Number.isFinite(height)) {
+      mutPageUiBounds = { width: Math.max(140, Math.round(width)), height: Math.max(40, Math.round(height)) }
+      repositionMultiPageControlWindow()
+    }
+    return
+  }
+
   if (message.type === 'SET_APP_MODE') {
     const modeRaw = String((message as any).mode ?? '')
     const mode = modeRaw === 'whiteboard' ? 'whiteboard' : modeRaw === 'video-show' ? 'video-show' : 'toolbar'
     if (mode === 'whiteboard' || mode === 'video-show') {
+      mutPageDesiredFromAppMode = true
       const screenOverlay = screenAnnotationOverlayWindow
       if (screenOverlay && !screenOverlay.isDestroyed()) {
         try {
@@ -2050,34 +2173,10 @@ function handleBackendControlMessage(message: any): void {
         if (bg && !bg.isDestroyed()) bg.setAlwaysOnTop(true, 'normal')
       } catch {}
       applyToolbarOnTopLevel('screen-saver')
-
-      const mp = getOrCreateMultiPageControlWindow()
-      repositionMultiPageControlWindow()
-      const showMutPage = () => {
-        if (mp.isDestroyed()) return
-        try {
-          if (!mp.isVisible()) mp.showInactive()
-        } catch {
-          try {
-            if (!mp.isVisible()) mp.show()
-          } catch {}
-        }
-        try {
-          mp.setAlwaysOnTop(true, 'screen-saver')
-        } catch {}
-        try {
-          mp.moveTop()
-        } catch {}
-      }
-      if (mp.webContents.isLoading()) mp.once('ready-to-show', showMutPage)
-      else showMutPage()
+      applyMutPageVisibility()
     } else {
-      const mp = multiPageControlWindow
-      if (mp && !mp.isDestroyed()) {
-        try {
-          if (mp.isVisible()) mp.hide()
-        } catch {}
-      }
+      mutPageDesiredFromAppMode = false
+      applyMutPageVisibility()
       const overlay = annotationOverlayWindow
       if (overlay && !overlay.isDestroyed()) {
         try {
@@ -2286,7 +2385,128 @@ function wireBackendStdout(stdout: NodeJS.ReadableStream): void {
   })
 }
 
-function startBackend(): void {
+async function pickFreePort(): Promise<number> {
+  return await new Promise((resolve, reject) => {
+    const srv = createServer()
+    srv.on('error', reject)
+    srv.listen(0, '127.0.0.1', () => {
+      const addr = srv.address()
+      const port = typeof addr === 'object' && addr ? addr.port : 0
+      srv.close(() => resolve(port))
+    })
+  })
+}
+
+function resolvePptWrapperExecutablePath(): string | undefined {
+  const candidates = [
+    join(process.resourcesPath, 'ppt-wrapper', platform === 'win32' ? 'PptHttpWrapper.exe' : 'PptHttpWrapper'),
+    join(process.resourcesPath, 'PptHttpWrapper', platform === 'win32' ? 'PptHttpWrapper.exe' : 'PptHttpWrapper'),
+    join(process.cwd(), 'out', 'ppt-wrapper', platform === 'win32' ? 'PptHttpWrapper.exe' : 'PptHttpWrapper'),
+  ]
+  for (const p of candidates) {
+    try {
+      if (existsSync(p)) return p
+    } catch {}
+  }
+  return undefined
+}
+
+async function waitForHttpOk(url: string, timeoutMs = 3500): Promise<boolean> {
+  const start = Date.now()
+  while (Date.now() - start < timeoutMs) {
+    try {
+      const controller = new AbortController()
+      const t = setTimeout(() => controller.abort(), 450)
+      const res = await fetch(url, { signal: controller.signal })
+      clearTimeout(t)
+      if (res.ok) return true
+    } catch {}
+    await new Promise((r) => setTimeout(r, 120))
+  }
+  return false
+}
+
+async function ensurePptWrapperStarted(): Promise<{ port: number; baseUrl: string } | undefined> {
+  if (pptWrapperPort && pptWrapperProcess && !pptWrapperProcess.killed) {
+    return { port: pptWrapperPort, baseUrl: `http://127.0.0.1:${pptWrapperPort}` }
+  }
+
+  if (!pptWrapperPort) {
+    const picked = await pickFreePort().catch(() => 0)
+    pptWrapperPort = Number.isFinite(picked) && picked > 0 ? picked : 3133
+  }
+
+  const port = pptWrapperPort
+  const baseUrl = `http://127.0.0.1:${port}`
+
+  const isDev = Boolean(getDevServerUrl())
+  const projectRoot = process.cwd()
+  const exePath = resolvePptWrapperExecutablePath()
+
+  try {
+    if (pptWrapperProcess && !pptWrapperProcess.killed) {
+      try {
+        pptWrapperProcess.kill()
+      } catch {}
+    }
+  } catch {}
+
+  if (pptWrapperRestartTimer) {
+    clearTimeout(pptWrapperRestartTimer)
+    pptWrapperRestartTimer = undefined
+  }
+
+  if (exePath) {
+    pptWrapperProcess = spawn(exePath, ['--port', String(port)], {
+      windowsHide: true,
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env: { ...process.env, LANSTART_PPT_WRAPPER_PORT: String(port) }
+    })
+  } else if (isDev && platform === 'win32') {
+    const csproj = join(projectRoot, 'src', 'office', 'PowerPoint', 'inkeys', 'PptHttpWrapper', 'PptHttpWrapper.csproj')
+    pptWrapperProcess = spawn('dotnet', ['run', '--project', csproj, '--', '--port', String(port)], {
+      windowsHide: true,
+      stdio: ['pipe', 'pipe', 'pipe'],
+      cwd: projectRoot,
+      env: { ...process.env, LANSTART_PPT_WRAPPER_PORT: String(port) }
+    })
+  } else {
+    pptWrapperProcess = undefined
+    return undefined
+  }
+
+  const proc = pptWrapperProcess
+  if (!proc) return undefined
+
+  try {
+    proc.stdin.end()
+  } catch {}
+
+  try {
+    sendToBackend({ type: 'PROCESS_STATUS', name: 'ppt-wrapper', status: 'spawned', pid: proc.pid, ts: Date.now() })
+  } catch {}
+
+  proc.stdout.on('data', (c) => {
+    const s = String(c ?? '')
+    if (s.trim()) process.stdout.write(s)
+  })
+  proc.stderr.on('data', (c) => {
+    const s = String(c ?? '')
+    if (s.trim()) process.stderr.write(s)
+  })
+  proc.on('exit', () => {
+    pptWrapperProcess = undefined
+    if (pptWrapperRestartTimer) clearTimeout(pptWrapperRestartTimer)
+    pptWrapperRestartTimer = setTimeout(() => {
+      void ensurePptWrapperStarted().catch(() => undefined)
+    }, 650)
+  })
+
+  await waitForHttpOk(`${baseUrl}/health`).catch(() => false)
+  return { port, baseUrl }
+}
+
+function startBackend(extraEnv?: Record<string, string>): void {
   const dbPath = join(app.getPath('userData'), 'leveldb')
   const transport = process.env.LANSTART_BACKEND_TRANSPORT === 'http' ? 'http' : 'stdio'
   const host = process.env.LANSTART_BACKEND_HOST ?? '127.0.0.1'
@@ -2295,7 +2515,8 @@ function startBackend(): void {
     LANSTART_BACKEND_PORT: String(BACKEND_PORT),
     LANSTART_BACKEND_HOST: host,
     LANSTART_DB_PATH: dbPath,
-    LANSTART_BACKEND_TRANSPORT: transport
+    LANSTART_BACKEND_TRANSPORT: transport,
+    ...(extraEnv ?? {})
   }
 
   const isDev = Boolean(getDevServerUrl())
@@ -2371,7 +2592,14 @@ if (hasSingleInstanceLock) {
     .whenReady()
     .then(async () => {
       try {
-        startBackend()
+        const ppt = await ensurePptWrapperStarted().catch(() => undefined)
+        const extraEnv = ppt
+          ? {
+              LANSTART_PPT_WRAPPER_PORT: String(ppt.port),
+              LANSTART_PPT_WRAPPER_BASE_URL: ppt.baseUrl
+            }
+          : undefined
+        startBackend(extraEnv)
       } catch (e) {
         process.stderr.write(String(e))
       }
@@ -2419,6 +2647,7 @@ if (hasSingleInstanceLock) {
       let loadedAppearance: Appearance | undefined
       let loadedNativeMica: boolean | undefined
       let loadedLegacyWindowImplementation: boolean | undefined
+      let loadedSystemUiaTopmost: boolean | undefined
 
       for (let attempt = 0; attempt < 3; attempt++) {
         let backendResponded = false
@@ -2451,6 +2680,16 @@ if (hasSingleInstanceLock) {
           if (String(e).includes('kv_not_found')) backendResponded = true
         }
 
+        try {
+          const raw = await backendGetKv(SYSTEM_UIA_TOPMOST_KV_KEY)
+          backendResponded = true
+          if (typeof raw === 'boolean') loadedSystemUiaTopmost = raw
+          else if (raw === 'true' || raw === 1 || raw === '1') loadedSystemUiaTopmost = true
+          else if (raw === 'false' || raw === 0 || raw === '0') loadedSystemUiaTopmost = false
+        } catch (e) {
+          if (String(e).includes('kv_not_found')) backendResponded = true
+        }
+
         if (backendResponded) break
         await new Promise((r) => setTimeout(r, 220))
       }
@@ -2458,6 +2697,12 @@ if (hasSingleInstanceLock) {
       applyLegacyWindowImplementation(loadedLegacyWindowImplementation ?? false, { rebuild: false })
       applyNativeMica(loadedNativeMica ?? false)
       applyAppearance(loadedAppearance ?? currentAppearance)
+      systemUiaTopmostEnabled = loadedSystemUiaTopmost ?? true
+
+      isRunningAsAdmin = await detectWindowsAdmin().catch(() => false)
+      topmostRelativeLevel = isRunningAsAdmin ? 20 : 0
+      backendPutUiStateKey('app', ADMIN_STATUS_UI_STATE_KEY, isRunningAsAdmin).catch(() => undefined)
+      backendPutUiStateKey('app', SYSTEM_UIA_TOPMOST_UI_STATE_KEY, systemUiaTopmostEnabled).catch(() => undefined)
 
       sendToBackend({ type: 'PROCESS_STATUS', name: 'main', status: 'ready', pid: process.pid, ts: Date.now() })
       ensureTaskWatcherStarted()
@@ -2468,7 +2713,7 @@ if (hasSingleInstanceLock) {
       ensureTray()
       if (!stopToolbarTopmostPolling) {
         const poller = startWindowTopmostPolling({
-          intervalMs: 5000,
+          intervalMs: 1000,
           getTargets: () => {
             const out: BrowserWindow[] = []
             const toolbar = floatingToolbarWindow
@@ -2489,6 +2734,7 @@ if (hasSingleInstanceLock) {
             refreshToolbarWindowsLayoutAndSurface()
             applyToolbarOnTopLevel('screen-saver')
             if (process.platform !== 'win32') return
+            if (!systemUiaTopmostEnabled) return
             const hwnds: bigint[] = []
             for (const w of targets) {
               if (!w || w.isDestroyed()) continue
@@ -2540,4 +2786,6 @@ app.on('before-quit', () => {
   } catch {}
   taskWatcher?.stop()
   if (backendProcess && !backendProcess.killed) backendProcess.kill()
+  if (pptWrapperRestartTimer) clearTimeout(pptWrapperRestartTimer)
+  if (pptWrapperProcess && !pptWrapperProcess.killed) pptWrapperProcess.kill()
 })

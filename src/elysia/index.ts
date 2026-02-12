@@ -17,7 +17,11 @@ import {
   PEN_THICKNESS_UI_STATE_KEY,
   PEN_TYPE_UI_STATE_KEY,
   PPT_FULLSCREEN_UI_STATE_KEY,
+  PPT_PAGE_INDEX_UI_STATE_KEY,
+  PPT_PAGE_TOTAL_UI_STATE_KEY,
+  PPT_SLIDE_NAME_UI_STATE_KEY,
   REDO_REV_UI_STATE_KEY,
+  SYSTEM_UIA_TOPMOST_KV_KEY,
   UI_STATE_APP_WINDOW_ID,
   UNDO_REV_UI_STATE_KEY,
   WHITEBOARD_BG_COLOR_KV_KEY,
@@ -55,6 +59,8 @@ const host = String(process.env.LANSTART_BACKEND_HOST ?? '127.0.0.1')
 const dbPath = process.env.LANSTART_DB_PATH ?? './leveldb'
 const transport = String(process.env.LANSTART_BACKEND_TRANSPORT ?? 'stdio')
 const csBaseUrl = String(process.env.LANSTART_CS_BASE_URL ?? '')
+const pptWrapperPort = Number(process.env.LANSTART_PPT_WRAPPER_PORT ?? 3133)
+const pptWrapperBaseUrl = String(process.env.LANSTART_PPT_WRAPPER_BASE_URL ?? `http://127.0.0.1:${pptWrapperPort}`)
 const castPort = Number(process.env.LANSTART_CAST_PORT ?? 3132)
 const castHost = String(process.env.LANSTART_CAST_HOST ?? '0.0.0.0')
 
@@ -346,6 +352,53 @@ function getOrInitUiState(windowId: string): Record<string, unknown> {
   return created
 }
 
+let pptPollInFlight = false
+let pptProbeInFlight = false
+let lastPptProbeAt = 0
+let lastPptMutPageVisible: boolean | undefined
+
+function isPptControlDataReady(status: PptWrapperStatus | null): boolean {
+  if (!status || status.ok !== true) return false
+  const total = asFiniteInt(status.totalPage)
+  const current = asFiniteInt(status.currentPage)
+  const slideName = typeof status.slideNameIndex === 'string' ? status.slideNameIndex.trim() : ''
+  if (!slideName) return false
+  if (total === undefined || total < 1) return false
+  if (current === undefined || current < 1 || current > total) return false
+  return true
+}
+
+setInterval(() => {
+  const state = getOrInitUiState(UI_STATE_APP_WINDOW_ID) as any
+  const activeAppRaw = state[ACTIVE_APP_UI_STATE_KEY]
+  const activeApp = isActiveApp(activeAppRaw) ? activeAppRaw : 'unknown'
+  if (activeApp !== 'ppt') return
+  if (pptPollInFlight) return
+  pptPollInFlight = true
+  pptGetStatus()
+    .then((status) => {
+      applyPptStatusToUiState(state, status)
+      const pptFullscreen = state[PPT_FULLSCREEN_UI_STATE_KEY] === true
+      const visible = pptFullscreen && isPptControlDataReady(status)
+      if (visible !== lastPptMutPageVisible) {
+        lastPptMutPageVisible = visible
+        requestMain({ type: 'SET_MUT_PAGE_VISIBLE', source: 'ppt', visible })
+        if (!visible) requestMain({ type: 'SET_MUT_PAGE_ANCHOR', source: 'ppt', bounds: undefined })
+      }
+    })
+    .catch(() => {
+      applyPptStatusToUiState(state, null)
+      if (lastPptMutPageVisible !== false) {
+        lastPptMutPageVisible = false
+        requestMain({ type: 'SET_MUT_PAGE_VISIBLE', source: 'ppt', visible: false })
+        requestMain({ type: 'SET_MUT_PAGE_ANCHOR', source: 'ppt', bounds: undefined })
+      }
+    })
+    .finally(() => {
+      pptPollInFlight = false
+    })
+}, 500).unref?.()
+
 function cleanupMonitoringData(): void {
   uiState.clear()
   runtimeWindows.clear()
@@ -392,6 +445,75 @@ function resolveEffectiveWritingBackend(input: {
   if (input.activeApp === 'word') return 'word'
   if (input.activeApp === 'ppt' && input.pptFullscreen) return 'ppt'
   return input.writingFramework
+}
+
+type PptWrapperStatus = {
+  ok: boolean
+  currentPage?: number
+  totalPage?: number
+  slideNameIndex?: string
+  hwnd?: number
+  error?: string
+}
+
+function asFiniteInt(v: unknown): number | undefined {
+  const n = typeof v === 'number' ? v : typeof v === 'string' ? Number(v) : NaN
+  if (!Number.isFinite(n)) return undefined
+  return Math.trunc(n)
+}
+
+function asFiniteNumber(v: unknown): number | undefined {
+  const n = typeof v === 'number' ? v : typeof v === 'string' ? Number(v) : NaN
+  if (!Number.isFinite(n)) return undefined
+  return n
+}
+
+function setUiStateKey(windowId: string, state: Record<string, any>, key: string, value: unknown): void {
+  state[key] = value
+  emitEvent('UI_STATE_PUT', { windowId, key, value })
+}
+
+function applyPptStatusToUiState(state: Record<string, any>, status: PptWrapperStatus | null): void {
+  const ok = Boolean(status?.ok)
+  const total1 = asFiniteInt(status?.totalPage)
+  const current1 = asFiniteInt(status?.currentPage)
+  const total = ok && total1 !== undefined && total1 >= 1 ? total1 : -1
+  const index = ok && total >= 1 && current1 !== undefined && current1 >= 1 ? Math.max(0, Math.min(total - 1, current1 - 1)) : -1
+  const slideName = typeof status?.slideNameIndex === 'string' ? status.slideNameIndex : ''
+
+  setUiStateKey(UI_STATE_APP_WINDOW_ID, state, PPT_PAGE_TOTAL_UI_STATE_KEY, total)
+  setUiStateKey(UI_STATE_APP_WINDOW_ID, state, PPT_PAGE_INDEX_UI_STATE_KEY, index)
+  setUiStateKey(UI_STATE_APP_WINDOW_ID, state, PPT_SLIDE_NAME_UI_STATE_KEY, slideName)
+}
+
+async function pptFetchJson(path: string, init?: RequestInit): Promise<PptWrapperStatus | null> {
+  const base = new URL(pptWrapperBaseUrl.endsWith('/') ? pptWrapperBaseUrl : `${pptWrapperBaseUrl}/`)
+  const url = new URL(`./${path.replace(/^\//, '')}`, base)
+  const signal = AbortSignal.timeout(700)
+  const res = await fetch(url, { ...init, signal })
+  const json = (await res.json().catch(() => null)) as any
+  if (!json || typeof json !== 'object') return null
+  return json as PptWrapperStatus
+}
+
+async function pptGetStatus(): Promise<PptWrapperStatus | null> {
+  try {
+    return await pptFetchJson('/ppt/status', { method: 'GET' })
+  } catch {
+    return null
+  }
+}
+
+async function pptPost(path: string, body?: unknown): Promise<PptWrapperStatus | null> {
+  try {
+    return await pptFetchJson(path, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: body === undefined ? '{}' : JSON.stringify(body)
+    })
+  } catch {
+    return null
+  }
 }
 
 async function handleCommand(command: string, payload: unknown): Promise<CommandResult> {
@@ -630,6 +752,18 @@ async function handleCommand(command: string, payload: unknown): Promise<Command
 
       if (action === 'prevPage') {
         const state = getOrInitUiState(UI_STATE_APP_WINDOW_ID)
+        const activeAppRaw = (state as any)[ACTIVE_APP_UI_STATE_KEY]
+        const activeApp = isActiveApp(activeAppRaw) ? activeAppRaw : 'unknown'
+        const pptFullscreen = (state as any)[PPT_FULLSCREEN_UI_STATE_KEY] === true
+        const pptTotal = asFiniteInt((state as any)[PPT_PAGE_TOTAL_UI_STATE_KEY]) ?? -1
+        const pptSlideShow = pptFullscreen || pptTotal >= 1
+        if (activeApp === 'ppt') {
+          if (pptSlideShow) {
+            const status = await pptPost('/ppt/prev')
+            applyPptStatusToUiState(state as any, status)
+          }
+          return { ok: true }
+        }
         const { index, total } = coercePageIndexTotal(state)
         ensurePageTotalInState(state, total)
         const nextIndex = Math.max(0, Math.min(total - 1, index - 1))
@@ -641,6 +775,24 @@ async function handleCommand(command: string, payload: unknown): Promise<Command
 
       if (action === 'nextPage') {
         const state = getOrInitUiState(UI_STATE_APP_WINDOW_ID)
+        const activeAppRaw = (state as any)[ACTIVE_APP_UI_STATE_KEY]
+        const activeApp = isActiveApp(activeAppRaw) ? activeAppRaw : 'unknown'
+        const pptFullscreen = (state as any)[PPT_FULLSCREEN_UI_STATE_KEY] === true
+        const pptTotal = asFiniteInt((state as any)[PPT_PAGE_TOTAL_UI_STATE_KEY]) ?? -1
+        const pptSlideShow = pptFullscreen || pptTotal >= 1
+        if (activeApp === 'ppt') {
+          if (pptSlideShow) {
+            const pre = await pptGetStatus()
+            const shouldCheck =
+              Boolean(pre?.ok) &&
+              asFiniteInt(pre?.currentPage) !== undefined &&
+              asFiniteInt(pre?.totalPage) !== undefined &&
+              (asFiniteInt(pre?.currentPage) as number) >= (asFiniteInt(pre?.totalPage) as number)
+            const status = await pptPost('/ppt/next', { check: shouldCheck })
+            applyPptStatusToUiState(state as any, status)
+          }
+          return { ok: true }
+        }
         const { index, total } = coercePageIndexTotal(state)
         ensurePageTotalInState(state, total)
         const modeRaw = state[APP_MODE_UI_STATE_KEY]
@@ -661,6 +813,13 @@ async function handleCommand(command: string, payload: unknown): Promise<Command
         state[NOTES_PAGE_INDEX_UI_STATE_KEY] = nextIndex
         emitEvent('UI_STATE_PUT', { windowId: UI_STATE_APP_WINDOW_ID, key: NOTES_PAGE_INDEX_UI_STATE_KEY, value: nextIndex })
         await applyWhiteboardBackgroundForPage({ state, index: nextIndex, total })
+        return { ok: true }
+      }
+
+      if (action === 'endPptSlideShow') {
+        const state = getOrInitUiState(UI_STATE_APP_WINDOW_ID)
+        const status = await pptPost('/ppt/end')
+        applyPptStatusToUiState(state as any, status)
         return { ok: true }
       }
 
@@ -833,6 +992,14 @@ async function handleCommand(command: string, payload: unknown): Promise<Command
     return { ok: true }
   }
 
+  if (command === 'set-mut-page-bounds') {
+    const width = Number((payload as any)?.width)
+    const height = Number((payload as any)?.height)
+    if (!Number.isFinite(width) || !Number.isFinite(height)) return { ok: false, error: 'BAD_BOUNDS' }
+    requestMain({ type: 'SET_MUT_PAGE_BOUNDS', width, height })
+    return { ok: true }
+  }
+
   if (command === 'set-app-window-bounds') {
     const windowId = coerceString((payload as any)?.windowId)
     const width = Number((payload as any)?.width)
@@ -971,6 +1138,16 @@ stdin.on('line', (line) => {
             if (!key) throw new Error('BAD_KEY')
             await putValue(db, key, params?.value)
             emitEvent('KV_PUT', { key })
+            if (key === SYSTEM_UIA_TOPMOST_KV_KEY) {
+              const raw = (params as any)?.value
+              const enabled =
+                raw === true || raw === 'true' || raw === 1 || raw === '1'
+                  ? true
+                  : raw === false || raw === 'false' || raw === 0 || raw === '0'
+                    ? false
+                    : Boolean(raw)
+              requestMain({ type: 'SET_SYSTEM_UIA_TOPMOST', enabled })
+            }
             if (key === 'native-mica-enabled') {
               const raw = (params as any)?.value
               const enabled =
@@ -1133,6 +1310,51 @@ stdin.on('line', (line) => {
       const processes = Array.isArray((msg as any)?.processes) ? ((msg as any).processes as ProcessSample[]) : []
       runtimeProcesses.set('system-processes', { ts: Number.isFinite(ts) ? ts : Date.now(), processes } as unknown)
       emitEvent('processChanged', { ts: Number.isFinite(ts) ? ts : Date.now(), processes })
+
+      const state = getOrInitUiState(UI_STATE_APP_WINDOW_ID) as any
+      const activeAppRaw = state[ACTIVE_APP_UI_STATE_KEY]
+      const activeApp = isActiveApp(activeAppRaw) ? activeAppRaw : 'unknown'
+      if (activeApp !== 'ppt') {
+        const hasPptProc = processes.some((p) => {
+          const n = String((p as any)?.name ?? '').toLowerCase()
+          if (!n) return false
+          const token = n.replace(/\.exe$/i, '').replace(/[\s._-]+/g, '')
+          return token.includes('powerpnt') || token.includes('pptview') || token.includes('powerpoint')
+        })
+
+        if (hasPptProc && !pptProbeInFlight) {
+          const now = Date.now()
+          if (now - lastPptProbeAt >= 900) {
+            lastPptProbeAt = now
+            pptProbeInFlight = true
+            void pptGetStatus()
+              .then((status) => {
+                const foreground = runtimeWindows.get('foreground') as any
+                const fgName = String(foreground?.window?.processName ?? '')
+                const canTrustForeground = Boolean(fgName)
+                const ok = Boolean(status?.ok)
+                const hwnd = asFiniteNumber(status?.hwnd)
+                if (ok || hwnd !== undefined || !canTrustForeground) {
+                  state[ACTIVE_APP_UI_STATE_KEY] = 'ppt'
+                  state[PPT_FULLSCREEN_UI_STATE_KEY] = ok
+                  emitEvent('UI_STATE_PUT', { windowId: UI_STATE_APP_WINDOW_ID, key: ACTIVE_APP_UI_STATE_KEY, value: 'ppt' })
+                  emitEvent('UI_STATE_PUT', { windowId: UI_STATE_APP_WINDOW_ID, key: PPT_FULLSCREEN_UI_STATE_KEY, value: ok })
+                  applyPptStatusToUiState(state, status)
+                  const visible = ok && isPptControlDataReady(status)
+                  if (visible !== lastPptMutPageVisible) {
+                    lastPptMutPageVisible = visible
+                    requestMain({ type: 'SET_MUT_PAGE_VISIBLE', source: 'ppt', visible })
+                    if (!visible) requestMain({ type: 'SET_MUT_PAGE_ANCHOR', source: 'ppt', bounds: undefined })
+                  }
+                }
+              })
+              .catch(() => undefined)
+              .finally(() => {
+                pptProbeInFlight = false
+              })
+          }
+        }
+      }
       return
     }
 
@@ -1142,16 +1364,45 @@ stdin.on('line', (line) => {
       runtimeWindows.set('foreground', { ts: Number.isFinite(ts) ? ts : Date.now(), window } as unknown)
       emitEvent('windowFocusChanged', { ts: Number.isFinite(ts) ? ts : Date.now(), window })
 
-      const state = getOrInitUiState(UI_STATE_APP_WINDOW_ID)
-      const identified = identifyActiveApp(window)
-      state[ACTIVE_APP_UI_STATE_KEY] = identified.activeApp
-      state[PPT_FULLSCREEN_UI_STATE_KEY] = identified.pptFullscreen
-      emitEvent('UI_STATE_PUT', { windowId: UI_STATE_APP_WINDOW_ID, key: ACTIVE_APP_UI_STATE_KEY, value: identified.activeApp })
-      emitEvent('UI_STATE_PUT', {
-        windowId: UI_STATE_APP_WINDOW_ID,
-        key: PPT_FULLSCREEN_UI_STATE_KEY,
-        value: identified.pptFullscreen
-      })
+      void (async () => {
+        const state = getOrInitUiState(UI_STATE_APP_WINDOW_ID) as any
+        const identified = identifyActiveApp(window)
+
+        let activeApp = identified.activeApp
+        let pptFullscreen = identified.pptFullscreen
+
+        let status: PptWrapperStatus | null = null
+        try {
+          status = await pptGetStatus()
+        } catch {
+          status = null
+        }
+
+        if (window) {
+          const pptHwnd = asFiniteNumber(status?.hwnd)
+          const winHwnd = asFiniteNumber(window.handle)
+          if (pptHwnd !== undefined && winHwnd !== undefined && pptHwnd === winHwnd) {
+            activeApp = 'ppt'
+          }
+        }
+
+        if (activeApp === 'ppt' && Boolean(status?.ok)) {
+          pptFullscreen = true
+        }
+
+        state[ACTIVE_APP_UI_STATE_KEY] = activeApp
+        state[PPT_FULLSCREEN_UI_STATE_KEY] = pptFullscreen
+        applyPptStatusToUiState(state, status)
+
+        emitEvent('UI_STATE_PUT', { windowId: UI_STATE_APP_WINDOW_ID, key: ACTIVE_APP_UI_STATE_KEY, value: activeApp })
+        emitEvent('UI_STATE_PUT', { windowId: UI_STATE_APP_WINDOW_ID, key: PPT_FULLSCREEN_UI_STATE_KEY, value: pptFullscreen })
+        const showMutPage = activeApp === 'ppt' && pptFullscreen && isPptControlDataReady(status)
+        if (showMutPage !== lastPptMutPageVisible) {
+          lastPptMutPageVisible = showMutPage
+          requestMain({ type: 'SET_MUT_PAGE_VISIBLE', source: 'ppt', visible: showMutPage })
+        }
+        requestMain({ type: 'SET_MUT_PAGE_ANCHOR', source: 'ppt', bounds: showMutPage ? window?.bounds : undefined })
+      })()
       return
     }
 
@@ -1177,6 +1428,20 @@ const api = new Elysia({ adapter: node() })
     }
   })
   .get('/health', () => ({ ok: true, port }))
+  .get('/ppt/health', async ({ set }) => {
+    const base = new URL(pptWrapperBaseUrl.endsWith('/') ? pptWrapperBaseUrl : `${pptWrapperBaseUrl}/`)
+    const url = new URL('./ppt/check', base)
+    try {
+      const res = await fetch(url, { method: 'GET', signal: AbortSignal.timeout(700) })
+      const json = (await res.json().catch(() => null)) as any
+      const ok = Boolean(json?.ok)
+      set.status = ok ? 200 : 503
+      return { ok, status: res.status, wrapper: json }
+    } catch (e) {
+      set.status = 503
+      return { ok: false, error: String(e) }
+    }
+  })
   .post('/dialog/select-image-file', async () => {
     const result = await requestMainRpc<{ fileUrl?: string }>('selectImageFile')
     const fileUrl = typeof (result as any)?.fileUrl === 'string' ? (result as any).fileUrl : undefined

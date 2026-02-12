@@ -133,7 +133,6 @@ try { $pname = (Get-Process -Id $pid -ErrorAction Stop).ProcessName } catch { $p
   const data = await runPowerShellJson(script, 1400)
   if (!data || typeof data !== 'object') return undefined
   const title = typeof (data as any).title === 'string' ? (data as any).title : ''
-  if (!title) return undefined
   const boundsRaw = (data as any).bounds
   const bounds =
     boundsRaw && Number.isFinite(boundsRaw.x) && Number.isFinite(boundsRaw.y) && Number.isFinite(boundsRaw.width) && Number.isFinite(boundsRaw.height)

@@ -14,6 +14,8 @@ npmRebuild: false
 extraResources:
   - from: iconpack/LanStartWrite.png
     to: iconpack/LanStartWrite.png
+  - from: out/ppt-wrapper
+    to: ppt-wrapper
 publish:
   provider: github
 win:

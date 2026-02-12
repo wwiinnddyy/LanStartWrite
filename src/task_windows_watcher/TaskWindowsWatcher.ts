@@ -26,10 +26,10 @@ function normalizeProcessList(list: ProcessSample[]): ProcessSample[] {
 function normalizeForegroundWindow(sample: ForegroundWindowSample | undefined): ForegroundWindowSample | undefined {
   if (!sample) return undefined
   const title = typeof sample.title === 'string' ? sample.title : ''
-  if (!title) return undefined
   const pid = Number.isFinite(sample.pid ?? NaN) ? (sample.pid as number) : undefined
   const processName = typeof sample.processName === 'string' ? sample.processName : undefined
   const handle = typeof sample.handle === 'string' ? sample.handle : undefined
+  if (!title && pid === undefined && processName === undefined && handle === undefined) return undefined
   const bounds = sample.bounds && Number.isFinite(sample.bounds.x) && Number.isFinite(sample.bounds.y) && Number.isFinite(sample.bounds.width) && Number.isFinite(sample.bounds.height)
     ? { x: sample.bounds.x, y: sample.bounds.y, width: sample.bounds.width, height: sample.bounds.height }
     : undefined

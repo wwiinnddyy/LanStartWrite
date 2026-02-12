@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "dgSpecHash": "+/9LDvquDNY=",
+  "success": true,
+  "projectFilePath": "C:\\Users\\HiteVision station\\Documents\\LanStart\\LanStartWrite\\src\\office\\PowerPoint\\inkeys\\PptHttpWrapper\\PptHttpWrapper.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\HiteVision station\\.nuget\\packages\\microsoft.office.interop.powerpoint\\15.0.4420.1018\\microsoft.office.interop.powerpoint.15.0.4420.1018.nupkg.sha512",
+    "C:\\Users\\HiteVision station\\.nuget\\packages\\microsoft.netcore.app.runtime.win-x64\\8.0.24\\microsoft.netcore.app.runtime.win-x64.8.0.24.nupkg.sha512",
+    "C:\\Users\\HiteVision station\\.nuget\\packages\\microsoft.windowsdesktop.app.runtime.win-x64\\8.0.24\\microsoft.windowsdesktop.app.runtime.win-x64.8.0.24.nupkg.sha512",
+    "C:\\Users\\HiteVision station\\.nuget\\packages\\microsoft.aspnetcore.app.runtime.win-x64\\8.0.24\\microsoft.aspnetcore.app.runtime.win-x64.8.0.24.nupkg.sha512"
+  ],
+  "logs": []
+}

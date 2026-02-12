@@ -8,7 +8,8 @@
   "main": "out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
-    "build": "electron-vite build && tsc -p tsconfig.backend.json",
+    "build:ppt-wrapper": "node -e \"const fs=require('fs');const path=require('path');const {spawnSync}=require('child_process');const candidates=['dotnet',process.env.DOTNET_ROOT?path.join(process.env.DOTNET_ROOT,'dotnet.exe'):null,'C:/Program Files/dotnet/dotnet.exe','C:/Program Files (x86)/dotnet/dotnet.exe'].filter(Boolean);let dotnet=null;for(const c of candidates){const r=spawnSync(c,['--version'],{stdio:'ignore'});if(r&&r.status===0){dotnet=c;break;}}if(!dotnet){console.error('dotnet not found; cannot build ppt wrapper');process.exit(1);}const outDir=path.resolve('out/ppt-wrapper');try{fs.mkdirSync(outDir,{recursive:true});}catch{}const args=['publish','src/office/PowerPoint/inkeys/PptHttpWrapper/PptHttpWrapper.csproj','-c','Release','-r','win-x64','--self-contained','true','-o',outDir];const p=spawnSync(dotnet,args,{stdio:'inherit'});process.exit(typeof p.status==='number'?p.status:1);\"",
+    "build": "pnpm build:ppt-wrapper && electron-vite build && tsc -p tsconfig.backend.json",
     "preview": "electron-vite preview",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",

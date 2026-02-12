@@ -10,6 +10,12 @@ import {
   UI_STATE_APP_WINDOW_ID,
   VIDEO_SHOW_MERGE_LAYERS_KV_KEY,
   VIDEO_SHOW_MERGE_LAYERS_UI_STATE_KEY,
+  OFFICE_PPT_MODE_KV_KEY,
+  OFFICE_PPT_MODE_UI_STATE_KEY,
+  type OfficePptMode,
+  SYSTEM_UIA_TOPMOST_KV_KEY,
+  SYSTEM_UIA_TOPMOST_UI_STATE_KEY,
+  ADMIN_STATUS_UI_STATE_KEY,
   WHITEBOARD_BG_COLOR_KV_KEY,
   WHITEBOARD_BG_COLOR_UI_STATE_KEY,
   WHITEBOARD_BG_IMAGE_OPACITY_UI_STATE_KEY,
@@ -1512,6 +1518,150 @@ function VideoShowSettings() {
   )
 }
 
+function OfficeSettings() {
+  const [pptMode, setPptMode] = usePersistedState<OfficePptMode>(OFFICE_PPT_MODE_KV_KEY, 'inkeys', {
+    validate: (v): v is OfficePptMode => v === 'inkeys' || v === 'based' || v === 'vsto'
+  })
+
+  const [pptBackendStatus, setPptBackendStatus] = React.useState<'loading' | 'ok' | 'error'>('loading')
+
+  const persistPptMode = (next: string | null) => {
+    const v = next as OfficePptMode
+    if (v !== 'inkeys' && v !== 'based' && v !== 'vsto') return
+    setPptMode(v)
+    void (async () => {
+      try {
+        await putKv(OFFICE_PPT_MODE_KV_KEY, v)
+      } catch {
+        return
+      }
+      try {
+        await putUiStateKey(UI_STATE_APP_WINDOW_ID, OFFICE_PPT_MODE_UI_STATE_KEY, v)
+      } catch {
+        return
+      }
+    })()
+  }
+
+  React.useEffect(() => {
+    if (pptMode !== 'inkeys') {
+      setPptBackendStatus('loading')
+      return
+    }
+
+    let cancelled = false
+    const check = async () => {
+      try {
+        const res = await window.lanstart?.apiRequest({ method: 'GET', path: '/ppt/health' })
+        const ok = (res as any)?.status === 200 && Boolean((res as any)?.body?.ok)
+        if (!cancelled) setPptBackendStatus(ok ? 'ok' : 'error')
+      } catch {
+        if (!cancelled) setPptBackendStatus('error')
+      }
+    }
+
+    void check()
+    const timer = setInterval(check, 5000)
+    return () => {
+      cancelled = true
+      clearInterval(timer)
+    }
+  }, [pptMode])
+
+  return (
+    <div className="settingsContentSection">
+      <h2 className="settingsContentTitle">Office</h2>
+      <p className="settingsContentDescription">配置 Office 办公软件的相关设置</p>
+
+      <div className="settingsFormCard">
+        <div className="settingsFormTitle">Word</div>
+        <div className="settingsFormDescription">Word 相关设置（暂无）</div>
+      </div>
+
+      <div className="settingsFormCard">
+        <div className="settingsFormTitle">PowerPoint</div>
+        <div className="settingsFormDescription">PowerPoint 演示模式设置</div>
+        <div className="settingsFormGroup">
+          <Select
+            label="演示模式"
+            description="选择 PowerPoint 的控制与批注实现方式"
+            value={pptMode}
+            onChange={persistPptMode}
+            data={[
+              { value: 'inkeys', label: 'InKeys' },
+              { value: 'based', label: 'Based (未实现)' },
+              { value: 'vsto', label: 'VSTO (未实现)' }
+            ]}
+          />
+        </div>
+        {pptMode === 'inkeys' && (
+          <Box mt="md">
+            <div className="settingsBackendStatus">
+              <span className={`settingsBackendStatusDot settingsBackendStatusDot--${pptBackendStatus}`} />
+              <span className="settingsBackendStatusText">
+                {pptBackendStatus === 'loading'
+                  ? '正在检查后端服务...'
+                  : pptBackendStatus === 'ok'
+                    ? 'PPT 联动功能正常，后端服务运行正常'
+                    : '后端服务连接失败，请检查服务状态'}
+              </span>
+            </div>
+          </Box>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function SystemSettings() {
+  const bus = useUiStateBus(UI_STATE_APP_WINDOW_ID)
+  const isAdmin = bus.state[ADMIN_STATUS_UI_STATE_KEY] === true
+
+  const [uiaTopmost, setUiaTopmost] = usePersistedState<boolean>(SYSTEM_UIA_TOPMOST_KV_KEY, true, {
+    validate: (v): v is boolean => typeof v === 'boolean'
+  })
+
+  const persistUiaTopmost = (next: boolean) => {
+    setUiaTopmost(next)
+    void (async () => {
+      try {
+        await putKv(SYSTEM_UIA_TOPMOST_KV_KEY, next)
+      } catch {
+        return
+      }
+      try {
+        await putUiStateKey(UI_STATE_APP_WINDOW_ID, SYSTEM_UIA_TOPMOST_UI_STATE_KEY, next)
+      } catch {}
+    })()
+  }
+
+  return (
+    <div className="settingsContentSection">
+      <h2 className="settingsContentTitle">系统</h2>
+      <p className="settingsContentDescription">配置系统相关能力与运行状态</p>
+
+      <div className="settingsFormCard">
+        <div className="settingsFormTitle">权限状态</div>
+        <div className="settingsFormDescription">用于判断是否启用管理员增强置顶策略</div>
+        <div className="settingsFormGroup">
+          <div className="settingsBackendStatus">
+            <span className={`settingsBackendStatusDot settingsBackendStatusDot--${isAdmin ? 'ok' : 'error'}`} />
+            <span className="settingsBackendStatusText">{isAdmin ? '已获得管理员权限' : '未获得管理员权限'}</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="settingsFormCard">
+        <div className="settingsFormTitle">置顶策略</div>
+        <div className="settingsFormDescription">开启后使用 UIA/Win32 强制置顶（更稳，但更激进）</div>
+        <div className="settingsFormGroup">
+          <Switch checked={uiaTopmost} onChange={(e) => persistUiaTopmost(e.currentTarget.checked)} label="启用 UIA 强制置顶" size="md" />
+        </div>
+      </div>
+    </div>
+  )
+}
+
 const contentComponents: Record<SettingsTab, React.FC> = {
   appearance: AppearanceSettings,
   toolbar: ToolbarSettings,
@@ -1519,6 +1669,8 @@ const contentComponents: Record<SettingsTab, React.FC> = {
   annotation: AnnotationSettings,
   whiteboard: WhiteboardSettings,
   'video-show': VideoShowSettings,
+  office: OfficeSettings,
+  system: SystemSettings,
   'lanstart-bar': LanStartBarSettings,
   about: AboutSettings,
 }
