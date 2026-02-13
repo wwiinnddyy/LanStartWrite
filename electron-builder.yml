@@ -20,11 +20,21 @@ publish:
   provider: github
 win:
   target:
+    - target: nsis
+      arch:
+        - x64
+    - target: innoSetup
+      arch:
+        - x64
     - target: appx
       arch:
         - x64
   icon: LanStartWrite.png
   signAndEditExecutable: false
+nsis:
+  artifactName: "${productName}-${version}-nsis.${ext}"
+innoSetup:
+  artifactName: "${productName}-${version}-inno.${ext}"
 appx:
   applicationId: LanStartWrite
   identityName: LanStart.LanStartWrite

@@ -106,6 +106,26 @@ jobs:
       - name: 构建
         run: pnpm -s build
 
+      - name: 安装 Inno Setup
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          choco install innosetup -y --no-progress
+          $iscc = (Get-Command iscc.exe -ErrorAction SilentlyContinue)?.Source
+          if (-not $iscc) {
+            $candidates = @(
+              'C:\Program Files (x86)\Inno Setup 6\ISCC.exe',
+              'C:\Program Files\Inno Setup 6\ISCC.exe'
+            ) | Where-Object { Test-Path $_ }
+            if ($candidates.Count -gt 0) {
+              $iscc = $candidates[0]
+            }
+          }
+          if (-not $iscc) {
+            throw 'ISCC.exe not found after installing innosetup'
+          }
+          Add-Content -Path $env:GITHUB_PATH -Value (Split-Path $iscc)
+
       - name: 打包（Windows）
         shell: pwsh
         run: |
@@ -132,7 +152,13 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: dist-win-${{ needs.parse.outputs.version }}
-          path: dist/*.appx
+          path: |
+            dist/*.appx
+            dist/*.appxbundle
+            dist/*.exe
+            dist/*.blockmap
+            dist/*.yml
+            dist/*.yaml
 
   build_mac:
     needs: parse
