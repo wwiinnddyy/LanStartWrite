@@ -15,7 +15,6 @@ export type AppButtonId =
   | 'db'
   | 'events'
   | 'watcher'
-  | 'pin'
   | 'settings'
   | 'quit'
 
@@ -84,7 +83,6 @@ export const APP_BUTTON_DEFINITIONS: readonly AppButtonDefinition[] = [
   { id: 'db', label: '数据库', tags: [ButtonDisplayTag.ALLOW_FEATURE_PANEL] },
   { id: 'events', label: '事件', tags: [ButtonDisplayTag.ALLOW_FLOATING_TOOLBAR, ButtonDisplayTag.ALLOW_FEATURE_PANEL, ButtonDisplayTag.TOOLBAR_SECONDARY] },
   { id: 'watcher', label: '监视器', tags: [ButtonDisplayTag.ALLOW_FLOATING_TOOLBAR, ButtonDisplayTag.ALLOW_FEATURE_PANEL, ButtonDisplayTag.TOOLBAR_SECONDARY] },
-  { id: 'pin', label: '置顶', tags: [ButtonDisplayTag.ALLOW_FLOATING_TOOLBAR, ButtonDisplayTag.ALLOW_FEATURE_PANEL] },
   { id: 'settings', label: '设置', tags: [ButtonDisplayTag.ALLOW_FLOATING_TOOLBAR, ButtonDisplayTag.ALLOW_FEATURE_PANEL] },
   { id: 'quit', label: '退出', tags: [ButtonDisplayTag.ALLOW_FLOATING_TOOLBAR, ButtonDisplayTag.ALLOW_FEATURE_PANEL] }
 ]
@@ -159,4 +157,3 @@ export function getToolbarDefaultSecondaryOrder(): ToolbarSecondaryButtonId[] {
   }
   return out
 }
-

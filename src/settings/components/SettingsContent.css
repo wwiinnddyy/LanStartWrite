@@ -837,3 +837,105 @@
   outline: 2px solid var(--ls-accent-primary, #3b82f6);
   outline-offset: 3px;
 }
+
+.settingsFeaturePanelPreview {
+  margin-top: 14px;
+  padding: 14px 14px 12px;
+  border-radius: 16px;
+  border: 1px solid var(--ls-surface-border, rgba(0, 0, 0, 0.08));
+  background: rgba(0, 0, 0, 0.02);
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+:root[data-appearance='dark'] .settingsFeaturePanelPreview {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.settingsFeaturePanelTitle {
+  font-size: 12px;
+  opacity: 0.9;
+  margin-bottom: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.settingsFeaturePanelMeta {
+  font-size: 11px;
+  opacity: 0.65;
+}
+
+.settingsFeaturePanelPager {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.settingsFeaturePanelPagerViewport {
+  width: calc(40px * 4 + 8px * 3);
+  overflow: hidden;
+  touch-action: none;
+}
+
+.settingsFeaturePanelPagerTrack {
+  display: flex;
+  gap: 0px;
+}
+
+.settingsFeaturePanelPagerPage {
+  width: calc(40px * 4 + 8px * 3);
+  flex: 0 0 auto;
+}
+
+.settingsFeaturePanelIconGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 40px);
+  gap: 8px;
+}
+
+.settingsFeaturePanelDragItem {
+  display: inline-flex;
+  width: 40px;
+  height: 40px;
+  -webkit-app-region: no-drag;
+  cursor: grab;
+}
+
+.settingsFeaturePanelDragItem:active {
+  cursor: grabbing;
+}
+
+.settingsFeaturePanelDragItem--dragging {
+  opacity: 0.6;
+}
+
+.settingsFeaturePanelPagerDots {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 10px;
+}
+
+.settingsFeaturePanelPagerDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(12, 12, 12, 0.22);
+}
+
+.settingsFeaturePanelPagerDot--active {
+  background: rgba(12, 12, 12, 0.5);
+}
+
+:root[data-appearance='dark'] .settingsFeaturePanelPagerDot {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+:root[data-appearance='dark'] .settingsFeaturePanelPagerDot--active {
+  background: rgba(255, 255, 255, 0.46);
+}

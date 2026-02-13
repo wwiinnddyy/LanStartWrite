@@ -4,6 +4,7 @@ import { motion, useReducedMotion } from '../Framer_Motion'
 import { markQuitting, postCommand } from '../toolbar/hooks/useBackend'
 import { useZoomOnWheel } from '../toolbar/hooks/useZoomOnWheel'
 import { getAppButtonVisibility, type AppButtonId } from '../toolbar/utils/constants'
+import { APP_BUTTON_DEFINITIONS } from '../button'
 import {
   WatcherIcon,
   EventsIcon,
@@ -172,60 +173,45 @@ export function FeaturePanelMenu(props: { kind: string }) {
   }, [])
 
   const items = useMemo(() => {
-    const allItems: Array<{ id: AppButtonId; title: string; icon: GridIconKind; variant?: 'default' | 'light' | 'danger'; onClick: () => void }> = [
-      {
-        id: 'db',
-        title: '数据库',
-        icon: 'db',
-        onClick: () => {
-          void postCommand('create-window')
-        }
-      },
-      {
-        id: 'events',
-        title: '事件',
-        icon: 'events',
-        onClick: () => {
-          void postCommand('toggle-subwindow', { kind: 'events', placement: 'bottom' })
-        }
-      },
-      {
-        id: 'clock',
-        title: '时钟',
-        icon: 'clock',
-        onClick: () => {
-          void postCommand('toggle-subwindow', { kind: 'clock', placement: 'bottom' })
-        }
-      },
-      {
-        id: 'watcher',
-        title: '监视器',
-        icon: 'watcher',
-        onClick: () => {
-          void postCommand('watcher.openWindow')
-        }
-      },
-      {
-        id: 'settings',
-        title: '设置',
-        icon: 'gear',
-        onClick: () => {
-          void postCommand('app.openSettingsWindow')
-        }
-      },
-      {
-        id: 'quit',
-        title: '退出',
-        icon: 'quit',
-        variant: 'danger',
-        onClick: () => {
+    const iconFor = (id: AppButtonId): GridIconKind => {
+      if (id === 'db') return 'db'
+      if (id === 'events') return 'events'
+      if (id === 'watcher') return 'watcher'
+      if (id === 'clock') return 'clock'
+      if (id === 'settings') return 'gear'
+      if (id === 'quit') return 'quit'
+      return 'grid'
+    }
+
+    const variantFor = (id: AppButtonId): 'default' | 'light' | 'danger' | undefined => {
+      if (id === 'quit') return 'danger'
+      return undefined
+    }
+
+    const onClickFor = (id: AppButtonId) => {
+      if (id === 'db') return () => void postCommand('create-window')
+      if (id === 'events') return () => void postCommand('toggle-subwindow', { kind: 'events', placement: 'bottom' })
+      if (id === 'clock') return () => void postCommand('toggle-subwindow', { kind: 'clock', placement: 'bottom' })
+      if (id === 'watcher') return () => void postCommand('watcher.openWindow')
+      if (id === 'settings') return () => void postCommand('app.openSettingsWindow')
+      if (id === 'quit')
+        return () => {
           markQuitting()
           void postCommand('quit')
         }
-      }
-    ]
 
-    return allItems.filter((item) => getAppButtonVisibility(item.id).showInFeaturePanel)
+      return () => void postCommand('toggle-subwindow', { kind: id, placement: 'bottom' })
+    }
+
+    return APP_BUTTON_DEFINITIONS
+      .filter((d) => getAppButtonVisibility(d.id).showInFeaturePanel)
+      .map((d) => ({
+        id: d.id,
+        title: d.label,
+        icon: iconFor(d.id),
+        variant: variantFor(d.id),
+        onClick: onClickFor(d.id)
+      }))
   }, [])
 
   const pages = useMemo(() => {

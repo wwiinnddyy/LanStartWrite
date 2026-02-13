@@ -1,6 +1,6 @@
 import React from 'react'
 import { Box, Select, Switch } from '@mantine/core'
-import { motion } from '../../Framer_Motion'
+import { motion, useReducedMotion } from '../../Framer_Motion'
 import {
   APP_MODE_UI_STATE_KEY,
   LEAFER_SETTINGS_KV_KEY,
@@ -35,6 +35,7 @@ import {
 } from '../../status'
 import {
   Button,
+  APP_BUTTON_DEFINITIONS,
   getToolbarDefaultAllowedSecondaryButtonIds,
   getToolbarDefaultSecondaryOrder,
   getAppButtonLabel,
@@ -45,11 +46,13 @@ import {
   type ToolbarPrimaryButtonId,
   type ToolbarSecondaryButtonId
 } from '../../button'
+import { getAppButtonVisibility, type AppButtonId } from '../../toolbar/utils/constants'
 import type { SettingsTab } from '../types'
 import { AccentColorPicker } from './AccentColorPicker'
 import { TransitionSettings } from './TransitionSettings'
 import { useAppearanceSettings } from '../hooks/useAppearanceSettings'
 import LanStartLogoSvg from '../../../iconpack/3d1b23de6a48e1d67f4c637d117897cd26c5594cfbb15bc6092a3546d8cc425a(1).svg'
+import { DatabaseIcon, EventsIcon, QuitIcon, SettingsIcon, WatcherIcon } from '../../toolbar/components/ToolbarIcons'
 import './SettingsContent.css'
 
 interface SettingsContentProps {
@@ -1017,21 +1020,272 @@ function ToolbarSettings() {
 }
 
 function FeaturePanelSettings() {
+  type GridIconKind = 'grid' | 'plus' | 'gear' | 'doc' | 'db' | 'events' | 'watcher' | 'clock' | 'quit'
+  const reduceMotion = useReducedMotion()
+  const pagerViewportRef = React.useRef<HTMLDivElement | null>(null)
+  const [pageIndex, setPageIndex] = React.useState(0)
+  const [pagerViewportWidth, setPagerViewportWidth] = React.useState(0)
+  const [draggingId, setDraggingId] = React.useState<AppButtonId | null>(null)
+
+  const definitionById = React.useMemo(() => {
+    const m = new Map<AppButtonId, { label: string }>()
+    for (const d of APP_BUTTON_DEFINITIONS) {
+      m.set(d.id, { label: d.label })
+    }
+    return m
+  }, [])
+
+  const [buttonOrder, setButtonOrder] = React.useState<AppButtonId[]>(() => {
+    return APP_BUTTON_DEFINITIONS.filter((d) => getAppButtonVisibility(d.id).showInFeaturePanel).map((d) => d.id)
+  })
+
+  React.useEffect(() => {
+    const viewport = pagerViewportRef.current
+    if (!viewport) return
+    if (typeof ResizeObserver === 'undefined') return
+
+    let rafId = 0
+    let lastWidth = 0
+
+    const send = () => {
+      rafId = 0
+      const rect = viewport.getBoundingClientRect()
+      const nextWidth = Math.max(1, Math.round(rect.width))
+      if (nextWidth === lastWidth) return
+      lastWidth = nextWidth
+      setPagerViewportWidth(nextWidth)
+    }
+
+    const schedule = () => {
+      if (rafId) return
+      rafId = window.requestAnimationFrame(send)
+    }
+
+    const ro = new ResizeObserver(schedule)
+    ro.observe(viewport)
+    schedule()
+
+    return () => {
+      ro.disconnect()
+      if (rafId) window.cancelAnimationFrame(rafId)
+    }
+  }, [])
+
+  const iconFor = React.useCallback((id: AppButtonId): GridIconKind => {
+    if (id === 'db') return 'db'
+    if (id === 'events') return 'events'
+    if (id === 'watcher') return 'watcher'
+    if (id === 'clock') return 'clock'
+    if (id === 'settings') return 'gear'
+    if (id === 'quit') return 'quit'
+    return 'grid'
+  }, [])
+
+  function GridIcon(props: { kind: GridIconKind }) {
+    const stroke = 'currentColor'
+    const common = {
+      width: 18,
+      height: 18,
+      viewBox: '0 0 24 24',
+      fill: 'none',
+      stroke,
+      strokeWidth: 1.6,
+      strokeLinecap: 'round' as const,
+      strokeLinejoin: 'round' as const
+    }
+
+    if (props.kind === 'grid') {
+      return (
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 20 20">
+          <path
+            fill="currentColor"
+            d="M4.5 17a1.5 1.5 0 0 1-1.493-1.355L3 15.501v-11a1.5 1.5 0 0 1 1.356-1.493L4.5 3H9a1.5 1.5 0 0 1 1.493 1.355l.007.145v.254l2.189-2.269a1.5 1.5 0 0 1 2.007-.138l.116.101l2.757 2.725a1.5 1.5 0 0 1 .111 2.011l-.103.116l-2.311 2.2h.234a1.5 1.5 0 0 1 1.493 1.356L17 11v4.5a1.5 1.5 0 0 1-1.355 1.493L15.5 17zm5-6.5H4v5a.5.5 0 0 0 .326.47l.084.023l.09.008h5zm6 0h-5V16h5a.5.5 0 0 0 .492-.41L16 15.5V11a.5.5 0 0 0-.41-.491zm-5-2.79V9.5h1.79zM9 4H4.5a.5.5 0 0 0-.492.411L4 4.501v5h5.5v-5a.5.5 0 0 0-.326-.469L9.09 4.01zm5.122-.826a.5.5 0 0 0-.645-.053l-.068.06l-2.616 2.713a.5.5 0 0 0-.057.623l.063.078l2.616 2.615a.5.5 0 0 0 .62.07l.078-.061l2.758-2.627a.5.5 0 0 0 .054-.638l-.059-.069z"
+          />
+        </svg>
+      )
+    }
+
+    if (props.kind === 'plus') {
+      return (
+        <svg {...common}>
+          <path d="M12 5v14" />
+          <path d="M5 12h14" />
+        </svg>
+      )
+    }
+
+    if (props.kind === 'db') return <DatabaseIcon />
+    if (props.kind === 'events') return <EventsIcon />
+    if (props.kind === 'watcher') return <WatcherIcon />
+    if (props.kind === 'gear') return <SettingsIcon />
+    if (props.kind === 'quit') return <QuitIcon />
+    if (props.kind === 'clock') {
+      return (
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 20 20">
+          <path
+            fill="currentColor"
+            d="M10 2a8 8 0 1 1 0 16a8 8 0 0 1 0-16m0 1a7 7 0 1 0 0 14a7 7 0 0 0 0-14m-.5 2a.5.5 0 0 1 .492.41L10 5.5V10h2.5a.5.5 0 0 1 .09.992L12.5 11h-3a.5.5 0 0 1-.492-.41L9 10.5v-5a.5.5 0 0 1 .5-.5"
+          />
+        </svg>
+      )
+    }
+
+    if (props.kind === 'doc') {
+      return (
+        <svg {...common}>
+          <path d="M7 3h7l3 3v15H7z" />
+          <path d="M14 3v4h4" />
+          <path d="M9 11h6" />
+          <path d="M9 14h6" />
+          <path d="M9 17h4" />
+        </svg>
+      )
+    }
+
+    return (
+      <svg {...common}>
+        <path d="M5 7h14" />
+        <path d="M5 12h14" />
+        <path d="M5 17h14" />
+      </svg>
+    )
+  }
+
+  const items = React.useMemo(() => {
+    return buttonOrder
+      .map((id) => ({ id, title: definitionById.get(id)?.label ?? id, icon: iconFor(id) }))
+      .filter((it) => getAppButtonVisibility(it.id).showInFeaturePanel)
+  }, [buttonOrder, definitionById, iconFor])
+
+  const pages = React.useMemo(() => {
+    const pageSize = 16
+    const result: Array<Array<{ id: AppButtonId; title: string; icon: GridIconKind }>> = []
+    for (let i = 0; i < items.length; i += pageSize) {
+      result.push(items.slice(i, i + pageSize))
+    }
+    return result
+  }, [items])
+
+  const pageCount = pages.length
+  const effectivePageIndex = Math.max(0, Math.min(pageCount - 1, pageIndex))
+  const swipeThreshold = 40
+  const pageWidth = pagerViewportWidth || 184
+  const leftLimit = -Math.max(0, (pageCount - 1) * pageWidth)
+
+  React.useEffect(() => {
+    if (pageIndex !== effectivePageIndex) setPageIndex(effectivePageIndex)
+  }, [effectivePageIndex, pageIndex])
+
+  const moveInOrder = React.useCallback((fromId: AppButtonId, toId: AppButtonId) => {
+    setButtonOrder((prev) => {
+      const from = prev.indexOf(fromId)
+      const to = prev.indexOf(toId)
+      if (from < 0 || to < 0 || from === to) return prev
+      const next = prev.slice()
+      const [moved] = next.splice(from, 1)
+      next.splice(to, 0, moved)
+      return next
+    })
+  }, [])
+
   return (
     <div className="settingsContentSection">
       <h2 className="settingsContentTitle">功能面板</h2>
-      <p className="settingsContentDescription">管理功能面板的显示选项</p>
-      
-      <div className="settingsContentPlaceholder">
-        <div className="settingsContentPlaceholderIcon">
-          <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" strokeWidth="1.5">
-            <rect x="3" y="3" width="7" height="7" rx="1" />
-            <rect x="14" y="3" width="7" height="7" rx="1" />
-            <rect x="3" y="14" width="7" height="7" rx="1" />
-            <rect x="14" y="14" width="7" height="7" rx="1" />
-          </svg>
+      <p className="settingsContentDescription">在这里预览功能面板布局（点击无效，可拖动调整按钮位置）</p>
+
+      <div className="settingsFeaturePanelPreview">
+        <div className="settingsFeaturePanelTitle">
+          <span>功能面板</span>
+          <span className="settingsFeaturePanelMeta">{items.length}</span>
         </div>
-        <p className="settingsContentPlaceholderText">功能面板设置即将推出</p>
+
+        <div className="settingsFeaturePanelPager">
+          <div ref={pagerViewportRef} className="settingsFeaturePanelPagerViewport">
+            <motion.div
+              className="settingsFeaturePanelPagerTrack"
+              drag={draggingId || pageCount <= 1 ? false : 'x'}
+              dragConstraints={{ left: leftLimit, right: 0 }}
+              dragElastic={0.06}
+              animate={{ x: -(effectivePageIndex * pageWidth) }}
+              transition={reduceMotion ? undefined : { type: 'spring', stiffness: 360, damping: 38 }}
+              onDragEnd={(_e, info: { offset: { x: number }; velocity: { x: number } }) => {
+                const offsetX = info.offset.x
+                const velocityX = info.velocity.x
+                const swipePower = offsetX + velocityX * 0.12
+                if (swipePower <= -swipeThreshold && effectivePageIndex < pageCount - 1) {
+                  setPageIndex(effectivePageIndex + 1)
+                  return
+                }
+                if (swipePower >= swipeThreshold && effectivePageIndex > 0) {
+                  setPageIndex(effectivePageIndex - 1)
+                }
+              }}
+            >
+              {pages.map((pageItems, idx) => (
+                <div key={idx} className="settingsFeaturePanelPagerPage">
+                  <div className="settingsFeaturePanelIconGrid">
+                    {pageItems.map((item) => (
+                      <div
+                        key={item.id}
+                        className={draggingId === item.id ? 'settingsFeaturePanelDragItem settingsFeaturePanelDragItem--dragging' : 'settingsFeaturePanelDragItem'}
+                        draggable
+                        onDragStart={(e) => {
+                          setDraggingId(item.id)
+                          try {
+                            e.dataTransfer.effectAllowed = 'move'
+                            e.dataTransfer.setData('text/plain', item.id)
+                          } catch {}
+                        }}
+                        onDragEnd={() => setDraggingId(null)}
+                        onDragOver={(e) => {
+                          e.preventDefault()
+                          try {
+                            e.dataTransfer.dropEffect = 'move'
+                          } catch {}
+                        }}
+                        onDrop={(e) => {
+                          e.preventDefault()
+                          let from = draggingId
+                          if (!from) {
+                            try {
+                              const raw = e.dataTransfer.getData('text/plain')
+                              from = raw as AppButtonId
+                            } catch {}
+                          }
+                          if (!from) return
+                          setDraggingId(null)
+                          moveInOrder(from, item.id)
+                        }}
+                      >
+                        <Button
+                          size="sm"
+                          ariaLabel={item.title}
+                          title={item.title}
+                          showInToolbar={getAppButtonVisibility(item.id).showInToolbar}
+                          showInFeaturePanel={getAppButtonVisibility(item.id).showInFeaturePanel}
+                          onClick={() => undefined}
+                        >
+                          <GridIcon kind={item.icon} />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </motion.div>
+          </div>
+
+          {pageCount > 1 ? (
+            <div className="settingsFeaturePanelPagerDots">
+              {pages.map((_, idx) => (
+                <span
+                  key={idx}
+                  className={idx === effectivePageIndex ? 'settingsFeaturePanelPagerDot settingsFeaturePanelPagerDot--active' : 'settingsFeaturePanelPagerDot'}
+                />
+              ))}
+            </div>
+          ) : null}
+        </div>
       </div>
     </div>
   )
