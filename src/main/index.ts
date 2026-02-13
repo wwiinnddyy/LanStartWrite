@@ -434,6 +434,8 @@ let mutPageHandleWindow: BrowserWindow | undefined
 let mutPageThumbnailsMenuWindow: BrowserWindow | undefined
 let mutPageDesiredFromAppMode = false
 let mutPageDesiredFromPpt = false
+let mutPagePptHideTimer: NodeJS.Timeout | undefined
+let mutPagePptLastShownAt = 0
 let mutPageAnchorBounds: { x: number; y: number; width: number; height: number } | undefined
 let mutPageUiBounds: { width: number; height: number } | undefined
 let whiteboardBackgroundWindow: BrowserWindow | undefined
@@ -702,8 +704,10 @@ function createFloatingToolbarWindow(): BrowserWindow {
     alwaysOnTop: true,
     skipTaskbar: true,
     title: WINDOW_TITLE_FLOATING_TOOLBAR,
-    backgroundColor: legacyWindowImplementation ? effectiveSurfaceBackgroundColor(currentAppearance) : '#00000000',
+    backgroundColor: legacyWindowImplementation ? effectiveSurfaceBackgroundColor(currentAppearance) : '#01000000',
     backgroundMaterial: legacyWindowImplementation && nativeMicaEnabled ? 'mica' : 'none',
+    roundedCorners: legacyWindowImplementation,
+    hasShadow: legacyWindowImplementation,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
@@ -787,8 +791,10 @@ function createFloatingToolbarHandleWindow(owner: BrowserWindow): BrowserWindow 
     skipTaskbar: true,
     parent: owner,
     title: '浮动工具栏拖动把手',
-    backgroundColor: legacyWindowImplementation ? effectiveSurfaceBackgroundColor(currentAppearance) : '#00000000',
+    backgroundColor: legacyWindowImplementation ? effectiveSurfaceBackgroundColor(currentAppearance) : '#01000000',
     backgroundMaterial: legacyWindowImplementation && nativeMicaEnabled ? 'mica' : 'none',
+    roundedCorners: legacyWindowImplementation,
+    hasShadow: legacyWindowImplementation,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
@@ -864,8 +870,10 @@ function getOrCreateToolbarNoticeWindow(): BrowserWindow {
     skipTaskbar: true,
     parent: owner,
     title: '浮动通知',
-    backgroundColor: legacyWindowImplementation ? effectiveSurfaceBackgroundColor(currentAppearance) : '#00000000',
+    backgroundColor: legacyWindowImplementation ? effectiveSurfaceBackgroundColor(currentAppearance) : '#01000000',
     backgroundMaterial: legacyWindowImplementation && nativeMicaEnabled ? 'mica' : 'none',
+    roundedCorners: legacyWindowImplementation,
+    hasShadow: legacyWindowImplementation,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
@@ -970,8 +978,10 @@ function getOrCreateMutPageHandleWindow(owner: BrowserWindow): BrowserWindow {
     skipTaskbar: true,
     parent: owner,
     title: '页面控制器把手',
-    backgroundColor: legacyWindowImplementation ? effectiveSurfaceBackgroundColor(currentAppearance) : '#00000000',
+    backgroundColor: legacyWindowImplementation ? effectiveSurfaceBackgroundColor(currentAppearance) : '#01000000',
     backgroundMaterial: legacyWindowImplementation && nativeMicaEnabled ? 'mica' : 'none',
+    roundedCorners: legacyWindowImplementation,
+    hasShadow: legacyWindowImplementation,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
@@ -1035,8 +1045,10 @@ function getOrCreateMultiPageControlWindow(): BrowserWindow {
     skipTaskbar: true,
     parent: owner,
     title: '多页控制',
-    backgroundColor: legacyWindowImplementation ? effectiveSurfaceBackgroundColor(currentAppearance) : '#00000000',
+    backgroundColor: legacyWindowImplementation ? effectiveSurfaceBackgroundColor(currentAppearance) : '#01000000',
     backgroundMaterial: legacyWindowImplementation && nativeMicaEnabled ? 'mica' : 'none',
+    roundedCorners: legacyWindowImplementation,
+    hasShadow: legacyWindowImplementation,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
@@ -1215,8 +1227,10 @@ function getOrCreateMutPageThumbnailsMenuWindow(owner: BrowserWindow): BrowserWi
     skipTaskbar: true,
     parent: owner,
     title: '页面缩略图查看菜单',
-    backgroundColor: legacyWindowImplementation ? effectiveSurfaceBackgroundColor(currentAppearance) : '#00000000',
+    backgroundColor: legacyWindowImplementation ? effectiveSurfaceBackgroundColor(currentAppearance) : '#01000000',
     backgroundMaterial: legacyWindowImplementation && nativeMicaEnabled ? 'mica' : 'none',
+    roundedCorners: legacyWindowImplementation,
+    hasShadow: legacyWindowImplementation,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
@@ -1923,8 +1937,10 @@ function getOrCreateToolbarSubwindow(kind: string, placement: 'top' | 'bottom'):
     skipTaskbar: true,
     parent: owner,
     title: `二级菜单-${kind}`,
-    backgroundColor: legacyWindowImplementation ? effectiveSurfaceBackgroundColor(currentAppearance) : '#00000000',
+    backgroundColor: legacyWindowImplementation ? effectiveSurfaceBackgroundColor(currentAppearance) : '#01000000',
     backgroundMaterial: legacyWindowImplementation && nativeMicaEnabled ? 'mica' : 'none',
+    roundedCorners: legacyWindowImplementation,
+    hasShadow: legacyWindowImplementation,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
@@ -2200,8 +2216,26 @@ function handleBackendControlMessage(message: any): void {
     const source = String((message as any).source ?? '')
     const visible = Boolean((message as any).visible)
     if (source === 'ppt') {
-      mutPageDesiredFromPpt = visible
-      applyMutPageVisibility()
+      if (visible) {
+        mutPagePptLastShownAt = Date.now()
+        mutPageDesiredFromPpt = true
+        if (mutPagePptHideTimer) {
+          clearTimeout(mutPagePptHideTimer)
+          mutPagePptHideTimer = undefined
+        }
+        applyMutPageVisibility()
+        return
+      }
+
+      if (mutPageAnchorBounds) return
+
+      if (mutPagePptHideTimer) clearTimeout(mutPagePptHideTimer)
+      mutPagePptHideTimer = setTimeout(() => {
+        mutPagePptHideTimer = undefined
+        if (Date.now() - mutPagePptLastShownAt < 900) return
+        mutPageDesiredFromPpt = false
+        applyMutPageVisibility()
+      }, 900)
     }
     return
   }
@@ -2212,8 +2246,22 @@ function handleBackendControlMessage(message: any): void {
     if (source === 'ppt') {
       if (b && Number.isFinite(b.x) && Number.isFinite(b.y) && Number.isFinite(b.width) && Number.isFinite(b.height)) {
         mutPageAnchorBounds = { x: Number(b.x), y: Number(b.y), width: Number(b.width), height: Number(b.height) }
+        mutPagePptLastShownAt = Date.now()
+        mutPageDesiredFromPpt = true
+        if (mutPagePptHideTimer) {
+          clearTimeout(mutPagePptHideTimer)
+          mutPagePptHideTimer = undefined
+        }
+        applyMutPageVisibility()
       } else {
         mutPageAnchorBounds = undefined
+        if (mutPagePptHideTimer) clearTimeout(mutPagePptHideTimer)
+        mutPagePptHideTimer = setTimeout(() => {
+          mutPagePptHideTimer = undefined
+          if (Date.now() - mutPagePptLastShownAt < 1200) return
+          mutPageDesiredFromPpt = false
+          applyMutPageVisibility()
+        }, 1200)
       }
       repositionMultiPageControlWindow()
     }

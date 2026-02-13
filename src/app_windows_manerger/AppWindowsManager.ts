@@ -355,8 +355,10 @@ export class AppWindowsManager {
       show: opts.show,
       frame: opts.frame,
       transparent: opts.transparent,
-      backgroundColor: opts.frame ? this.deps.surfaceBackgroundColor(appearance) : '#00000000',
+      backgroundColor: opts.transparent ? '#01000000' : this.deps.surfaceBackgroundColor(appearance),
       backgroundMaterial: opts.frame && this.deps.getNativeMicaEnabled() ? 'mica' : 'none',
+      roundedCorners: !opts.transparent,
+      hasShadow: !opts.transparent,
       webPreferences: {
         preload: this.deps.preloadPath,
         sandbox: false,

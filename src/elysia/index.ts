@@ -6,6 +6,9 @@ import { networkInterfaces } from 'node:os'
 import { deleteByPrefix, deleteValue, getValue, openLeavelDb, putValue } from '../LeavelDB'
 import {
   ACTIVE_APP_UI_STATE_KEY,
+  APPEARANCE_KV_KEY,
+  APPEARANCE_UI_STATE_KEY,
+  APP_MODE_KV_KEY,
   APP_MODE_UI_STATE_KEY,
   CLEAR_PAGE_REV_UI_STATE_KEY,
   EFFECTIVE_WRITING_BACKEND_UI_STATE_KEY,
@@ -21,9 +24,14 @@ import {
   PPT_PAGE_TOTAL_UI_STATE_KEY,
   PPT_SLIDE_NAME_UI_STATE_KEY,
   REDO_REV_UI_STATE_KEY,
+  OFFICE_PPT_MODE_KV_KEY,
+  OFFICE_PPT_MODE_UI_STATE_KEY,
   SYSTEM_UIA_TOPMOST_KV_KEY,
+  SYSTEM_UIA_TOPMOST_UI_STATE_KEY,
   UI_STATE_APP_WINDOW_ID,
   UNDO_REV_UI_STATE_KEY,
+  VIDEO_SHOW_MERGE_LAYERS_KV_KEY,
+  VIDEO_SHOW_MERGE_LAYERS_UI_STATE_KEY,
   WHITEBOARD_BG_COLOR_KV_KEY,
   WHITEBOARD_BG_COLOR_UI_STATE_KEY,
   WHITEBOARD_BG_IMAGE_URL_KV_KEY,
@@ -37,6 +45,7 @@ import {
   WRITING_FRAMEWORK_UI_STATE_KEY,
   isActiveApp,
   isAppMode,
+  isAppearance,
   isFileOrDataUrl,
   isHexColor,
   isWritingFramework,
@@ -612,6 +621,155 @@ async function handleCommand(command: string, payload: unknown): Promise<Command
 
       if (action === 'quit') {
         requestMain({ type: 'QUIT_APP' })
+        return { ok: true }
+      }
+
+      return { ok: false, error: 'UNKNOWN_COMMAND' }
+    }
+
+    if (scope === 'settings') {
+      if (action === 'setAppearance') {
+        const appearanceRaw = coerceString((payload as any)?.appearance)
+        const appearance = isAppearance(appearanceRaw) ? appearanceRaw : undefined
+        if (!appearance) return { ok: false, error: 'BAD_APPEARANCE' }
+        await putValue(db, APPEARANCE_KV_KEY, appearance)
+        emitEvent('KV_PUT', { key: APPEARANCE_KV_KEY })
+        const state = getOrInitUiState(UI_STATE_APP_WINDOW_ID)
+        state[APPEARANCE_UI_STATE_KEY] = appearance
+        emitEvent('UI_STATE_PUT', { windowId: UI_STATE_APP_WINDOW_ID, key: APPEARANCE_UI_STATE_KEY, value: appearance })
+        requestMain({ type: 'SET_APPEARANCE', appearance })
+        return { ok: true }
+      }
+
+      if (action === 'setAppMode') {
+        const modeRaw = coerceString((payload as any)?.mode)
+        const mode = isAppMode(modeRaw) ? modeRaw : undefined
+        if (!mode) return { ok: false, error: 'BAD_MODE' }
+        await putValue(db, APP_MODE_KV_KEY, mode)
+        emitEvent('KV_PUT', { key: APP_MODE_KV_KEY })
+        const state = getOrInitUiState(UI_STATE_APP_WINDOW_ID)
+        state[APP_MODE_UI_STATE_KEY] = mode
+        emitEvent('UI_STATE_PUT', { windowId: UI_STATE_APP_WINDOW_ID, key: APP_MODE_UI_STATE_KEY, value: mode })
+        requestMain({ type: 'SET_APP_MODE', mode })
+        return { ok: true }
+      }
+
+      if (action === 'setVideoShowMergeLayers') {
+        const enabled = Boolean((payload as any)?.enabled)
+        await putValue(db, VIDEO_SHOW_MERGE_LAYERS_KV_KEY, enabled)
+        emitEvent('KV_PUT', { key: VIDEO_SHOW_MERGE_LAYERS_KV_KEY })
+        const state = getOrInitUiState(UI_STATE_APP_WINDOW_ID)
+        state[VIDEO_SHOW_MERGE_LAYERS_UI_STATE_KEY] = enabled
+        emitEvent('UI_STATE_PUT', {
+          windowId: UI_STATE_APP_WINDOW_ID,
+          key: VIDEO_SHOW_MERGE_LAYERS_UI_STATE_KEY,
+          value: enabled
+        })
+        return { ok: true }
+      }
+
+      if (action === 'setOfficePptMode') {
+        const v = coerceString((payload as any)?.mode)
+        if (v !== 'inkeys' && v !== 'based' && v !== 'vsto') return { ok: false, error: 'BAD_PPT_MODE' }
+        await putValue(db, OFFICE_PPT_MODE_KV_KEY, v)
+        emitEvent('KV_PUT', { key: OFFICE_PPT_MODE_KV_KEY })
+        const state = getOrInitUiState(UI_STATE_APP_WINDOW_ID)
+        state[OFFICE_PPT_MODE_UI_STATE_KEY] = v
+        emitEvent('UI_STATE_PUT', { windowId: UI_STATE_APP_WINDOW_ID, key: OFFICE_PPT_MODE_UI_STATE_KEY, value: v })
+        return { ok: true }
+      }
+
+      if (action === 'setSystemUiaTopmost') {
+        const enabled = Boolean((payload as any)?.enabled)
+        await putValue(db, SYSTEM_UIA_TOPMOST_KV_KEY, enabled)
+        emitEvent('KV_PUT', { key: SYSTEM_UIA_TOPMOST_KV_KEY })
+        const state = getOrInitUiState(UI_STATE_APP_WINDOW_ID)
+        state[SYSTEM_UIA_TOPMOST_UI_STATE_KEY] = enabled
+        emitEvent('UI_STATE_PUT', { windowId: UI_STATE_APP_WINDOW_ID, key: SYSTEM_UIA_TOPMOST_UI_STATE_KEY, value: enabled })
+        requestMain({ type: 'SET_SYSTEM_UIA_TOPMOST', enabled })
+        return { ok: true }
+      }
+
+      if (action === 'setNativeMica') {
+        const enabled = Boolean((payload as any)?.enabled)
+        await putValue(db, 'native-mica-enabled', enabled)
+        emitEvent('KV_PUT', { key: 'native-mica-enabled' })
+        requestMain({ type: 'SET_NATIVE_MICA', enabled })
+        return { ok: true }
+      }
+
+      if (action === 'setLegacyWindowImplementation') {
+        const enabled = Boolean((payload as any)?.enabled)
+        await putValue(db, 'legacy-window-implementation', enabled)
+        emitEvent('KV_PUT', { key: 'legacy-window-implementation' })
+        requestMain({ type: 'SET_LEGACY_WINDOW_IMPLEMENTATION', enabled })
+        return { ok: true }
+      }
+
+      if (action === 'setWhiteboardBackground') {
+        const state = getOrInitUiState(UI_STATE_APP_WINDOW_ID)
+        const nextColor = isHexColor((payload as any)?.bgColor) ? String((payload as any)?.bgColor) : undefined
+        const nextImageUrl = isFileOrDataUrl((payload as any)?.bgImageUrl) ? String((payload as any)?.bgImageUrl ?? '') : undefined
+        const nextOpacity = (() => {
+          const raw = (payload as any)?.bgImageOpacity
+          const n = typeof raw === 'number' ? raw : typeof raw === 'string' ? Number(raw) : NaN
+          if (!Number.isFinite(n)) return undefined
+          return Math.max(0, Math.min(1, n))
+        })()
+
+        if (nextColor !== undefined) {
+          state[WHITEBOARD_BG_COLOR_UI_STATE_KEY] = nextColor
+          emitEvent('UI_STATE_PUT', { windowId: UI_STATE_APP_WINDOW_ID, key: WHITEBOARD_BG_COLOR_UI_STATE_KEY, value: nextColor })
+        }
+        if (nextImageUrl !== undefined) {
+          state[WHITEBOARD_BG_IMAGE_URL_UI_STATE_KEY] = nextImageUrl
+          emitEvent('UI_STATE_PUT', { windowId: UI_STATE_APP_WINDOW_ID, key: WHITEBOARD_BG_IMAGE_URL_UI_STATE_KEY, value: nextImageUrl })
+        }
+        if (nextOpacity !== undefined) {
+          state[WHITEBOARD_BG_IMAGE_OPACITY_UI_STATE_KEY] = nextOpacity
+          emitEvent('UI_STATE_PUT', { windowId: UI_STATE_APP_WINDOW_ID, key: WHITEBOARD_BG_IMAGE_OPACITY_UI_STATE_KEY, value: nextOpacity })
+        }
+
+        const modeRaw = state[APP_MODE_UI_STATE_KEY]
+        const mode = isAppMode(modeRaw) ? modeRaw : 'toolbar'
+        if (mode === 'whiteboard') {
+          const { index, total } = coercePageIndexTotal(state)
+          const defaultBg = await getDefaultWhiteboardBackground()
+          const book = await ensureWhiteboardCanvasBookPersisted({ total, defaultBg })
+          const rawPage = (book.pages as any)?.[index] as Partial<WhiteboardCanvasPageV1> | undefined
+          const page = {
+            bgColor: typeof rawPage?.bgColor === 'string' ? rawPage.bgColor : defaultBg.bgColor,
+            bgImageUrl: isFileOrDataUrl(rawPage?.bgImageUrl) ? String(rawPage?.bgImageUrl ?? '') : defaultBg.bgImageUrl,
+            bgImageOpacity:
+              typeof rawPage?.bgImageOpacity === 'number' && Number.isFinite(rawPage.bgImageOpacity)
+                ? Math.max(0, Math.min(1, rawPage.bgImageOpacity))
+                : defaultBg.bgImageOpacity
+          }
+
+          const appliedColor = nextColor ?? page.bgColor
+          const appliedImageUrl = nextImageUrl ?? page.bgImageUrl
+          const appliedOpacity = nextOpacity ?? page.bgImageOpacity
+
+          if (appliedColor !== page.bgColor || appliedImageUrl !== page.bgImageUrl || appliedOpacity !== page.bgImageOpacity) {
+            book.pages[index] = { bgColor: appliedColor, bgImageUrl: appliedImageUrl, bgImageOpacity: appliedOpacity }
+            await putValue(db, WHITEBOARD_CANVAS_PAGES_KV_KEY, book)
+            emitEvent('KV_PUT', { key: WHITEBOARD_CANVAS_PAGES_KV_KEY })
+          }
+        }
+
+        if (nextColor !== undefined) {
+          await putValue(db, WHITEBOARD_BG_COLOR_KV_KEY, nextColor)
+          emitEvent('KV_PUT', { key: WHITEBOARD_BG_COLOR_KV_KEY })
+        }
+        if (nextImageUrl !== undefined) {
+          await putValue(db, WHITEBOARD_BG_IMAGE_URL_KV_KEY, nextImageUrl)
+          emitEvent('KV_PUT', { key: WHITEBOARD_BG_IMAGE_URL_KV_KEY })
+        }
+        if (nextOpacity !== undefined) {
+          await putValue(db, WHITEBOARD_BG_IMAGE_OPACITY_KV_KEY, nextOpacity)
+          emitEvent('KV_PUT', { key: WHITEBOARD_BG_IMAGE_OPACITY_KV_KEY })
+        }
+
         return { ok: true }
       }
 

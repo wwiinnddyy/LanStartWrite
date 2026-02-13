@@ -76,13 +76,13 @@ export function AppWindowTitlebar(props: {
   className?: string
 }) {
   return (
-    <>
+    <div className={props.className ? `lsAppWindowTitlebarRoot ${props.className}` : 'lsAppWindowTitlebarRoot'}>
       <WindowControls windowId={props.windowId} showMaximize={props.showMaximize} />
-      <div className={props.className ? `lsAppWindowTitlebar ${props.className}` : 'lsAppWindowTitlebar'}>
+      <div className="lsAppWindowTitlebar">
         <div className="lsAppWindowTitlebarTitle">{props.title}</div>
         {props.subtitle ? <div className="lsAppWindowTitlebarSubtitle">{props.subtitle}</div> : null}
       </div>
-    </>
+    </div>
   )
 }
 
