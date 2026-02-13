@@ -237,6 +237,15 @@ body {
   align-items: center;
 }
 
+.clockTabPane {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+}
+
 .clockTabsBar {
   position: absolute;
   left: 12px;
@@ -264,11 +273,24 @@ body {
   font-weight: 600;
   opacity: 0.78;
   cursor: pointer;
+  position: relative;
+  overflow: hidden;
 }
 
 .clockTabButton--active {
   opacity: 1;
+}
+
+.clockTabActiveBg {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
   background: color-mix(in srgb, var(--ls-accent-light) 90%, transparent);
+}
+
+.clockTabLabel {
+  position: relative;
+  z-index: 1;
 }
 
 .clockPrimaryText {
@@ -284,6 +306,166 @@ body {
   opacity: 0.75;
   padding: 0px 2px 4px;
   text-align: center;
+}
+
+.clockWheelRow {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0 12px;
+}
+
+.clockWheelSep {
+  font-size: 16px;
+  font-weight: 700;
+  opacity: 0.5;
+  margin-top: 18px;
+  width: 10px;
+  text-align: center;
+}
+
+.clockWheelCol {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.clockWheelCol--disabled {
+  opacity: 0.5;
+}
+
+.clockWheelLabel {
+  font-size: 11px;
+  opacity: 0.75;
+}
+
+.clockWheelViewport {
+  position: relative;
+  width: 68px;
+  border-radius: 14px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--ls-surface-overlay) 75%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ls-surface-border) 85%, transparent);
+  touch-action: none;
+}
+
+.clockWheelViewport::before,
+.clockWheelViewport::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 34%;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.clockWheelViewport::before {
+  top: 0;
+  background: linear-gradient(to bottom, color-mix(in srgb, var(--ls-surface-bg) 78%, transparent), transparent);
+}
+
+.clockWheelViewport::after {
+  bottom: 0;
+  background: linear-gradient(to top, color-mix(in srgb, var(--ls-surface-bg) 78%, transparent), transparent);
+}
+
+.clockWheelHighlight {
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  height: 28px;
+  margin-top: 0px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--ls-accent-light, rgba(59, 130, 246, 0.12)) 92%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ls-accent-primary, #3b82f6) 22%, transparent);
+  z-index: 1;
+}
+
+.clockWheelTrack {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  will-change: transform;
+  z-index: 0;
+}
+
+.clockIconSwap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.clockWheelItem {
+  width: 100%;
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  opacity: 0.52;
+  cursor: pointer;
+}
+
+.clockWheelItem--selected {
+  opacity: 1;
+  color: var(--ls-accent-primary, #3b82f6);
+}
+
+.clockCountdownLayout {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.clockActionRow {
+  display: flex;
+  gap: 14px;
+  justify-content: center;
+  align-items: center;
+  padding: 4px 2px 12px;
+}
+
+.clockActionButton {
+  appearance: none;
+  border: 0;
+  width: 48px;
+  height: 48px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease, opacity 0.12s ease;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.clockActionButton svg {
+  display: block;
+}
+
+.clockActionButton--primary {
+  background: var(--ls-accent-primary, #3b82f6);
+  color: #fff;
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--ls-accent-primary, #3b82f6) 35%, transparent);
+}
+
+.clockActionButton--secondary {
+  background: color-mix(in srgb, var(--ls-btn-bg) 70%, transparent);
+  color: var(--ls-accent-primary, #3b82f6);
+  border: 1px solid color-mix(in srgb, var(--ls-surface-border) 85%, transparent);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
+}
+
+.clockActionButton:active {
+  transform: scale(0.98);
+  opacity: 0.95;
 }
 
 .clockControls {
