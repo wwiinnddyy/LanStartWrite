@@ -6,6 +6,7 @@ import { ClockMenu, EventsMenu, FeaturePanelMenu, PenSubmenu, EraserSubmenu, Set
 import { NotificationSubwindow } from '../../toolbar_notice/NotificationSubwindow'
 import { TaskWindowsWatcherWindow } from '../../task_windows_watcher'
 import { AnnotationOverlayApp, PaintBoardBackgroundApp } from '../../paint_board'
+import { PdfBackgroundApp } from '../../PDF'
 import { VideoShowBackgroundApp } from '../../video_show'
 import { MultiPageControlHandleWindow, MultiPageControlWindow, PageThumbnailsMenuWindow } from '../../mut_page'
 import { useHyperGlassRealtimeBlur } from '../../hyper_glass'
@@ -94,6 +95,7 @@ export default function App() {
   if (windowId === 'paint-board') {
     if (kind === 'annotation') return <AnnotationOverlayApp />
     if (kind === 'video-show') return <VideoShowBackgroundApp />
+    if (kind === 'pdf') return <PdfBackgroundApp />
     return <PaintBoardBackgroundApp />
   }
   if (windowId === 'watcher') return <WithAppearance><TaskWindowsWatcherWindow /></WithAppearance>

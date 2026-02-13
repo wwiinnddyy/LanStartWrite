@@ -16,6 +16,8 @@ import {
   NOTES_PAGE_TOTAL_UI_STATE_KEY,
   NOTES_RELOAD_REV_UI_STATE_KEY,
   NOTICE_KIND_UI_STATE_KEY,
+  PDF_FILE_URL_KV_KEY,
+  PDF_FILE_URL_UI_STATE_KEY,
   PEN_COLOR_UI_STATE_KEY,
   PEN_SETTINGS_KV_KEY,
   PEN_THICKNESS_UI_STATE_KEY,
@@ -101,6 +103,8 @@ export {
   NOTES_PAGE_TOTAL_UI_STATE_KEY,
   NOTES_RELOAD_REV_UI_STATE_KEY,
   NOTICE_KIND_UI_STATE_KEY,
+  PDF_FILE_URL_KV_KEY,
+  PDF_FILE_URL_UI_STATE_KEY,
   PEN_COLOR_UI_STATE_KEY,
   PEN_SETTINGS_KV_KEY,
   PEN_THICKNESS_UI_STATE_KEY,
@@ -241,6 +245,13 @@ export async function putKv<T>(key: string, value: T): Promise<void> {
 
 export async function selectImageFile(): Promise<{ fileUrl?: string }> {
   const res = (await requireLanstart().apiRequest({ method: 'POST', path: '/dialog/select-image-file' })) as any
+  const body = res?.body as any
+  const fileUrl = typeof body?.fileUrl === 'string' ? body.fileUrl : undefined
+  return { fileUrl }
+}
+
+export async function selectPdfFile(): Promise<{ fileUrl?: string }> {
+  const res = (await requireLanstart().apiRequest({ method: 'POST', path: '/dialog/select-pdf-file' })) as any
   const body = res?.body as any
   const fileUrl = typeof body?.fileUrl === 'string' ? body.fileUrl : undefined
   return { fileUrl }
@@ -437,7 +448,9 @@ export function useAppAppearance() {
 
 export function useAppMode() {
   const [appMode, setAppModeState] = usePersistedState<AppMode>(APP_MODE_KV_KEY, 'toolbar', {
-    validate: isAppMode
+    validate: isAppMode,
+    mapLoad: (v) => (v === 'pdf' ? 'toolbar' : v),
+    mapSave: (v) => (v === 'pdf' ? 'toolbar' : v)
   })
   const bus = useUiStateBus(UI_STATE_APP_WINDOW_ID)
 
@@ -454,7 +467,7 @@ export function useAppMode() {
     if (next === appMode) return
     setAppModeState(next)
     bus.setKey(APP_MODE_UI_STATE_KEY, next).catch(() => undefined)
-    postCommand('win.setAppMode', { mode: next }).catch(() => undefined)
+    postCommand('settings.setAppMode', { mode: next }).catch(() => undefined)
   }
 
   return { appMode, setAppMode }

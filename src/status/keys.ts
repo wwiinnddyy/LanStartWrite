@@ -5,7 +5,7 @@ export const UI_STATE_APP_WINDOW_ID = 'app'
 export const APPEARANCE_UI_STATE_KEY = 'appearance'
 export const APPEARANCE_KV_KEY = 'app-appearance'
 
-export type AppMode = 'toolbar' | 'whiteboard' | 'video-show'
+export type AppMode = 'toolbar' | 'whiteboard' | 'video-show' | 'pdf'
 export const APP_MODE_UI_STATE_KEY = 'mode'
 export const APP_MODE_KV_KEY = 'app-mode'
 
@@ -50,6 +50,9 @@ export const NOTES_PAGE_INDEX_UI_STATE_KEY = 'notesPageIndex'
 export const NOTES_PAGE_TOTAL_UI_STATE_KEY = 'notesPageTotal'
 
 export const NOTES_RELOAD_REV_UI_STATE_KEY = 'notesReloadRev'
+
+export const PDF_FILE_URL_KV_KEY = 'pdf-file-url'
+export const PDF_FILE_URL_UI_STATE_KEY = 'pdfFileUrl'
 
 export const WHITEBOARD_BG_COLOR_KV_KEY = 'whiteboard-bg-color'
 export const WHITEBOARD_BG_COLOR_UI_STATE_KEY = 'whiteboardBgColor'
@@ -112,7 +115,7 @@ export function isAppearance(v: unknown): v is Appearance {
 }
 
 export function isAppMode(v: unknown): v is AppMode {
-  return v === 'toolbar' || v === 'whiteboard' || v === 'video-show'
+  return v === 'toolbar' || v === 'whiteboard' || v === 'video-show' || v === 'pdf'
 }
 
 export function isWritingFramework(v: unknown): v is WritingFramework {

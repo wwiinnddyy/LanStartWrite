@@ -2,7 +2,9 @@ import { Elysia, t } from 'elysia'
 import { node } from '@elysiajs/node'
 import { createInterface } from 'node:readline'
 import { randomUUID } from 'node:crypto'
+import { open, stat } from 'node:fs/promises'
 import { networkInterfaces } from 'node:os'
+import { fileURLToPath } from 'node:url'
 import { deleteByPrefix, deleteValue, getValue, openLeavelDb, putValue } from '../LeavelDB'
 import {
   ACTIVE_APP_UI_STATE_KEY,
@@ -353,6 +355,28 @@ function requestMainRpc<T>(method: string, params?: unknown, timeoutMs = 30_000)
 const uiState = new Map<string, Record<string, unknown>>()
 const runtimeWindows = new Map<string, unknown>()
 const runtimeProcesses = new Map<string, unknown>()
+
+type PdfFileSession = {
+  token: string
+  filePath: string
+  size: number
+  createdAt: number
+  updatedAt: number
+}
+
+const pdfFileSessions = new Map<string, PdfFileSession>()
+const PDF_FILE_SESSION_TTL_MS = 10 * 60 * 1000
+const PDF_MAX_BYTES = 80 * 1024 * 1024
+const PDF_CHUNK_MAX_BYTES = 1024 * 1024
+
+function cleanupPdfFileSessions(): void {
+  const now = nowMs()
+  for (const [token, s] of pdfFileSessions.entries()) {
+    if (now - s.updatedAt > PDF_FILE_SESSION_TTL_MS) pdfFileSessions.delete(token)
+  }
+}
+
+setInterval(() => cleanupPdfFileSessions(), 60 * 1000).unref?.()
 
 function getOrInitUiState(windowId: string): Record<string, unknown> {
   const existing = uiState.get(windowId)
@@ -988,6 +1012,10 @@ async function handleCommand(command: string, payload: unknown): Promise<Command
         const modeRaw = state[APP_MODE_UI_STATE_KEY]
         const mode = isAppMode(modeRaw) ? modeRaw : 'toolbar'
 
+        if (mode === 'pdf') {
+          return { ok: true }
+        }
+
         if (mode === 'video-show') {
           const rev = Date.now()
           const baseTotal = Math.max(1, total)
@@ -1616,6 +1644,111 @@ const api = new Elysia({ adapter: node() })
     const fileUrl = typeof (result as any)?.fileUrl === 'string' ? (result as any).fileUrl : undefined
     return { ok: true, fileUrl }
   })
+  .post('/dialog/select-pdf-file', async () => {
+    const result = await requestMainRpc<{ fileUrl?: string }>('selectPdfFile')
+    const fileUrl = typeof (result as any)?.fileUrl === 'string' ? (result as any).fileUrl : undefined
+    return { ok: true, fileUrl }
+  })
+  .post(
+    '/pdf/load',
+    async ({ body, set }) => {
+      set.status = 410
+      return { ok: false, error: 'DEPRECATED' }
+    },
+    { body: t.Object({ fileUrl: t.String() }) }
+  )
+  .post(
+    '/pdf/open',
+    async ({ body, set }) => {
+      cleanupPdfFileSessions()
+      const fileUrl = typeof (body as any)?.fileUrl === 'string' ? String((body as any).fileUrl) : ''
+      if (!fileUrl || !fileUrl.startsWith('file:')) {
+        set.status = 400
+        return { ok: false, error: 'BAD_FILE_URL' }
+      }
+
+      let filePath = ''
+      try {
+        filePath = fileURLToPath(fileUrl)
+      } catch {
+        set.status = 400
+        return { ok: false, error: 'BAD_FILE_URL' }
+      }
+
+      try {
+        const st = await stat(filePath)
+        const size = Number(st.size)
+        if (!Number.isFinite(size) || size <= 0) {
+          set.status = 400
+          return { ok: false, error: 'BAD_FILE_SIZE' }
+        }
+        if (size > PDF_MAX_BYTES) {
+          set.status = 413
+          return { ok: false, error: 'PDF_TOO_LARGE', size }
+        }
+
+        const token = randomUUID?.() ?? `${Math.random().toString(16).slice(2)}${Math.random().toString(16).slice(2)}`
+        const ts = nowMs()
+        const session: PdfFileSession = { token, filePath, size, createdAt: ts, updatedAt: ts }
+        pdfFileSessions.set(token, session)
+        return { ok: true, token, size }
+      } catch (e) {
+        set.status = 500
+        return { ok: false, error: String(e) }
+      }
+    },
+    { body: t.Object({ fileUrl: t.String() }) }
+  )
+  .get(
+    '/pdf/chunk/:token',
+    async ({ params, query, set }) => {
+      const token = String((params as any)?.token ?? '')
+      const s = pdfFileSessions.get(token)
+      if (!s) {
+        set.status = 404
+        return { ok: false, error: 'SESSION_NOT_FOUND' }
+      }
+      s.updatedAt = nowMs()
+
+      const offsetRaw = typeof (query as any)?.offset === 'string' ? Number((query as any).offset) : 0
+      const lengthRaw = typeof (query as any)?.length === 'string' ? Number((query as any).length) : PDF_CHUNK_MAX_BYTES
+      const offset = Number.isFinite(offsetRaw) ? Math.max(0, Math.floor(offsetRaw)) : 0
+      const length = Number.isFinite(lengthRaw) ? Math.max(1, Math.floor(lengthRaw)) : PDF_CHUNK_MAX_BYTES
+      if (offset >= s.size) {
+        set.status = 416
+        return { ok: false, error: 'OFFSET_OUT_OF_RANGE' }
+      }
+      const cappedLength = Math.min(PDF_CHUNK_MAX_BYTES, length, s.size - offset)
+
+      try {
+        const fh = await open(s.filePath, 'r')
+        try {
+          const buf = Buffer.allocUnsafe(cappedLength)
+          const { bytesRead } = await fh.read(buf, 0, cappedLength, offset)
+          const slice = bytesRead === buf.length ? buf : buf.subarray(0, bytesRead)
+          return { ok: true, offset, length: bytesRead, base64: slice.toString('base64') }
+        } finally {
+          await fh.close().catch(() => undefined)
+        }
+      } catch (e) {
+        set.status = 500
+        return { ok: false, error: String(e) }
+      }
+    },
+    {
+      params: t.Object({ token: t.String() }),
+      query: t.Object({ offset: t.Optional(t.String()), length: t.Optional(t.String()) })
+    }
+  )
+  .post(
+    '/pdf/close',
+    async ({ body }) => {
+      const token = typeof (body as any)?.token === 'string' ? String((body as any).token) : ''
+      if (token) pdfFileSessions.delete(token)
+      return { ok: true }
+    },
+    { body: t.Object({ token: t.String() }) }
+  )
   .get('/watcher/docs', () => {
     return {
       ok: true,

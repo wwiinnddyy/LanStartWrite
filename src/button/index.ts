@@ -7,6 +7,7 @@ export type AppButtonId =
   | 'eraser'
   | 'whiteboard'
   | 'video-show'
+  | 'pdf'
   | 'toggle-expanded'
   | 'undo'
   | 'redo'
@@ -27,7 +28,7 @@ export enum ButtonDisplayTag {
   TOOLBAR_DEFAULT_SECONDARY_ORDER = 'toolbar-default-secondary-order'
 }
 
-export const TOOLBAR_PRIMARY_BUTTON_IDS = ['mouse', 'pen', 'eraser', 'whiteboard', 'video-show'] as const
+export const TOOLBAR_PRIMARY_BUTTON_IDS = ['mouse', 'pen', 'eraser', 'whiteboard', 'video-show', 'pdf'] as const
 export type ToolbarPrimaryButtonId = (typeof TOOLBAR_PRIMARY_BUTTON_IDS)[number]
 
 export const TOOLBAR_SECONDARY_BUTTON_IDS = ['undo', 'redo', 'clock', 'feature-panel', 'events', 'watcher'] as const
@@ -48,6 +49,7 @@ export const APP_BUTTON_DEFINITIONS: readonly AppButtonDefinition[] = [
   { id: 'eraser', label: '橡皮', tags: [ButtonDisplayTag.ALLOW_FLOATING_TOOLBAR, ButtonDisplayTag.TOOLBAR_PRIMARY] },
   { id: 'whiteboard', label: '白板', tags: [ButtonDisplayTag.ALLOW_FLOATING_TOOLBAR, ButtonDisplayTag.TOOLBAR_PRIMARY] },
   { id: 'video-show', label: '视频展台', tags: [ButtonDisplayTag.ALLOW_FLOATING_TOOLBAR, ButtonDisplayTag.TOOLBAR_PRIMARY] },
+  { id: 'pdf', label: 'PDF', tags: [ButtonDisplayTag.ALLOW_FLOATING_TOOLBAR, ButtonDisplayTag.TOOLBAR_PRIMARY] },
   { id: 'toggle-expanded', label: '折叠/展开', tags: [ButtonDisplayTag.ALLOW_FLOATING_TOOLBAR] },
   {
     id: 'undo',

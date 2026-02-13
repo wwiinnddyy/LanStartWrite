@@ -288,8 +288,9 @@ export function AnnotationOverlayApp() {
   }, [eraserThickness])
 
   const appModeRaw = bus.state[APP_MODE_UI_STATE_KEY]
-  const appMode = appModeRaw === 'whiteboard' ? 'whiteboard' : appModeRaw === 'video-show' ? 'video-show' : 'toolbar'
-  const isWhiteboardLike = appMode === 'whiteboard' || appMode === 'video-show'
+  const appMode =
+    appModeRaw === 'whiteboard' ? 'whiteboard' : appModeRaw === 'video-show' ? 'video-show' : appModeRaw === 'pdf' ? 'pdf' : 'toolbar'
+  const isWhiteboardLike = appMode === 'whiteboard' || appMode === 'video-show' || appMode === 'pdf'
   const shouldFreezeScreen = appMode === 'toolbar' && tool !== 'mouse' && leaferSettings.freezeScreen
   const rendererEngine = leaferSettings.rendererEngine ?? 'canvas2d'
 
@@ -1195,7 +1196,14 @@ struct VSOut {
     }
 
     const disposeParentLayout = ensureParentLayout()
-    const notesKvKey = appMode === 'whiteboard' ? 'annotation-notes-whiteboard' : appMode === 'video-show' ? 'annotation-notes-video-show' : 'annotation-notes-toolbar'
+    const notesKvKey =
+      appMode === 'whiteboard'
+        ? 'annotation-notes-whiteboard'
+        : appMode === 'video-show'
+          ? 'annotation-notes-video-show'
+          : appMode === 'pdf'
+            ? 'annotation-notes-pdf'
+            : 'annotation-notes-toolbar'
     const notesHistoryKvKey = `${notesKvKey}-prev`
     let serializePersistedDoc: null | (() => PersistedAnnotationDocV1) = null
     let persistTimer: number | null = null

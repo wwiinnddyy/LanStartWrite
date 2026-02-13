@@ -1630,7 +1630,7 @@ function repositionToolbarSubwindows(animate: boolean) {
   }
 }
 
-function createPaintBoardWindow(kind?: 'video-show'): BrowserWindow {
+function createPaintBoardWindow(kind?: 'video-show' | 'pdf'): BrowserWindow {
   const owner = floatingToolbarWindow
   const ownerBounds = owner && !owner.isDestroyed() ? owner.getBounds() : screen.getPrimaryDisplay().bounds
   const display = screen.getDisplayMatching(ownerBounds)
@@ -1648,7 +1648,7 @@ function createPaintBoardWindow(kind?: 'video-show'): BrowserWindow {
     maximizable: false,
     fullscreenable: false,
     skipTaskbar: true,
-    title: kind === 'video-show' ? '视频展台' : '白板',
+    title: kind === 'video-show' ? '视频展台' : kind === 'pdf' ? 'PDF' : '白板',
     backgroundColor: kind === 'video-show' ? '#000000ff' : '#ffffffff',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
@@ -2033,15 +2033,22 @@ async function maybeShowRestoreNotesNotice(): Promise<void> {
   const owner = floatingToolbarWindow
   if (!owner || owner.isDestroyed()) return
 
-  let mode: 'toolbar' | 'whiteboard' | 'video-show' = 'toolbar'
+  let mode: 'toolbar' | 'whiteboard' | 'video-show' | 'pdf' = 'toolbar'
   try {
     const raw = await backendGetKv('app-mode')
     if (raw === 'whiteboard') mode = 'whiteboard'
     if (raw === 'video-show') mode = 'video-show'
+    if (raw === 'pdf') mode = 'pdf'
   } catch {}
 
   const notesHistoryKvKey =
-    mode === 'whiteboard' ? 'annotation-notes-whiteboard-prev' : mode === 'video-show' ? 'annotation-notes-video-show-prev' : 'annotation-notes-toolbar-prev'
+    mode === 'whiteboard'
+      ? 'annotation-notes-whiteboard-prev'
+      : mode === 'video-show'
+        ? 'annotation-notes-video-show-prev'
+        : mode === 'pdf'
+          ? 'annotation-notes-pdf-prev'
+          : 'annotation-notes-toolbar-prev'
   try {
     await backendGetKv(notesHistoryKvKey)
   } catch (e) {
@@ -2165,6 +2172,26 @@ function handleBackendControlMessage(message: any): void {
           return
         }
 
+        if (method === 'selectPdfFile') {
+          const parent =
+            BrowserWindow.getFocusedWindow() ??
+            whiteboardBackgroundWindow ??
+            annotationOverlayWindow ??
+            screenAnnotationOverlayWindow ??
+            undefined
+          const options: OpenDialogOptions = {
+            properties: ['openFile'],
+            filters: [
+              { name: 'PDF', extensions: ['pdf'] },
+              { name: 'All Files', extensions: ['*'] }
+            ]
+          }
+          const res = parent ? await dialog.showOpenDialog(parent, options) : await dialog.showOpenDialog(options)
+          const fileUrl = res.canceled || !res.filePaths?.[0] ? undefined : pathToFileURL(res.filePaths[0]).toString()
+          sendToBackend({ type: 'MAIN_RPC_RESPONSE', id, ok: true, result: { fileUrl } })
+          return
+        }
+
         throw new Error('UNKNOWN_MAIN_RPC_METHOD')
       } catch (e) {
         sendToBackend({ type: 'MAIN_RPC_RESPONSE', id, ok: false, error: String(e) })
@@ -2279,8 +2306,9 @@ function handleBackendControlMessage(message: any): void {
 
   if (message.type === 'SET_APP_MODE') {
     const modeRaw = String((message as any).mode ?? '')
-    const mode = modeRaw === 'whiteboard' ? 'whiteboard' : modeRaw === 'video-show' ? 'video-show' : 'toolbar'
-    if (mode === 'whiteboard' || mode === 'video-show') {
+    const mode =
+      modeRaw === 'whiteboard' ? 'whiteboard' : modeRaw === 'video-show' ? 'video-show' : modeRaw === 'pdf' ? 'pdf' : 'toolbar'
+    if (mode === 'whiteboard' || mode === 'video-show' || mode === 'pdf') {
       mutPageDesiredFromAppMode = true
       const screenOverlay = screenAnnotationOverlayWindow
       if (screenOverlay && !screenOverlay.isDestroyed()) {
@@ -2294,22 +2322,34 @@ function handleBackendControlMessage(message: any): void {
       hideAllToolbarSubwindows()
       appWindowsManager.hideAll()
       if (!whiteboardBackgroundWindow || whiteboardBackgroundWindow.isDestroyed()) {
-        whiteboardBackgroundWindow = createPaintBoardWindow(mode === 'video-show' ? 'video-show' : undefined)
+        whiteboardBackgroundWindow =
+          createPaintBoardWindow(mode === 'video-show' ? 'video-show' : mode === 'pdf' ? 'pdf' : undefined)
       } else {
         try {
           const devUrl = getDevServerUrl()
           if (devUrl) {
             whiteboardBackgroundWindow.loadURL(
-              `${devUrl}?window=${encodeURIComponent('paint-board')}${mode === 'video-show' ? `&kind=${encodeURIComponent('video-show')}` : ''}`
+              `${devUrl}?window=${encodeURIComponent('paint-board')}${
+                mode === 'video-show'
+                  ? `&kind=${encodeURIComponent('video-show')}`
+                  : mode === 'pdf'
+                    ? `&kind=${encodeURIComponent('pdf')}`
+                    : ''
+              }`
             )
           } else {
             whiteboardBackgroundWindow.loadFile(join(__dirname, '../renderer/index.html'), {
-              query: mode === 'video-show' ? { window: 'paint-board', kind: 'video-show' } : { window: 'paint-board' }
+              query:
+                mode === 'video-show'
+                  ? { window: 'paint-board', kind: 'video-show' }
+                  : mode === 'pdf'
+                    ? { window: 'paint-board', kind: 'pdf' }
+                    : { window: 'paint-board' }
             })
           }
         } catch {}
         try {
-          whiteboardBackgroundWindow.setTitle(mode === 'video-show' ? '视频展台' : '白板')
+          whiteboardBackgroundWindow.setTitle(mode === 'video-show' ? '视频展台' : mode === 'pdf' ? 'PDF' : '白板')
         } catch {}
         whiteboardBackgroundWindow.show()
       }

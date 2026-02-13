@@ -4,6 +4,8 @@ import {
   APP_MODE_UI_STATE_KEY,
   NOTES_PAGE_INDEX_UI_STATE_KEY,
   NOTES_PAGE_TOTAL_UI_STATE_KEY,
+  PDF_FILE_URL_KV_KEY,
+  PDF_FILE_URL_UI_STATE_KEY,
   UI_STATE_APP_WINDOW_ID,
   WHITEBOARD_BG_COLOR_KV_KEY,
   WHITEBOARD_BG_IMAGE_URL_KV_KEY,
@@ -25,6 +27,7 @@ import {
   useUiStateBus
 } from '../status'
 import { Button } from '../button'
+import { loadPdfjs } from '../PDF/pdfjs'
 import { useZoomOnWheel } from '../toolbar/hooks/useZoomOnWheel'
 import { useEventsPoll } from '../toolbar/hooks/useEventsPoll'
 import '../toolbar-subwindows/styles/subwindow.css'
@@ -46,6 +49,13 @@ type WhiteboardCanvasBookV1 = { version: 1; pages: WhiteboardCanvasPageV1[] }
 
 type VideoShowPageV1 = { name?: string; imageUrl?: string; createdAt?: number }
 type VideoShowPageBookV1 = { version: 1; pages: VideoShowPageV1[] }
+
+function base64ToU8(base64: string): Uint8Array {
+  const raw = globalThis.atob(base64)
+  const out = new Uint8Array(raw.length)
+  for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i) & 0xff
+  return out
+}
 
 function isPersistedAnnotationDocV1(v: unknown): v is PersistedAnnotationDocV1 {
   if (!v || typeof v !== 'object') return false
@@ -217,6 +227,104 @@ function drawDocStrokesToCanvas(args: {
   }
 
   ctx.globalAlpha = 1
+}
+
+function PdfThumbnailItem(props: {
+  index: number
+  selected: boolean
+  doc: PersistedAnnotationDocV1 | null
+  pdfDoc: any | null
+  onPick: () => void
+}) {
+  const { index, selected, doc, pdfDoc, onPick } = props
+  const canvasRef = useRef<HTMLCanvasElement | null>(null)
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    let cancelled = false
+    let renderTask: any = null
+
+    void (async () => {
+      const prepared = prepareCanvas({ canvas, cssWidth: 160, cssHeight: 100 })
+      const ctx = prepared.ctx
+      if (!ctx) return
+
+      ctx.setTransform(1, 0, 0, 1, 0, 0)
+      ctx.globalAlpha = 1
+      ctx.clearRect(0, 0, prepared.w, prepared.h)
+      ctx.fillStyle = '#ffffff'
+      ctx.fillRect(0, 0, prepared.w, prepared.h)
+
+      if (pdfDoc) {
+        try {
+          const page = await pdfDoc.getPage(index + 1)
+          if (cancelled) return
+          const baseViewport = page.getViewport({ scale: 1 })
+          const fitScale = Math.min(prepared.w / baseViewport.width, prepared.h / baseViewport.height)
+          const viewport = page.getViewport({ scale: fitScale })
+          const dx = (prepared.w - viewport.width) * 0.5
+          const dy = (prepared.h - viewport.height) * 0.5
+          renderTask = page.render({
+            canvasContext: ctx,
+            viewport,
+            transform: [1, 0, 0, 1, dx, dy]
+          })
+          await renderTask.promise
+          if (cancelled) return
+        } catch {}
+      }
+
+      if (doc) drawDocStrokesToCanvas({ doc, ctx, w: prepared.w, h: prepared.h, dpr: prepared.dpr })
+    })()
+
+    return () => {
+      cancelled = true
+      if (renderTask) {
+        try {
+          renderTask.cancel?.()
+        } catch {}
+      }
+    }
+  }, [doc, index, pdfDoc])
+
+  return (
+    <Button
+      size="sm"
+      kind="custom"
+      ariaLabel={`第${index + 1}页`}
+      title={`第${index + 1}页`}
+      onClick={onPick}
+      style={{
+        width: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'stretch',
+        gap: 8,
+        padding: 10,
+        borderRadius: 12,
+        border: selected ? '1px solid var(--ls-surface-border)' : undefined,
+        background: selected ? 'rgba(255,255,255,0.12)' : undefined
+      }}
+    >
+      <div
+        style={{
+          width: '100%',
+          aspectRatio: '16 / 10',
+          borderRadius: 10,
+          overflow: 'hidden',
+          border: '1px solid rgba(0,0,0,0.12)',
+          background: 'rgba(255,255,255,0.04)'
+        }}
+      >
+        <canvas ref={canvasRef} style={{ width: '100%', height: '100%', display: 'block' }} />
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10 }}>
+        <div style={{ fontSize: 12, fontWeight: 650 }}>第 {index + 1} 页</div>
+        {selected ? <div style={{ fontSize: 11, opacity: 0.8 }}>当前</div> : null}
+      </div>
+    </Button>
+  )
 }
 
 function PageThumbnailItem(props: {
@@ -509,12 +617,27 @@ export function PageThumbnailsMenuWindow() {
     bus.setKey(VIDEO_SHOW_DEVICE_ID_UI_STATE_KEY, first).catch(() => undefined)
   }, [appMode, bus, videoDeviceIdRaw, videoDevices])
 
-  const notesKvKey = appMode === 'whiteboard' ? 'annotation-notes-whiteboard' : appMode === 'video-show' ? 'annotation-notes-video-show' : 'annotation-notes-toolbar'
+  const notesKvKey =
+    appMode === 'whiteboard'
+      ? 'annotation-notes-whiteboard'
+      : appMode === 'video-show'
+        ? 'annotation-notes-video-show'
+        : appMode === 'pdf'
+          ? 'annotation-notes-pdf'
+          : 'annotation-notes-toolbar'
 
   const [pages, setPages] = useState<PersistedAnnotationDocV1[]>([])
   const [canvasPages, setCanvasPages] = useState<WhiteboardCanvasPageV1[]>([])
   const [videoPages, setVideoPages] = useState<VideoShowPageV1[]>([])
   const [defaultBg, setDefaultBg] = useState<{ color: string; imageUrl: string; imageOpacity: number }>({ color: '#ffffff', imageUrl: '', imageOpacity: 0.5 })
+  const [persistedPdfFileUrl, setPersistedPdfFileUrl] = useState<string>('')
+  const pdfUiFileUrlRaw = bus.state[PDF_FILE_URL_UI_STATE_KEY]
+  const pdfUiFileUrl = isFileOrDataUrl(pdfUiFileUrlRaw) ? String(pdfUiFileUrlRaw ?? '') : ''
+  const pdfFileUrl = pdfUiFileUrl || persistedPdfFileUrl
+  const [pdfDoc, setPdfDoc] = useState<any | null>(null)
+  const pdfDocRef = useRef<any | null>(null)
+  const pdfLoadTaskRef = useRef<any | null>(null)
+  const pdfTokenRef = useRef<string | null>(null)
   const lastReloadAtRef = useRef(0)
 
   const reload = async () => {
@@ -563,11 +686,20 @@ export function PageThumbnailsMenuWindow() {
     } catch {
       setDefaultBg({ color: '#ffffff', imageUrl: '', imageOpacity: 0.5 })
     }
+
+    if (appMode === 'pdf' && !pdfUiFileUrl) {
+      try {
+        const loaded = await getKv<unknown>(PDF_FILE_URL_KV_KEY)
+        setPersistedPdfFileUrl(isFileOrDataUrl(loaded) ? String(loaded ?? '') : '')
+      } catch {
+        setPersistedPdfFileUrl('')
+      }
+    }
   }
 
   useEffect(() => {
     void reload()
-  }, [notesKvKey, total])
+  }, [notesKvKey, total, appMode, pdfUiFileUrl])
 
   useEffect(() => {
     const latest = events[events.length - 1]
@@ -579,6 +711,7 @@ export function PageThumbnailsMenuWindow() {
       (key !== notesKvKey &&
         key !== WHITEBOARD_CANVAS_PAGES_KV_KEY &&
         key !== VIDEO_SHOW_PAGES_KV_KEY &&
+        key !== PDF_FILE_URL_KV_KEY &&
         key !== WHITEBOARD_BG_COLOR_KV_KEY &&
         key !== WHITEBOARD_BG_IMAGE_URL_KV_KEY &&
         key !== WHITEBOARD_BG_IMAGE_OPACITY_KV_KEY)
@@ -587,11 +720,123 @@ export function PageThumbnailsMenuWindow() {
     void reload()
   }, [events, notesKvKey])
 
+  useEffect(() => {
+    let cancelled = false
+    const last = pdfDocRef.current
+    pdfDocRef.current = null
+    setPdfDoc(null)
+    if (pdfLoadTaskRef.current) {
+      try {
+        pdfLoadTaskRef.current.destroy?.()
+      } catch {}
+      pdfLoadTaskRef.current = null
+    }
+    if (last) {
+      try {
+        last.destroy?.()
+      } catch {}
+    }
+    const lastToken = pdfTokenRef.current
+    pdfTokenRef.current = null
+    if (lastToken) {
+      window.lanstart?.apiRequest({ method: 'POST', path: '/pdf/close', body: { token: lastToken } }).catch(() => undefined)
+    }
+    if (appMode !== 'pdf') return
+    if (!pdfFileUrl) return
+
+    void (async () => {
+      let token: string | null = null
+      try {
+        const pdfjs = await loadPdfjs()
+        const openRes = await window.lanstart?.apiRequest({ method: 'POST', path: '/pdf/open', body: { fileUrl: pdfFileUrl } })
+        const openBody = (openRes as any)?.body as any
+        if ((openRes as any)?.status !== 200 || openBody?.ok !== true) throw new Error(String(openBody?.error ?? 'PDF_OPEN_FAILED'))
+        token = typeof openBody?.token === 'string' ? openBody.token : ''
+        const size = Number(openBody?.size ?? 0)
+        if (!token || !Number.isFinite(size) || size <= 0) throw new Error('PDF_OPEN_FAILED')
+        pdfTokenRef.current = token
+
+        const data = new Uint8Array(size)
+        const chunkLen = 512 * 1024
+        let offset = 0
+        while (offset < size) {
+          if (cancelled) return
+          const url = `/pdf/chunk/${encodeURIComponent(token)}?offset=${offset}&length=${chunkLen}`
+          const res = await window.lanstart?.apiRequest({ method: 'GET', path: url })
+          const body = (res as any)?.body as any
+          if ((res as any)?.status !== 200 || body?.ok !== true) throw new Error(String(body?.error ?? 'PDF_CHUNK_FAILED'))
+          const base64 = typeof body?.base64 === 'string' ? body.base64 : ''
+          const bytesRead = Number(body?.length ?? 0)
+          if (!base64 || !Number.isFinite(bytesRead) || bytesRead <= 0) throw new Error('PDF_CHUNK_FAILED')
+          const chunk = base64ToU8(base64)
+          data.set(chunk, offset)
+          offset += bytesRead
+        }
+
+        const task = (pdfjs as any).getDocument({ data, length: size })
+        pdfLoadTaskRef.current = task
+        const doc = await task.promise
+        if (cancelled) {
+          try {
+            doc.destroy?.()
+          } catch {}
+          return
+        }
+        pdfDocRef.current = doc
+        setPdfDoc(doc)
+      } catch {
+        return
+      } finally {
+        if (token) {
+          window.lanstart?.apiRequest({ method: 'POST', path: '/pdf/close', body: { token } }).catch(() => undefined)
+          if (pdfTokenRef.current === token) pdfTokenRef.current = null
+        }
+        pdfLoadTaskRef.current = null
+      }
+    })()
+
+    return () => {
+      cancelled = true
+      const d = pdfDocRef.current
+      pdfDocRef.current = null
+      if (d) {
+        try {
+          d.destroy?.()
+        } catch {}
+      }
+      if (pdfLoadTaskRef.current) {
+        try {
+          pdfLoadTaskRef.current.destroy?.()
+        } catch {}
+        pdfLoadTaskRef.current = null
+      }
+    }
+  }, [appMode, pdfFileUrl])
+
   const effectivePages = useMemo(() => {
     const src = pages.length ? pages : new Array(total).fill(null).map(() => ({ version: 1 as const, nodes: [] }))
     if (src.length >= total) return src.slice(0, total)
     return [...src, ...new Array(total - src.length).fill(null).map(() => ({ version: 1 as const, nodes: [] }))]
   }, [pages, total])
+
+  const pageWindow = useMemo(() => {
+    const maxThumbs = 120
+    const t = Math.max(0, total)
+    if (t <= maxThumbs) return { start: 0, end: t }
+    const half = Math.floor(maxThumbs / 2)
+    let start = Math.max(0, Math.floor(index) - half)
+    let end = start + maxThumbs
+    if (end > t) {
+      end = t
+      start = Math.max(0, end - maxThumbs)
+    }
+    return { start, end }
+  }, [index, total])
+
+  const windowedPages = useMemo(
+    () => effectivePages.slice(pageWindow.start, pageWindow.end),
+    [effectivePages, pageWindow.end, pageWindow.start]
+  )
 
   const effectiveCanvasPages = useMemo(() => {
     const src = canvasPages.length ? canvasPages : new Array(total).fill(null).map(() => ({} as WhiteboardCanvasPageV1))
@@ -733,21 +978,41 @@ export function PageThumbnailsMenuWindow() {
                         )
                       })
                     ]
-                  : effectivePages.map((doc, i) => (
-                      <PageThumbnailItem
-                        key={i}
-                        index={i}
-                        selected={i === index}
-                        doc={doc ?? null}
-                        bgColor={effectiveCanvasPages[i]?.bgColor ?? defaultBg.color}
-                        bgImageUrl={effectiveCanvasPages[i]?.bgImageUrl ?? defaultBg.imageUrl}
-                        bgImageOpacity={effectiveCanvasPages[i]?.bgImageOpacity ?? defaultBg.imageOpacity}
-                        onPick={() => {
-                          postCommand('app.setPageIndex', { index: i }).catch(() => undefined)
-                          postCommand('app.togglePageThumbnailsMenu').catch(() => undefined)
-                        }}
-                      />
-                    ))}
+                  : appMode === 'pdf'
+                    ? windowedPages.map((doc, j) => {
+                        const i = pageWindow.start + j
+                        return (
+                          <PdfThumbnailItem
+                            key={i}
+                            index={i}
+                            selected={i === index}
+                            doc={doc ?? null}
+                            pdfDoc={pdfDoc}
+                            onPick={() => {
+                              postCommand('app.setPageIndex', { index: i }).catch(() => undefined)
+                              postCommand('app.togglePageThumbnailsMenu').catch(() => undefined)
+                            }}
+                          />
+                        )
+                      })
+                    : windowedPages.map((doc, j) => {
+                        const i = pageWindow.start + j
+                        return (
+                          <PageThumbnailItem
+                            key={i}
+                            index={i}
+                            selected={i === index}
+                            doc={doc ?? null}
+                            bgColor={effectiveCanvasPages[i]?.bgColor ?? defaultBg.color}
+                            bgImageUrl={effectiveCanvasPages[i]?.bgImageUrl ?? defaultBg.imageUrl}
+                            bgImageOpacity={effectiveCanvasPages[i]?.bgImageOpacity ?? defaultBg.imageOpacity}
+                            onPick={() => {
+                              postCommand('app.setPageIndex', { index: i }).catch(() => undefined)
+                              postCommand('app.togglePageThumbnailsMenu').catch(() => undefined)
+                            }}
+                          />
+                        )
+                      })}
               </div>
             </div>
           </div>
