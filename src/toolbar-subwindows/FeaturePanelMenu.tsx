@@ -13,7 +13,7 @@ import {
 } from '../toolbar/components/ToolbarIcons'
 import './styles/subwindow.css'
 
-type GridIconKind = 'grid' | 'plus' | 'gear' | 'doc' | 'db' | 'events' | 'watcher' | 'quit'
+type GridIconKind = 'grid' | 'plus' | 'gear' | 'doc' | 'db' | 'events' | 'watcher' | 'clock' | 'quit'
 
 function GridIcon(props: { kind: GridIconKind }) {
   const stroke = 'currentColor'
@@ -46,6 +46,17 @@ function GridIcon(props: { kind: GridIconKind }) {
 
   if (props.kind === 'watcher') {
     return <WatcherIcon />
+  }
+
+  if (props.kind === 'clock') {
+    return (
+      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 20 20">
+        <path
+          fill="currentColor"
+          d="M10 2a8 8 0 1 1 0 16a8 8 0 0 1 0-16m0 1a7 7 0 1 0 0 14a7 7 0 0 0 0-14m-.5 2a.5.5 0 0 1 .492.41L10 5.5V10h2.5a.5.5 0 0 1 .09.992L12.5 11h-3a.5.5 0 0 1-.492-.41L9 10.5v-5a.5.5 0 0 1 .5-.5"
+        />
+      </svg>
+    )
   }
 
   if (props.kind === 'gear') {
@@ -176,6 +187,14 @@ export function FeaturePanelMenu(props: { kind: string }) {
         icon: 'events',
         onClick: () => {
           void postCommand('toggle-subwindow', { kind: 'events', placement: 'bottom' })
+        }
+      },
+      {
+        id: 'clock',
+        title: '时钟',
+        icon: 'clock',
+        onClick: () => {
+          void postCommand('toggle-subwindow', { kind: 'clock', placement: 'bottom' })
         }
       },
       {

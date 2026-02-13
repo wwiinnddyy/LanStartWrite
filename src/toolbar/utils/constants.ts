@@ -13,6 +13,7 @@ export type AppButtonId =
   | 'toggle-expanded'
   | 'undo'
   | 'redo'
+  | 'clock'
   | 'feature-panel'
   | 'db'
   | 'events'
@@ -35,6 +36,7 @@ export const APP_BUTTON_DISPLAY_TAGS: Record<AppButtonId, readonly ButtonDisplay
   'toggle-expanded': [ButtonDisplayTag.ALLOW_FLOATING_TOOLBAR],
   undo: [ButtonDisplayTag.ALLOW_FLOATING_TOOLBAR],
   redo: [ButtonDisplayTag.ALLOW_FLOATING_TOOLBAR],
+  clock: [ButtonDisplayTag.ALLOW_FLOATING_TOOLBAR, ButtonDisplayTag.ALLOW_FEATURE_PANEL],
   'feature-panel': [ButtonDisplayTag.ALLOW_FLOATING_TOOLBAR],
   db: [ButtonDisplayTag.ALLOW_FEATURE_PANEL],
   events: [ButtonDisplayTag.ALLOW_FLOATING_TOOLBAR, ButtonDisplayTag.ALLOW_FEATURE_PANEL],

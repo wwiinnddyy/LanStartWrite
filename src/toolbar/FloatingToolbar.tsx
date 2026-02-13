@@ -70,6 +70,17 @@ function EventsIcon() {
   )
 }
 
+function ClockIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 20 20">
+      <path
+        fill="currentColor"
+        d="M10 2a8 8 0 1 1 0 16a8 8 0 0 1 0-16m0 1a7 7 0 1 0 0 14a7 7 0 0 0 0-14m-.5 2a.5.5 0 0 1 .492.41L10 5.5V10h2.5a.5.5 0 0 1 .09.992L12.5 11h-3a.5.5 0 0 1-.492-.41L9 10.5v-5a.5.5 0 0 1 .5-.5"
+      />
+    </svg>
+  )
+}
+
 function ChevronLeftIcon() {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -100,9 +111,9 @@ type ToolbarState = {
 }
 
 type PrimaryButtonId = 'mouse' | 'pen' | 'eraser' | 'whiteboard' | 'video-show'
-type SecondaryButtonId = 'undo' | 'redo' | 'feature-panel' | 'events' | 'watcher'
+type SecondaryButtonId = 'undo' | 'redo' | 'clock' | 'feature-panel' | 'events' | 'watcher'
 
-const ALL_SECONDARY_BUTTONS: SecondaryButtonId[] = ['undo', 'redo', 'feature-panel', 'events', 'watcher']
+const ALL_SECONDARY_BUTTONS: SecondaryButtonId[] = ['undo', 'redo', 'clock', 'feature-panel', 'events', 'watcher']
 const DEFAULT_ALLOWED_PRIMARY_BUTTONS: PrimaryButtonId[] = ['mouse', 'pen', 'eraser', 'whiteboard', 'video-show']
 const DEFAULT_ALLOWED_SECONDARY_BUTTONS: SecondaryButtonId[] = ['undo', 'redo', 'feature-panel']
 
@@ -127,7 +138,7 @@ function normalizeAllowedSecondaryButtons(input: unknown): SecondaryButtonId[] {
   const allowed = new Set(ALL_SECONDARY_BUTTONS)
   const unique: SecondaryButtonId[] = []
   for (const item of input) {
-    if (item !== 'undo' && item !== 'redo' && item !== 'feature-panel' && item !== 'events' && item !== 'watcher') continue
+    if (item !== 'undo' && item !== 'redo' && item !== 'clock' && item !== 'feature-panel' && item !== 'events' && item !== 'watcher') continue
     if (!allowed.has(item)) continue
     if (unique.includes(item)) continue
     unique.push(item)
@@ -140,7 +151,7 @@ function normalizePinnedSecondaryButtonsOrder(input: unknown, allowedButtons: re
   const unique: SecondaryButtonId[] = []
   if (Array.isArray(input)) {
     for (const item of input) {
-      if (item !== 'undo' && item !== 'redo' && item !== 'feature-panel' && item !== 'events' && item !== 'watcher') continue
+      if (item !== 'undo' && item !== 'redo' && item !== 'clock' && item !== 'feature-panel' && item !== 'events' && item !== 'watcher') continue
       if (!allowed.has(item)) continue
       if (unique.includes(item)) continue
       unique.push(item)
@@ -176,7 +187,7 @@ function normalizeSecondaryButtonsOrder(
   const unique: SecondaryButtonId[] = []
   if (Array.isArray(input)) {
     for (const item of input) {
-      if (item !== 'undo' && item !== 'redo' && item !== 'feature-panel' && item !== 'events' && item !== 'watcher') continue
+      if (item !== 'undo' && item !== 'redo' && item !== 'clock' && item !== 'feature-panel' && item !== 'events' && item !== 'watcher') continue
       if (!allowed.has(item)) continue
       if (pinned.has(item)) continue
       if (unique.includes(item)) continue
@@ -565,6 +576,25 @@ function FloatingToolbarInner() {
           }}
         >
           <RedoIcon />
+        </Button>
+      )
+    }
+
+    if (id === 'clock') {
+      const visibility = getAppButtonVisibility('clock')
+      return (
+        <Button
+          key="clock"
+          size={uiButtonSize}
+          ariaLabel="时钟"
+          title="时钟"
+          showInToolbar={visibility.showInToolbar}
+          showInFeaturePanel={visibility.showInFeaturePanel}
+          onClick={() => {
+            void postCommand('toggle-subwindow', { kind: 'clock', placement: 'bottom' })
+          }}
+        >
+          <ClockIcon />
         </Button>
       )
     }

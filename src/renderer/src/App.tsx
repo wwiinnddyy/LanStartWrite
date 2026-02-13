@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { FloatingToolbarApp, FloatingToolbarHandleApp, WINDOW_ID_FLOATING_TOOLBAR, WINDOW_ID_FLOATING_TOOLBAR_HANDLE } from '../../toolbar'
 import { useEventsPoll } from '../../toolbar/hooks/useEventsPoll'
 import { Button } from '../../button'
-import { EventsMenu, FeaturePanelMenu, PenSubmenu, EraserSubmenu, SettingsMenu } from '../../toolbar-subwindows'
+import { ClockMenu, EventsMenu, FeaturePanelMenu, PenSubmenu, EraserSubmenu, SettingsMenu } from '../../toolbar-subwindows'
 import { NotificationSubwindow } from '../../toolbar_notice/NotificationSubwindow'
 import { TaskWindowsWatcherWindow } from '../../task_windows_watcher'
 import { AnnotationOverlayApp, PaintBoardBackgroundApp } from '../../paint_board'
@@ -105,6 +105,7 @@ export default function App() {
 
   if (windowId === 'toolbar-subwindow') {
     if (kind === 'events') return <WithAppearance><EventsMenu kind="events" /></WithAppearance>
+    if (kind === 'clock') return <WithAppearance><ClockMenu kind="clock" /></WithAppearance>
     if (kind === 'feature-panel') return <WithAppearance><FeaturePanelMenu kind="feature-panel" /></WithAppearance>
     if (kind === 'settings') return <WithAppearance><SettingsMenu kind="settings" /></WithAppearance>
     if (kind === 'pen') return <WithAppearance><PenSubmenu kind="pen" /></WithAppearance>

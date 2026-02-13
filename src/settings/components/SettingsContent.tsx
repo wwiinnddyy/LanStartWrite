@@ -177,7 +177,7 @@ function AppearanceSettings() {
 // 各选项卡的内容占位组件
 function ToolbarSettings() {
   type PrimaryButtonId = 'mouse' | 'pen' | 'eraser' | 'whiteboard' | 'video-show'
-  type SecondaryButtonId = 'undo' | 'redo' | 'feature-panel' | 'events' | 'watcher'
+  type SecondaryButtonId = 'undo' | 'redo' | 'clock' | 'feature-panel' | 'events' | 'watcher'
   type SelectedButton =
     | { group: 'primary'; id: PrimaryButtonId }
     | { group: 'pinned'; id: SecondaryButtonId }
@@ -198,7 +198,7 @@ function ToolbarSettings() {
 
   const DEFAULT_PRIMARY: PrimaryButtonId[] = ['mouse', 'pen', 'eraser', 'whiteboard', 'video-show']
   const DEFAULT_SECONDARY: SecondaryButtonId[] = ['undo', 'redo', 'feature-panel']
-  const ALL_SECONDARY: SecondaryButtonId[] = ['undo', 'redo', 'feature-panel', 'events', 'watcher']
+  const ALL_SECONDARY: SecondaryButtonId[] = ['undo', 'redo', 'clock', 'feature-panel', 'events', 'watcher']
   const DEFAULT_SECONDARY_ORDER: SecondaryButtonId[] = ['undo', 'redo', 'feature-panel']
 
   function normalizeAllowedPrimaryButtons(input: unknown): PrimaryButtonId[] {
@@ -219,7 +219,7 @@ function ToolbarSettings() {
     const allowed = new Set(ALL_SECONDARY)
     const unique: SecondaryButtonId[] = []
     for (const item of input) {
-      if (item !== 'undo' && item !== 'redo' && item !== 'feature-panel' && item !== 'events' && item !== 'watcher') continue
+      if (item !== 'undo' && item !== 'redo' && item !== 'clock' && item !== 'feature-panel' && item !== 'events' && item !== 'watcher') continue
       if (!allowed.has(item)) continue
       if (unique.includes(item)) continue
       unique.push(item)
@@ -248,7 +248,7 @@ function ToolbarSettings() {
     const unique: SecondaryButtonId[] = []
     if (Array.isArray(input)) {
       for (const item of input) {
-        if (item !== 'undo' && item !== 'redo' && item !== 'feature-panel' && item !== 'events' && item !== 'watcher') continue
+        if (item !== 'undo' && item !== 'redo' && item !== 'clock' && item !== 'feature-panel' && item !== 'events' && item !== 'watcher') continue
         if (!allowed.has(item)) continue
         if (unique.includes(item)) continue
         unique.push(item)
@@ -267,7 +267,7 @@ function ToolbarSettings() {
     const unique: SecondaryButtonId[] = []
     if (Array.isArray(input)) {
       for (const item of input) {
-        if (item !== 'undo' && item !== 'redo' && item !== 'feature-panel' && item !== 'events' && item !== 'watcher') continue
+        if (item !== 'undo' && item !== 'redo' && item !== 'clock' && item !== 'feature-panel' && item !== 'events' && item !== 'watcher') continue
         if (!allowed.has(item)) continue
         if (pinned.has(item)) continue
         if (unique.includes(item)) continue
@@ -341,6 +341,7 @@ function ToolbarSettings() {
     if (id === 'video-show') return '视频展台'
     if (id === 'undo') return '撤销'
     if (id === 'redo') return '重做'
+    if (id === 'clock') return '时钟'
     if (id === 'events') return '事件'
     if (id === 'watcher') return '监视器'
     return '功能面板'
@@ -399,6 +400,17 @@ function ToolbarSettings() {
       >
         <path d="M21 7v6h-6" />
         <path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3L21 13" />
+      </svg>
+    )
+  }
+
+  function ClockIcon() {
+    return (
+      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 20 20">
+        <path
+          fill="currentColor"
+          d="M10 2a8 8 0 1 1 0 16a8 8 0 0 1 0-16m0 1a7 7 0 1 0 0 14a7 7 0 0 0 0-14m-.5 2a.5.5 0 0 1 .492.41L10 5.5V10h2.5a.5.5 0 0 1 .09.992L12.5 11h-3a.5.5 0 0 1-.492-.41L9 10.5v-5a.5.5 0 0 1 .5-.5"
+        />
       </svg>
     )
   }
@@ -518,6 +530,7 @@ function ToolbarSettings() {
     if (id === 'video-show') return <ToolbarToolIcon kind="video-show" />
     if (id === 'undo') return <UndoIcon />
     if (id === 'redo') return <RedoIcon />
+    if (id === 'clock') return <ClockIcon />
     if (id === 'events') return <EventsIcon />
     if (id === 'watcher') return <WatcherIcon />
     return <FeaturePanelIcon />
@@ -531,6 +544,7 @@ function ToolbarSettings() {
     if (id === 'video-show') return '进入/退出视频展台模式'
     if (id === 'undo') return '撤销上一步操作'
     if (id === 'redo') return '重做上一步操作'
+    if (id === 'clock') return '打开时钟窗口'
     if (id === 'events') return '打开事件列表窗口'
     if (id === 'watcher') return '打开进程与窗口监视器'
     return '打开功能面板'
