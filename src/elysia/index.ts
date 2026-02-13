@@ -28,6 +28,7 @@ import {
   REDO_REV_UI_STATE_KEY,
   OFFICE_PPT_MODE_KV_KEY,
   OFFICE_PPT_MODE_UI_STATE_KEY,
+  OFFICE_PPT_QUICK_FLIP_KV_KEY,
   SYSTEM_UIA_TOPMOST_KV_KEY,
   SYSTEM_UIA_TOPMOST_UI_STATE_KEY,
   SYSTEM_MERGE_RENDERER_PIPELINE_KV_KEY,
@@ -56,6 +57,7 @@ import {
   type EffectiveWritingBackend,
   type WritingFramework
 } from '../status/keys'
+import { sendSimulatedKeys } from '../system_different_code'
 import { identifyActiveApp } from '../task_windows_watcher/identify'
 import type { ForegroundWindowSample, ProcessSample, TaskWatcherStatus } from '../task_windows_watcher/types'
 
@@ -468,6 +470,17 @@ async function getPersistedWritingFramework(): Promise<WritingFramework | undefi
     return isWritingFramework(value) ? value : undefined
   } catch {
     return undefined
+  }
+}
+
+async function getPersistedPptQuickFlipEnabled(): Promise<boolean> {
+  try {
+    const raw = await getValue(db, OFFICE_PPT_QUICK_FLIP_KV_KEY)
+    if (raw === true || raw === 'true' || raw === 1 || raw === '1') return true
+    if (raw === false || raw === 'false' || raw === 0 || raw === '0') return false
+    return Boolean(raw)
+  } catch {
+    return false
   }
 }
 
@@ -942,8 +955,13 @@ async function handleCommand(command: string, payload: unknown): Promise<Command
         const pptSlideShow = pptFullscreen || pptTotal >= 1
         if (activeApp === 'ppt') {
           if (pptSlideShow) {
-            const status = await pptPost('/ppt/prev')
-            applyPptStatusToUiState(state as any, status)
+            const quickFlipEnabled = await getPersistedPptQuickFlipEnabled()
+            if (quickFlipEnabled) {
+              await sendSimulatedKeys(['left'])
+            } else {
+              const status = await pptPost('/ppt/prev')
+              applyPptStatusToUiState(state as any, status)
+            }
           }
           return { ok: true }
         }
@@ -965,14 +983,19 @@ async function handleCommand(command: string, payload: unknown): Promise<Command
         const pptSlideShow = pptFullscreen || pptTotal >= 1
         if (activeApp === 'ppt') {
           if (pptSlideShow) {
-            const pre = await pptGetStatus()
-            const shouldCheck =
-              Boolean(pre?.ok) &&
-              asFiniteInt(pre?.currentPage) !== undefined &&
-              asFiniteInt(pre?.totalPage) !== undefined &&
-              (asFiniteInt(pre?.currentPage) as number) >= (asFiniteInt(pre?.totalPage) as number)
-            const status = await pptPost('/ppt/next', { check: shouldCheck })
-            applyPptStatusToUiState(state as any, status)
+            const quickFlipEnabled = await getPersistedPptQuickFlipEnabled()
+            if (quickFlipEnabled) {
+              await sendSimulatedKeys(['right'])
+            } else {
+              const pre = await pptGetStatus()
+              const shouldCheck =
+                Boolean(pre?.ok) &&
+                asFiniteInt(pre?.currentPage) !== undefined &&
+                asFiniteInt(pre?.totalPage) !== undefined &&
+                (asFiniteInt(pre?.currentPage) as number) >= (asFiniteInt(pre?.totalPage) as number)
+              const status = await pptPost('/ppt/next', { check: shouldCheck })
+              applyPptStatusToUiState(state as any, status)
+            }
           }
           return { ok: true }
         }
@@ -1001,6 +1024,20 @@ async function handleCommand(command: string, payload: unknown): Promise<Command
 
       if (action === 'endPptSlideShow') {
         const state = getOrInitUiState(UI_STATE_APP_WINDOW_ID)
+        const activeAppRaw = (state as any)[ACTIVE_APP_UI_STATE_KEY]
+        const activeApp = isActiveApp(activeAppRaw) ? activeAppRaw : 'unknown'
+        const pptFullscreen = (state as any)[PPT_FULLSCREEN_UI_STATE_KEY] === true
+        const pptTotal = asFiniteInt((state as any)[PPT_PAGE_TOTAL_UI_STATE_KEY]) ?? -1
+        const pptSlideShow = pptFullscreen || pptTotal >= 1
+
+        if (activeApp === 'ppt' && pptSlideShow) {
+          const quickFlipEnabled = await getPersistedPptQuickFlipEnabled()
+          if (quickFlipEnabled) {
+            await sendSimulatedKeys(['escape'])
+            return { ok: true }
+          }
+        }
+
         const status = await pptPost('/ppt/end')
         applyPptStatusToUiState(state as any, status)
         return { ok: true }

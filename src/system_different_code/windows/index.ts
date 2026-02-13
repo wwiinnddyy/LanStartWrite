@@ -151,6 +151,14 @@ export function createWindowsAdapter(): TaskWatcherAdapter {
   return { getProcesses: getProcessesWindows, getForegroundWindow: getForegroundWindowWindows }
 }
 
+export type SimulatedKeyWindows = 'escape' | 'left' | 'right'
+
+function vkCodeOfKey(key: SimulatedKeyWindows): number {
+  if (key === 'escape') return 0x1b
+  if (key === 'left') return 0x25
+  return 0x27
+}
+
 export async function forceTopmostWindowsWindows(hwnds: bigint[]): Promise<void> {
   const uniq: bigint[] = []
   const seen = new Set<string>()
@@ -189,6 +197,69 @@ foreach ($h in $hwnds) {
     [LanStartWin32Z]::BringWindowToTop($ptr) | Out-Null
   } catch {}
 }
+`
+  await runPowerShell(script, 1200).catch(() => undefined)
+}
+
+export async function sendKeysWindows(keys: SimulatedKeyWindows[]): Promise<void> {
+  const list = Array.isArray(keys) ? keys : []
+  if (!list.length) return
+  const codes = list.map(vkCodeOfKey).join(',')
+  const script = `
+Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+public class LanStartWin32SendInput {
+  [StructLayout(LayoutKind.Sequential)]
+  public struct INPUT {
+    public int type;
+    public InputUnion u;
+  }
+
+  [StructLayout(LayoutKind.Explicit)]
+  public struct InputUnion {
+    [FieldOffset(0)] public KEYBDINPUT ki;
+  }
+
+  [StructLayout(LayoutKind.Sequential)]
+  public struct KEYBDINPUT {
+    public short wVk;
+    public short wScan;
+    public int dwFlags;
+    public int time;
+    public IntPtr dwExtraInfo;
+  }
+
+  [DllImport("user32.dll", SetLastError=true)]
+  public static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
+}
+"@
+
+$INPUT_KEYBOARD = 1
+$KEYEVENTF_KEYUP = 0x0002
+$inputs = New-Object System.Collections.Generic.List[LanStartWin32SendInput+INPUT]
+
+function Add-KeyStroke([int]$vk) {
+  $down = New-Object LanStartWin32SendInput+INPUT
+  $down.type = $INPUT_KEYBOARD
+  $down.u.ki.wVk = [int16]$vk
+  $down.u.ki.wScan = 0
+  $down.u.ki.dwFlags = 0
+  $inputs.Add($down) | Out-Null
+
+  $up = New-Object LanStartWin32SendInput+INPUT
+  $up.type = $INPUT_KEYBOARD
+  $up.u.ki.wVk = [int16]$vk
+  $up.u.ki.wScan = 0
+  $up.u.ki.dwFlags = $KEYEVENTF_KEYUP
+  $inputs.Add($up) | Out-Null
+}
+
+$vks = @(${codes})
+foreach ($vk in $vks) { Add-KeyStroke $vk }
+
+$size = [System.Runtime.InteropServices.Marshal]::SizeOf([type]([LanStartWin32SendInput+INPUT]))
+[LanStartWin32SendInput]::SendInput([uint32]$inputs.Count, $inputs.ToArray(), $size) | Out-Null
 `
   await runPowerShell(script, 1200).catch(() => undefined)
 }

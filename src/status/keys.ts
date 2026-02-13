@@ -86,6 +86,8 @@ export const NOTICE_KIND_UI_STATE_KEY = 'noticeKind'
 export type OfficePptMode = 'inkeys' | 'based' | 'vsto'
 export const OFFICE_PPT_MODE_KV_KEY = 'office-ppt-mode'
 export const OFFICE_PPT_MODE_UI_STATE_KEY = 'officePptMode'
+export const OFFICE_PPT_QUICK_FLIP_KV_KEY = 'office-ppt-quick-flip'
+export const OFFICE_PPT_QUICK_FLIP_UI_STATE_KEY = 'officePptQuickFlip'
 
 export const SYSTEM_UIA_TOPMOST_KV_KEY = 'system-uia-topmost'
 export const SYSTEM_UIA_TOPMOST_UI_STATE_KEY = 'systemUiaTopmost'

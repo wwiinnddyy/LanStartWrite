@@ -12,6 +12,8 @@ import {
   VIDEO_SHOW_MERGE_LAYERS_UI_STATE_KEY,
   OFFICE_PPT_MODE_KV_KEY,
   OFFICE_PPT_MODE_UI_STATE_KEY,
+  OFFICE_PPT_QUICK_FLIP_KV_KEY,
+  OFFICE_PPT_QUICK_FLIP_UI_STATE_KEY,
   type OfficePptMode,
   SYSTEM_UIA_TOPMOST_KV_KEY,
   SYSTEM_UIA_TOPMOST_UI_STATE_KEY,
@@ -1793,6 +1795,10 @@ function OfficeSettings() {
     validate: (v): v is OfficePptMode => v === 'inkeys' || v === 'based' || v === 'vsto'
   })
 
+  const [pptQuickFlip, setPptQuickFlip] = usePersistedState<boolean>(OFFICE_PPT_QUICK_FLIP_KV_KEY, false, {
+    validate: (v): v is boolean => typeof v === 'boolean'
+  })
+
   const [pptBackendStatus, setPptBackendStatus] = React.useState<'loading' | 'ok' | 'error'>('loading')
 
   const persistPptMode = (next: string | null) => {
@@ -1807,6 +1813,22 @@ function OfficeSettings() {
       }
       try {
         await putUiStateKey(UI_STATE_APP_WINDOW_ID, OFFICE_PPT_MODE_UI_STATE_KEY, v)
+      } catch {
+        return
+      }
+    })()
+  }
+
+  const persistPptQuickFlip = (next: boolean) => {
+    setPptQuickFlip(next)
+    void (async () => {
+      try {
+        await putKv(OFFICE_PPT_QUICK_FLIP_KV_KEY, next)
+      } catch {
+        return
+      }
+      try {
+        await putUiStateKey(UI_STATE_APP_WINDOW_ID, OFFICE_PPT_QUICK_FLIP_UI_STATE_KEY, next)
       } catch {
         return
       }
@@ -1862,6 +1884,15 @@ function OfficeSettings() {
               { value: 'based', label: 'Based (未实现)' },
               { value: 'vsto', label: 'VSTO (未实现)' }
             ]}
+          />
+        </div>
+        <div className="settingsFormGroup">
+          <Switch
+            checked={pptQuickFlip}
+            onChange={(e) => persistPptQuickFlip(e.currentTarget.checked)}
+            label="快速翻页（模拟键盘）"
+            size="md"
+            disabled={pptMode !== 'inkeys'}
           />
         </div>
         {pptMode === 'inkeys' && (
