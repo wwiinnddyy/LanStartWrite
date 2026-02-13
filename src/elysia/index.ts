@@ -28,6 +28,7 @@ import {
   OFFICE_PPT_MODE_UI_STATE_KEY,
   SYSTEM_UIA_TOPMOST_KV_KEY,
   SYSTEM_UIA_TOPMOST_UI_STATE_KEY,
+  SYSTEM_MERGE_RENDERER_PIPELINE_KV_KEY,
   UI_STATE_APP_WINDOW_ID,
   UNDO_REV_UI_STATE_KEY,
   VIDEO_SHOW_MERGE_LAYERS_KV_KEY,
@@ -1305,6 +1306,16 @@ stdin.on('line', (line) => {
                     ? false
                     : Boolean(raw)
               requestMain({ type: 'SET_SYSTEM_UIA_TOPMOST', enabled })
+            }
+            if (key === SYSTEM_MERGE_RENDERER_PIPELINE_KV_KEY) {
+              const raw = (params as any)?.value
+              const enabled =
+                raw === true || raw === 'true' || raw === 1 || raw === '1'
+                  ? true
+                  : raw === false || raw === 'false' || raw === 0 || raw === '0'
+                    ? false
+                    : Boolean(raw)
+              requestMain({ type: 'SET_MERGE_RENDERER_PIPELINE', enabled })
             }
             if (key === 'native-mica-enabled') {
               const raw = (params as any)?.value

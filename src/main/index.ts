@@ -35,8 +35,10 @@ const NATIVE_MICA_KV_KEY = 'native-mica-enabled'
 const LEGACY_WINDOW_IMPL_KV_KEY = 'legacy-window-implementation'
 const VIDEO_SHOW_MERGE_LAYERS_KV_KEY = 'video-show-merge-layers'
 const SYSTEM_UIA_TOPMOST_KV_KEY = 'system-uia-topmost'
+const SYSTEM_MERGE_RENDERER_PIPELINE_KV_KEY = 'system-merge-renderer-pipeline'
 const SYSTEM_UIA_TOPMOST_UI_STATE_KEY = 'systemUiaTopmost'
 const ADMIN_STATUS_UI_STATE_KEY = 'isAdmin'
+const SHARED_RENDERER_AFFINITY = 'lanstartwrite-ui'
 
 type Appearance = 'light' | 'dark'
 
@@ -57,6 +59,7 @@ let didApplyAppearance = false
 let toolbarUiZoom = Math.log(0.8) / Math.log(1.2)
 let nativeMicaEnabled = false
 let legacyWindowImplementation = false
+let mergeRendererPipelineEnabled = false
 let systemUiaTopmostEnabled = true
 let isRunningAsAdmin = false
 let topmostRelativeLevel = 0
@@ -315,11 +318,7 @@ function applyNativeMica(enabled: boolean): void {
   }
 }
 
-function applyLegacyWindowImplementation(enabled: boolean, opts?: { rebuild?: boolean }): void {
-  legacyWindowImplementation = enabled
-  if (!enabled) applyNativeMica(false)
-  if (opts?.rebuild === false) return
-
+function rebuildAllUiWindows(): void {
   const prevToolbar = floatingToolbarWindow
   const prevToolbarBounds = prevToolbar && !prevToolbar.isDestroyed() ? prevToolbar.getBounds() : undefined
   const prevToolbarVisible = prevToolbar && !prevToolbar.isDestroyed() ? prevToolbar.isVisible() : true
@@ -394,6 +393,19 @@ function applyLegacyWindowImplementation(enabled: boolean, opts?: { rebuild?: bo
       } catch {}
     }
   }
+}
+
+function applyLegacyWindowImplementation(enabled: boolean, opts?: { rebuild?: boolean }): void {
+  legacyWindowImplementation = enabled
+  if (!enabled) applyNativeMica(false)
+  if (opts?.rebuild === false) return
+  rebuildAllUiWindows()
+}
+
+function applyMergeRendererPipeline(enabled: boolean, opts?: { rebuild?: boolean }): void {
+  mergeRendererPipelineEnabled = enabled
+  if (opts?.rebuild === false) return
+  rebuildAllUiWindows()
 }
 
 function applyToolbarUiZoom(zoom: number): void {
@@ -565,6 +577,7 @@ const appWindowsManager = new AppWindowsManager({
   getUiZoomLevel: () => toolbarUiZoom,
   getNativeMicaEnabled: () => nativeMicaEnabled,
   getLegacyWindowImplementation: () => legacyWindowImplementation,
+  getMergeRendererPipelineEnabled: () => mergeRendererPipelineEnabled,
   surfaceBackgroundColor: effectiveSurfaceBackgroundColor,
   applyWindowsBackdrop,
   wireWindowDebug,
@@ -689,6 +702,15 @@ function applyWindowsBackdrop(win: BrowserWindow): void {
   } catch {}
 }
 
+function buildUiWebPreferences(): any {
+  return {
+    preload: join(__dirname, '../preload/index.js'),
+    contextIsolation: true,
+    nodeIntegration: false,
+    ...(mergeRendererPipelineEnabled ? { affinity: SHARED_RENDERER_AFFINITY } : {})
+  }
+}
+
 function createFloatingToolbarWindow(): BrowserWindow {
   const win = new BrowserWindow({
     ...(APP_ICON_PATH ? { icon: APP_ICON_PATH } : {}),
@@ -708,11 +730,7 @@ function createFloatingToolbarWindow(): BrowserWindow {
     backgroundMaterial: legacyWindowImplementation && nativeMicaEnabled ? 'mica' : 'none',
     roundedCorners: legacyWindowImplementation,
     hasShadow: legacyWindowImplementation,
-    webPreferences: {
-      preload: join(__dirname, '../preload/index.js'),
-      contextIsolation: true,
-      nodeIntegration: false
-    }
+    webPreferences: buildUiWebPreferences()
   })
 
   applyWindowsBackdrop(win)
@@ -795,11 +813,7 @@ function createFloatingToolbarHandleWindow(owner: BrowserWindow): BrowserWindow 
     backgroundMaterial: legacyWindowImplementation && nativeMicaEnabled ? 'mica' : 'none',
     roundedCorners: legacyWindowImplementation,
     hasShadow: legacyWindowImplementation,
-    webPreferences: {
-      preload: join(__dirname, '../preload/index.js'),
-      contextIsolation: true,
-      nodeIntegration: false
-    }
+    webPreferences: buildUiWebPreferences()
   })
 
   applyWindowsBackdrop(win)
@@ -874,11 +888,7 @@ function getOrCreateToolbarNoticeWindow(): BrowserWindow {
     backgroundMaterial: legacyWindowImplementation && nativeMicaEnabled ? 'mica' : 'none',
     roundedCorners: legacyWindowImplementation,
     hasShadow: legacyWindowImplementation,
-    webPreferences: {
-      preload: join(__dirname, '../preload/index.js'),
-      contextIsolation: true,
-      nodeIntegration: false
-    }
+    webPreferences: buildUiWebPreferences()
   })
 
   applyWindowsBackdrop(win)
@@ -982,11 +992,7 @@ function getOrCreateMutPageHandleWindow(owner: BrowserWindow): BrowserWindow {
     backgroundMaterial: legacyWindowImplementation && nativeMicaEnabled ? 'mica' : 'none',
     roundedCorners: legacyWindowImplementation,
     hasShadow: legacyWindowImplementation,
-    webPreferences: {
-      preload: join(__dirname, '../preload/index.js'),
-      contextIsolation: true,
-      nodeIntegration: false
-    }
+    webPreferences: buildUiWebPreferences()
   })
 
   applyWindowsBackdrop(win)
@@ -1049,11 +1055,7 @@ function getOrCreateMultiPageControlWindow(): BrowserWindow {
     backgroundMaterial: legacyWindowImplementation && nativeMicaEnabled ? 'mica' : 'none',
     roundedCorners: legacyWindowImplementation,
     hasShadow: legacyWindowImplementation,
-    webPreferences: {
-      preload: join(__dirname, '../preload/index.js'),
-      contextIsolation: true,
-      nodeIntegration: false
-    }
+    webPreferences: buildUiWebPreferences()
   })
 
   applyWindowsBackdrop(win)
@@ -1231,11 +1233,7 @@ function getOrCreateMutPageThumbnailsMenuWindow(owner: BrowserWindow): BrowserWi
     backgroundMaterial: legacyWindowImplementation && nativeMicaEnabled ? 'mica' : 'none',
     roundedCorners: legacyWindowImplementation,
     hasShadow: legacyWindowImplementation,
-    webPreferences: {
-      preload: join(__dirname, '../preload/index.js'),
-      contextIsolation: true,
-      nodeIntegration: false
-    }
+    webPreferences: buildUiWebPreferences()
   })
 
   applyWindowsBackdrop(win)
@@ -1941,11 +1939,7 @@ function getOrCreateToolbarSubwindow(kind: string, placement: 'top' | 'bottom'):
     backgroundMaterial: legacyWindowImplementation && nativeMicaEnabled ? 'mica' : 'none',
     roundedCorners: legacyWindowImplementation,
     hasShadow: legacyWindowImplementation,
-    webPreferences: {
-      preload: join(__dirname, '../preload/index.js'),
-      contextIsolation: true,
-      nodeIntegration: false
-    }
+    webPreferences: buildUiWebPreferences()
   })
 
   applyWindowsBackdrop(win)
@@ -2193,6 +2187,11 @@ function handleBackendControlMessage(message: any): void {
 
   if (message.type === 'SET_LEGACY_WINDOW_IMPLEMENTATION') {
     applyLegacyWindowImplementation(Boolean((message as any).enabled))
+    return
+  }
+
+  if (message.type === 'SET_MERGE_RENDERER_PIPELINE') {
+    applyMergeRendererPipeline(Boolean((message as any).enabled))
     return
   }
 
@@ -2825,6 +2824,7 @@ if (hasSingleInstanceLock) {
       let loadedNativeMica: boolean | undefined
       let loadedLegacyWindowImplementation: boolean | undefined
       let loadedSystemUiaTopmost: boolean | undefined
+      let loadedMergeRendererPipeline: boolean | undefined
 
       for (let attempt = 0; attempt < 3; attempt++) {
         let backendResponded = false
@@ -2867,10 +2867,21 @@ if (hasSingleInstanceLock) {
           if (String(e).includes('kv_not_found')) backendResponded = true
         }
 
+        try {
+          const raw = await backendGetKv(SYSTEM_MERGE_RENDERER_PIPELINE_KV_KEY)
+          backendResponded = true
+          if (typeof raw === 'boolean') loadedMergeRendererPipeline = raw
+          else if (raw === 'true' || raw === 1 || raw === '1') loadedMergeRendererPipeline = true
+          else if (raw === 'false' || raw === 0 || raw === '0') loadedMergeRendererPipeline = false
+        } catch (e) {
+          if (String(e).includes('kv_not_found')) backendResponded = true
+        }
+
         if (backendResponded) break
         await new Promise((r) => setTimeout(r, 220))
       }
 
+      applyMergeRendererPipeline(loadedMergeRendererPipeline ?? false, { rebuild: false })
       applyLegacyWindowImplementation(loadedLegacyWindowImplementation ?? false, { rebuild: false })
       applyNativeMica(loadedNativeMica ?? false)
       applyAppearance(loadedAppearance ?? currentAppearance)

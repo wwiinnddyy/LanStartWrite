@@ -87,6 +87,8 @@ export const OFFICE_PPT_MODE_UI_STATE_KEY = 'officePptMode'
 export const SYSTEM_UIA_TOPMOST_KV_KEY = 'system-uia-topmost'
 export const SYSTEM_UIA_TOPMOST_UI_STATE_KEY = 'systemUiaTopmost'
 
+export const SYSTEM_MERGE_RENDERER_PIPELINE_KV_KEY = 'system-merge-renderer-pipeline'
+
 export const ADMIN_STATUS_UI_STATE_KEY = 'isAdmin'
 
 export type LeaferRendererEngine = 'canvas2d' | 'svg' | 'webgl' | 'webgpu'

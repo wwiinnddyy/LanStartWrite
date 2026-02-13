@@ -15,6 +15,7 @@ import {
   type OfficePptMode,
   SYSTEM_UIA_TOPMOST_KV_KEY,
   SYSTEM_UIA_TOPMOST_UI_STATE_KEY,
+  SYSTEM_MERGE_RENDERER_PIPELINE_KV_KEY,
   ADMIN_STATUS_UI_STATE_KEY,
   WHITEBOARD_BG_COLOR_KV_KEY,
   WHITEBOARD_BG_COLOR_UI_STATE_KEY,
@@ -32,7 +33,18 @@ import {
   usePersistedState,
   useUiStateBus
 } from '../../status'
-import { Button } from '../../button'
+import {
+  Button,
+  getToolbarDefaultAllowedSecondaryButtonIds,
+  getToolbarDefaultSecondaryOrder,
+  getAppButtonLabel,
+  getToolbarPrimaryButtonIds,
+  getToolbarSecondaryButtonIds,
+  isToolbarPrimaryButtonId,
+  isToolbarSecondaryButtonId,
+  type ToolbarPrimaryButtonId,
+  type ToolbarSecondaryButtonId
+} from '../../button'
 import type { SettingsTab } from '../types'
 import { AccentColorPicker } from './AccentColorPicker'
 import { TransitionSettings } from './TransitionSettings'
@@ -176,8 +188,8 @@ function AppearanceSettings() {
 
 // 各选项卡的内容占位组件
 function ToolbarSettings() {
-  type PrimaryButtonId = 'mouse' | 'pen' | 'eraser' | 'whiteboard' | 'video-show'
-  type SecondaryButtonId = 'undo' | 'redo' | 'clock' | 'feature-panel' | 'events' | 'watcher'
+  type PrimaryButtonId = ToolbarPrimaryButtonId
+  type SecondaryButtonId = ToolbarSecondaryButtonId
   type SelectedButton =
     | { group: 'primary'; id: PrimaryButtonId }
     | { group: 'pinned'; id: SecondaryButtonId }
@@ -196,17 +208,17 @@ function ToolbarSettings() {
     secondaryButtonsOrder?: SecondaryButtonId[]
   }
 
-  const DEFAULT_PRIMARY: PrimaryButtonId[] = ['mouse', 'pen', 'eraser', 'whiteboard', 'video-show']
-  const DEFAULT_SECONDARY: SecondaryButtonId[] = ['undo', 'redo', 'feature-panel']
-  const ALL_SECONDARY: SecondaryButtonId[] = ['undo', 'redo', 'clock', 'feature-panel', 'events', 'watcher']
-  const DEFAULT_SECONDARY_ORDER: SecondaryButtonId[] = ['undo', 'redo', 'feature-panel']
+  const DEFAULT_PRIMARY: PrimaryButtonId[] = getToolbarPrimaryButtonIds()
+  const DEFAULT_SECONDARY: SecondaryButtonId[] = getToolbarDefaultAllowedSecondaryButtonIds()
+  const ALL_SECONDARY: SecondaryButtonId[] = getToolbarSecondaryButtonIds()
+  const DEFAULT_SECONDARY_ORDER: SecondaryButtonId[] = getToolbarDefaultSecondaryOrder()
 
   function normalizeAllowedPrimaryButtons(input: unknown): PrimaryButtonId[] {
     if (!Array.isArray(input)) return DEFAULT_PRIMARY
-    const allowed = new Set(DEFAULT_PRIMARY)
+    const allowed = new Set(getToolbarPrimaryButtonIds())
     const unique: PrimaryButtonId[] = []
     for (const item of input) {
-      if (item !== 'mouse' && item !== 'pen' && item !== 'eraser' && item !== 'whiteboard' && item !== 'video-show') continue
+      if (!isToolbarPrimaryButtonId(item)) continue
       if (!allowed.has(item)) continue
       if (unique.includes(item)) continue
       unique.push(item)
@@ -216,10 +228,10 @@ function ToolbarSettings() {
 
   function normalizeAllowedSecondaryButtons(input: unknown): SecondaryButtonId[] {
     if (!Array.isArray(input)) return DEFAULT_SECONDARY
-    const allowed = new Set(ALL_SECONDARY)
+    const allowed = new Set(getToolbarSecondaryButtonIds())
     const unique: SecondaryButtonId[] = []
     for (const item of input) {
-      if (item !== 'undo' && item !== 'redo' && item !== 'clock' && item !== 'feature-panel' && item !== 'events' && item !== 'watcher') continue
+      if (!isToolbarSecondaryButtonId(item)) continue
       if (!allowed.has(item)) continue
       if (unique.includes(item)) continue
       unique.push(item)
@@ -232,7 +244,7 @@ function ToolbarSettings() {
     const unique: PrimaryButtonId[] = []
     if (Array.isArray(input)) {
       for (const item of input) {
-        if (item !== 'mouse' && item !== 'pen' && item !== 'eraser' && item !== 'whiteboard' && item !== 'video-show') continue
+        if (!isToolbarPrimaryButtonId(item)) continue
         if (!allowed.has(item)) continue
         if (unique.includes(item)) continue
         unique.push(item)
@@ -248,7 +260,7 @@ function ToolbarSettings() {
     const unique: SecondaryButtonId[] = []
     if (Array.isArray(input)) {
       for (const item of input) {
-        if (item !== 'undo' && item !== 'redo' && item !== 'clock' && item !== 'feature-panel' && item !== 'events' && item !== 'watcher') continue
+        if (!isToolbarSecondaryButtonId(item)) continue
         if (!allowed.has(item)) continue
         if (unique.includes(item)) continue
         unique.push(item)
@@ -267,7 +279,7 @@ function ToolbarSettings() {
     const unique: SecondaryButtonId[] = []
     if (Array.isArray(input)) {
       for (const item of input) {
-        if (item !== 'undo' && item !== 'redo' && item !== 'clock' && item !== 'feature-panel' && item !== 'events' && item !== 'watcher') continue
+        if (!isToolbarSecondaryButtonId(item)) continue
         if (!allowed.has(item)) continue
         if (pinned.has(item)) continue
         if (unique.includes(item)) continue
@@ -334,17 +346,7 @@ function ToolbarSettings() {
   const secondaryButtonsOrder = normalizeSecondaryButtonsOrder(toolbarState.secondaryButtonsOrder, allowedSecondaryButtons, pinnedSecondaryButtonsOrder)
 
   const labelForButton = (id: PrimaryButtonId | SecondaryButtonId) => {
-    if (id === 'mouse') return '鼠标'
-    if (id === 'pen') return '笔'
-    if (id === 'eraser') return '橡皮'
-    if (id === 'whiteboard') return '白板'
-    if (id === 'video-show') return '视频展台'
-    if (id === 'undo') return '撤销'
-    if (id === 'redo') return '重做'
-    if (id === 'clock') return '时钟'
-    if (id === 'events') return '事件'
-    if (id === 'watcher') return '监视器'
-    return '功能面板'
+    return getAppButtonLabel(id)
   }
 
   function ToolbarToolIcon(props: { kind: PrimaryButtonId }) {
@@ -1635,6 +1637,10 @@ function SystemSettings() {
     validate: (v): v is boolean => typeof v === 'boolean'
   })
 
+  const [mergeRendererPipeline, setMergeRendererPipeline] = usePersistedState<boolean>(SYSTEM_MERGE_RENDERER_PIPELINE_KV_KEY, false, {
+    validate: (v): v is boolean => typeof v === 'boolean'
+  })
+
   const persistUiaTopmost = (next: boolean) => {
     setUiaTopmost(next)
     void (async () => {
@@ -1645,6 +1651,15 @@ function SystemSettings() {
       }
       try {
         await putUiStateKey(UI_STATE_APP_WINDOW_ID, SYSTEM_UIA_TOPMOST_UI_STATE_KEY, next)
+      } catch {}
+    })()
+  }
+
+  const persistMergeRendererPipeline = (next: boolean) => {
+    setMergeRendererPipeline(next)
+    void (async () => {
+      try {
+        await putKv(SYSTEM_MERGE_RENDERER_PIPELINE_KV_KEY, next)
       } catch {}
     })()
   }
@@ -1670,6 +1685,21 @@ function SystemSettings() {
         <div className="settingsFormDescription">开启后使用 UIA/Win32 强制置顶（更稳，但更激进）</div>
         <div className="settingsFormGroup">
           <Switch checked={uiaTopmost} onChange={(e) => persistUiaTopmost(e.currentTarget.checked)} label="启用 UIA 强制置顶" size="md" />
+        </div>
+      </div>
+
+      <div className="settingsFormCard">
+        <div className="settingsFormTitle">渲染进程</div>
+        <div className="settingsFormDescription">
+          开启后多个窗口会尽量共享 renderer 进程以降低内存占用（独立性降低，任一窗口卡死可能影响其它窗口；会自动重建窗口）
+        </div>
+        <div className="settingsFormGroup">
+          <Switch
+            checked={mergeRendererPipeline}
+            onChange={(e) => persistMergeRendererPipeline(e.currentTarget.checked)}
+            label="合并渲染管线（共享 renderer）"
+            size="md"
+          />
         </div>
       </div>
     </div>

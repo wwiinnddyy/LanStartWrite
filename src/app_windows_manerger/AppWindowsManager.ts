@@ -10,6 +10,8 @@ const WINDOW_ID_BY_KIND: Record<AppManagedWindowKind, string> = {
   settings: 'settings-window'
 }
 
+const SHARED_RENDERER_AFFINITY = 'lanstartwrite-ui'
+
 function resolveAppIconPath(): string | undefined {
   const candidates = [
     join(process.resourcesPath, 'iconpack', 'LanStartWrite.png'),
@@ -41,6 +43,7 @@ export type AppWindowsManagerDeps = {
   getUiZoomLevel: () => number
   getNativeMicaEnabled: () => boolean
   getLegacyWindowImplementation: () => boolean
+  getMergeRendererPipelineEnabled: () => boolean
   surfaceBackgroundColor: (appearance: 'light' | 'dark') => string
   applyWindowsBackdrop: (win: BrowserWindow) => void
   wireWindowDebug: (win: BrowserWindow, name: string) => void
@@ -359,12 +362,13 @@ export class AppWindowsManager {
       backgroundMaterial: opts.frame && this.deps.getNativeMicaEnabled() ? 'mica' : 'none',
       roundedCorners: !opts.transparent,
       hasShadow: !opts.transparent,
-      webPreferences: {
+      webPreferences: ({
         preload: this.deps.preloadPath,
         sandbox: false,
         contextIsolation: true,
-        nodeIntegration: false
-      }
+        nodeIntegration: false,
+        ...(this.deps.getMergeRendererPipelineEnabled() ? { affinity: SHARED_RENDERER_AFFINITY } : {})
+      } as any)
     })
 
     this.deps.applyWindowsBackdrop(win)
