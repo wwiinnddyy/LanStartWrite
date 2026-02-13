@@ -1,6 +1,6 @@
 import React from 'react'
 import { describe, expect, it, vi } from 'vitest'
-import { render } from '@testing-library/react'
+import { render, waitFor } from '@testing-library/react'
 
 const SVG_LEAFER_SETTINGS = {
   multiTouch: false,
@@ -87,10 +87,10 @@ describe('Annotation notes partition', () => {
     }
 
     const a = render(<AnnotationOverlayApp />)
-    await new Promise((r) => setTimeout(r, 0))
+    await waitFor(() => {
+      expect(putCalls.some((c) => c.key === 'annotation-notes-whiteboard')).toBe(true)
+    })
     a.unmount()
-
-    expect(putCalls.some((c) => c.key === 'annotation-notes-whiteboard')).toBe(true)
 
     putCalls.length = 0
 
@@ -108,10 +108,10 @@ describe('Annotation notes partition', () => {
     }
 
     const b = render(<AnnotationOverlayApp />)
-    await new Promise((r) => setTimeout(r, 0))
+    await waitFor(() => {
+      expect(putCalls.some((c) => c.key === 'annotation-notes-toolbar')).toBe(true)
+    })
     b.unmount()
-
-    expect(putCalls.some((c) => c.key === 'annotation-notes-toolbar')).toBe(true)
 
     putCalls.length = 0
 
@@ -129,10 +129,10 @@ describe('Annotation notes partition', () => {
     }
 
     const c = render(<AnnotationOverlayApp />)
-    await new Promise((r) => setTimeout(r, 30))
+    await waitFor(() => {
+      expect(putCalls.some((c) => c.key === 'annotation-notes-video-show')).toBe(true)
+    })
     c.unmount()
-
-    expect(putCalls.some((c) => c.key === 'annotation-notes-video-show')).toBe(true)
   }, 20000)
 
   it('rotates notes on startup and keeps only last history', async () => {
@@ -222,7 +222,9 @@ describe('Annotation notes partition', () => {
     }
 
     const a = render(<AnnotationOverlayApp />)
-    await new Promise((r) => setTimeout(r, 0))
+    await waitFor(() => {
+      expect(putCalls.some((c) => c.key === 'annotation-notes-whiteboard-prev')).toBe(true)
+    })
     a.unmount()
 
     const prevCall = putCalls.find((c) => c.key === 'annotation-notes-whiteboard-prev')

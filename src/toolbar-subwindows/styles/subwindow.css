@@ -218,3 +218,96 @@ body {
 .subwindowPagerDot--active {
   opacity: 0.7;
 }
+
+.clockMenuCard {
+  position: relative;
+  justify-content: flex-start;
+  align-items: stretch;
+  padding: 14px;
+  padding-bottom: 58px;
+}
+
+.clockMenuMeasure {
+  width: 100%;
+  max-width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+.clockTabsBar {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  display: flex;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ls-surface-overlay) 88%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ls-surface-border) 85%, transparent);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.18);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  z-index: 2;
+}
+
+.clockTabButton {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 0.78;
+  cursor: pointer;
+}
+
+.clockTabButton--active {
+  opacity: 1;
+  background: color-mix(in srgb, var(--ls-accent-light) 90%, transparent);
+}
+
+.clockPrimaryText {
+  font-size: 46px;
+  font-weight: 650;
+  letter-spacing: 0.6px;
+  padding: 0px 2px 10px;
+  text-align: center;
+}
+
+.clockSecondaryText {
+  font-size: 12px;
+  opacity: 0.75;
+  padding: 0px 2px 4px;
+  text-align: center;
+}
+
+.clockControls {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 8px 2px 2px;
+  justify-content: center;
+}
+
+.clockControlButton {
+  appearance: none;
+  border: 1px solid color-mix(in srgb, var(--ls-surface-border) 85%, transparent);
+  background: color-mix(in srgb, var(--ls-surface-overlay) 92%, transparent);
+  color: inherit;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  opacity: 0.9;
+}
+
+.clockControlButton:hover {
+  background: color-mix(in srgb, var(--ls-accent-light) 55%, transparent);
+  opacity: 1;
+}
