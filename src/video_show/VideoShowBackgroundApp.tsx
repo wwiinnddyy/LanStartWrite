@@ -351,6 +351,7 @@ export function VideoShowBackgroundApp() {
         const idealW = Number.isFinite(desiredWidth) ? desiredWidth : 1920
         baseVideo.width = { ideal: idealW }
         baseVideo.height = { ideal: idealH }
+        baseVideo.frameRate = { ideal: 30, max: 30 }
 
         const p = navigator.mediaDevices.getUserMedia({ video: Object.keys(baseVideo).length ? baseVideo : true, audio: false })
         p.then((stream) => {

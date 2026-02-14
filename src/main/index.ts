@@ -298,6 +298,16 @@ if (process.platform === 'win32') {
   try {
     app.setAppUserModelId('com.lanstart.write')
   } catch {}
+
+  try {
+    app.commandLine.appendSwitch('disable-video-capture-use-gpu-memory-buffer')
+  } catch {}
+
+  if (!process.argv.some((a) => String(a).startsWith('--disable-features'))) {
+    try {
+      app.commandLine.appendSwitch('disable-features', 'MediaFoundationVideoCapture,ZeroCopyVideoCapture')
+    } catch {}
+  }
 }
 
 const hasSingleInstanceLock = lanstartwriteLink.register(app)
@@ -1093,7 +1103,7 @@ function repositionMultiPageControlWindow(): void {
   const heightLimit = Math.max(40, area.height - 20)
   const width = Math.max(140, Math.min(widthLimit, Math.round(base?.width ?? 360)))
   const height = Math.max(40, Math.min(heightLimit, Math.round(base?.height ?? 66)))
-  const margin = mutPageDesiredFromPpt ? 0 : 14
+  const margin = 14
   const x = area.x + margin
   const y = area.y + area.height - height - margin
 
@@ -1649,6 +1659,57 @@ function waitForWindowReadyToShow(win: BrowserWindow): Promise<void> {
     const done = () => resolve()
     win.once('ready-to-show', done)
   })
+}
+
+let didAlignToolbarWithMutPageInPpt = false
+
+function alignFloatingToolbarWithMutPageOnce() {
+  const toolbar = floatingToolbarWindow
+  const mp = multiPageControlWindow
+  if (!toolbar || toolbar.isDestroyed()) return
+  if (!mp || mp.isDestroyed()) return
+
+  try {
+    repositionMultiPageControlWindow()
+  } catch {}
+
+  const mpBounds = mp.getBounds()
+  const toolbarBounds = toolbar.getBounds()
+  const display = screen.getDisplayMatching(mpBounds)
+  const bounds = display.bounds
+
+  const z = getUiZoomFactor()
+  const gap = Math.round(TOOLBAR_HANDLE_GAP * z)
+  const totalWidth = toolbarBounds.width + gap + TOOLBAR_HANDLE_WIDTH
+
+  const xMin = bounds.x
+  const xMax = bounds.x + bounds.width - totalWidth
+  const centeredX = Math.round(bounds.x + (bounds.width - totalWidth) / 2)
+
+  let nextX = Math.max(xMin, Math.min(xMax, centeredX))
+
+  const mpGroupLeft = mpBounds.x
+  const mpGroupRight = mpBounds.x + mpBounds.width + TOOLBAR_HANDLE_GAP + MUT_PAGE_HANDLE_WIDTH
+  const overlapGap = Math.round(8 * z)
+  const overlaps = nextX < mpGroupRight && nextX + totalWidth > mpGroupLeft
+  if (overlaps) {
+    const leftX = Math.max(xMin, Math.min(xMax, Math.round(mpGroupLeft - totalWidth - overlapGap)))
+    const rightX = Math.max(xMin, Math.min(xMax, Math.round(mpGroupRight + overlapGap)))
+    const leftDist = Math.abs(leftX - centeredX)
+    const rightDist = Math.abs(rightX - centeredX)
+    nextX = rightDist <= leftDist ? rightX : leftX
+  }
+
+  const yMin = bounds.y
+  const yMax = bounds.y + bounds.height - toolbarBounds.height
+  const mpBottom = mpBounds.y + mpBounds.height
+  const nextY = Math.max(yMin, Math.min(yMax, mpBottom - toolbarBounds.height))
+
+  if (toolbarBounds.x === nextX && toolbarBounds.y === nextY) return
+  try {
+    toolbar.setBounds({ ...toolbarBounds, x: nextX, y: nextY }, false)
+  } catch {}
+  scheduleRepositionToolbarSubwindows('move')
 }
 
 function computeStartupToolbarBounds() {
@@ -2529,6 +2590,14 @@ function handleBackendControlMessage(message: any): void {
       if (visible) {
         mutPagePptLastShownAt = Date.now()
         mutPageDesiredFromPpt = true
+        if (!didAlignToolbarWithMutPageInPpt) {
+          didAlignToolbarWithMutPageInPpt = true
+          setTimeout(() => {
+            try {
+              alignFloatingToolbarWithMutPageOnce()
+            } catch {}
+          }, 0)
+        }
         if (mutPagePptHideTimer) {
           clearTimeout(mutPagePptHideTimer)
           mutPagePptHideTimer = undefined
@@ -2544,6 +2613,7 @@ function handleBackendControlMessage(message: any): void {
         mutPagePptHideTimer = undefined
         if (Date.now() - mutPagePptLastShownAt < 900) return
         mutPageDesiredFromPpt = false
+        didAlignToolbarWithMutPageInPpt = false
         applyMutPageVisibility()
       }, 900)
     }
@@ -2558,6 +2628,14 @@ function handleBackendControlMessage(message: any): void {
         mutPageAnchorBounds = { x: Number(b.x), y: Number(b.y), width: Number(b.width), height: Number(b.height) }
         mutPagePptLastShownAt = Date.now()
         mutPageDesiredFromPpt = true
+        if (!didAlignToolbarWithMutPageInPpt) {
+          didAlignToolbarWithMutPageInPpt = true
+          setTimeout(() => {
+            try {
+              alignFloatingToolbarWithMutPageOnce()
+            } catch {}
+          }, 0)
+        }
         if (mutPagePptHideTimer) {
           clearTimeout(mutPagePptHideTimer)
           mutPagePptHideTimer = undefined
@@ -2570,6 +2648,7 @@ function handleBackendControlMessage(message: any): void {
           mutPagePptHideTimer = undefined
           if (Date.now() - mutPagePptLastShownAt < 1200) return
           mutPageDesiredFromPpt = false
+          didAlignToolbarWithMutPageInPpt = false
           applyMutPageVisibility()
         }, 1200)
       }
@@ -2674,6 +2753,13 @@ function handleBackendControlMessage(message: any): void {
       } catch {}
       applyToolbarOnTopLevel('screen-saver')
       applyMutPageVisibility()
+      if (mode === 'whiteboard' || mode === 'video-show') {
+        setTimeout(() => {
+          try {
+            alignFloatingToolbarWithMutPageOnce()
+          } catch {}
+        }, 0)
+      }
     } else {
       mutPageDesiredFromAppMode = false
       applyMutPageVisibility()
