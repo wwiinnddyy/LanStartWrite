@@ -51,6 +51,7 @@ import {
   SYSTEM_UIA_TOPMOST_KV_KEY,
   SYSTEM_UIA_TOPMOST_UI_STATE_KEY,
   SYSTEM_MERGE_RENDERER_PIPELINE_KV_KEY,
+  SYSTEM_WINDOW_PRELOAD_KV_KEY,
   ADMIN_STATUS_UI_STATE_KEY,
   VIDEO_SHOW_PAGES_KV_KEY,
   VIDEO_SHOW_QUALITY_UI_STATE_KEY,
@@ -140,6 +141,7 @@ export {
   SYSTEM_UIA_TOPMOST_KV_KEY,
   SYSTEM_UIA_TOPMOST_UI_STATE_KEY,
   SYSTEM_MERGE_RENDERER_PIPELINE_KV_KEY,
+  SYSTEM_WINDOW_PRELOAD_KV_KEY,
   ADMIN_STATUS_UI_STATE_KEY,
   VIDEO_SHOW_PAGES_KV_KEY,
   VIDEO_SHOW_QUALITY_UI_STATE_KEY,
@@ -284,18 +286,26 @@ export function usePersistedState<T>(
 ) {
   const [value, setValue] = useState<T>(defaultValue)
   const didHydrate = useRef(false)
+  const validateRef = useRef<((value: unknown) => value is T) | undefined>(undefined)
+  const mapLoadRef = useRef<((value: T) => T) | undefined>(undefined)
+  const mapSaveRef = useRef<((value: T) => unknown) | undefined>(undefined)
+
+  validateRef.current = options?.validate
+  mapLoadRef.current = options?.mapLoad
+  mapSaveRef.current = options?.mapSave
 
   useEffect(() => {
     let cancelled = false
-    const validate = options?.validate
-    const mapLoad = options?.mapLoad
+    didHydrate.current = false
 
     const run = async () => {
       try {
         const loaded = await getKv<unknown>(key)
         if (cancelled) return
         if (loaded === undefined) return
+        const validate = validateRef.current
         if (validate && !validate(loaded)) return
+        const mapLoad = mapLoadRef.current
         const next = mapLoad ? mapLoad(loaded as T) : (loaded as T)
         setValue(next)
       } catch {
@@ -309,13 +319,13 @@ export function usePersistedState<T>(
     return () => {
       cancelled = true
     }
-  }, [key, options?.validate])
+  }, [key])
 
   useEffect(() => {
     if (!didHydrate.current) return
-    const mapSave = options?.mapSave
 
     const id = window.setTimeout(() => {
+      const mapSave = mapSaveRef.current
       const next = mapSave ? mapSave(value) : value
       putKv(key, next as any).catch(() => undefined)
     }, 250)

@@ -32,6 +32,7 @@ import {
   SYSTEM_UIA_TOPMOST_KV_KEY,
   SYSTEM_UIA_TOPMOST_UI_STATE_KEY,
   SYSTEM_MERGE_RENDERER_PIPELINE_KV_KEY,
+  SYSTEM_WINDOW_PRELOAD_KV_KEY,
   UI_STATE_APP_WINDOW_ID,
   UNDO_REV_UI_STATE_KEY,
   VIDEO_SHOW_MERGE_LAYERS_KV_KEY,
@@ -394,11 +395,9 @@ let lastPptProbeAt = 0
 let lastPptMutPageVisible: boolean | undefined
 
 function isPptControlDataReady(status: PptWrapperStatus | null): boolean {
-  if (!status || status.ok !== true) return false
+  if (!status) return false
   const total = asFiniteInt(status.totalPage)
   const current = asFiniteInt(status.currentPage)
-  const slideName = typeof status.slideNameIndex === 'string' ? status.slideNameIndex.trim() : ''
-  if (!slideName) return false
   if (total === undefined || total < 1) return false
   if (current === undefined || current < 1 || current > total) return false
   return true
@@ -408,14 +407,26 @@ setInterval(() => {
   const state = getOrInitUiState(UI_STATE_APP_WINDOW_ID) as any
   const activeAppRaw = state[ACTIVE_APP_UI_STATE_KEY]
   const activeApp = isActiveApp(activeAppRaw) ? activeAppRaw : 'unknown'
-  if (activeApp !== 'ppt') return
   if (pptPollInFlight) return
   pptPollInFlight = true
   pptGetStatus()
     .then((status) => {
       applyPptStatusToUiState(state, status)
-      const pptFullscreen = state[PPT_FULLSCREEN_UI_STATE_KEY] === true
-      const visible = pptFullscreen && isPptControlDataReady(status)
+      const ready = isPptControlDataReady(status)
+      if (ready) {
+        if (activeApp !== 'ppt') {
+          state[ACTIVE_APP_UI_STATE_KEY] = 'ppt'
+          emitEvent('UI_STATE_PUT', { windowId: UI_STATE_APP_WINDOW_ID, key: ACTIVE_APP_UI_STATE_KEY, value: 'ppt' })
+        }
+        if (state[PPT_FULLSCREEN_UI_STATE_KEY] !== true) {
+          state[PPT_FULLSCREEN_UI_STATE_KEY] = true
+          emitEvent('UI_STATE_PUT', { windowId: UI_STATE_APP_WINDOW_ID, key: PPT_FULLSCREEN_UI_STATE_KEY, value: true })
+        }
+      } else if (activeApp === 'ppt' && state[PPT_FULLSCREEN_UI_STATE_KEY] === true) {
+        state[PPT_FULLSCREEN_UI_STATE_KEY] = false
+        emitEvent('UI_STATE_PUT', { windowId: UI_STATE_APP_WINDOW_ID, key: PPT_FULLSCREEN_UI_STATE_KEY, value: false })
+      }
+      const visible = ready
       if (visible !== lastPptMutPageVisible) {
         lastPptMutPageVisible = visible
         requestMain({ type: 'SET_MUT_PAGE_VISIBLE', source: 'ppt', visible })
@@ -521,11 +532,10 @@ function setUiStateKey(windowId: string, state: Record<string, any>, key: string
 }
 
 function applyPptStatusToUiState(state: Record<string, any>, status: PptWrapperStatus | null): void {
-  const ok = Boolean(status?.ok)
   const total1 = asFiniteInt(status?.totalPage)
   const current1 = asFiniteInt(status?.currentPage)
-  const total = ok && total1 !== undefined && total1 >= 1 ? total1 : -1
-  const index = ok && total >= 1 && current1 !== undefined && current1 >= 1 ? Math.max(0, Math.min(total - 1, current1 - 1)) : -1
+  const total = total1 !== undefined && total1 >= 1 ? total1 : -1
+  const index = total >= 1 && current1 !== undefined && current1 >= 1 ? Math.max(0, Math.min(total - 1, current1 - 1)) : -1
   const slideName = typeof status?.slideNameIndex === 'string' ? status.slideNameIndex : ''
 
   setUiStateKey(UI_STATE_APP_WINDOW_ID, state, PPT_PAGE_TOTAL_UI_STATE_KEY, total)
@@ -1352,8 +1362,10 @@ stdin.on('line', (line) => {
               emitEvent('KV_GET', { key })
               requestMain({ type: 'RPC_RESPONSE', id, ok: true, result: value })
               return
-            } catch {
-              throw new Error('kv_not_found')
+            } catch (e) {
+              const err = e as any
+              if (err?.notFound === true || String(err?.code ?? '') === 'LEVEL_NOT_FOUND') throw new Error('kv_not_found')
+              throw e
             }
           }
 
@@ -1381,6 +1393,16 @@ stdin.on('line', (line) => {
                     ? false
                     : Boolean(raw)
               requestMain({ type: 'SET_MERGE_RENDERER_PIPELINE', enabled })
+            }
+            if (key === SYSTEM_WINDOW_PRELOAD_KV_KEY) {
+              const raw = (params as any)?.value
+              const enabled =
+                raw === true || raw === 'true' || raw === 1 || raw === '1'
+                  ? true
+                  : raw === false || raw === 'false' || raw === 0 || raw === '0'
+                    ? false
+                    : Boolean(raw)
+              requestMain({ type: 'SET_WINDOW_PRELOAD', enabled })
             }
             if (key === 'native-mica-enabled') {
               const raw = (params as any)?.value
@@ -1498,6 +1520,17 @@ stdin.on('line', (line) => {
             return
           }
 
+          if (method === 'shutdown') {
+            requestMain({ type: 'RPC_RESPONSE', id, ok: true, result: null })
+            try {
+              await db.close()
+            } catch {}
+            setTimeout(() => {
+              process.exit(0)
+            }, 10)
+            return
+          }
+
           throw new Error('UNKNOWN_METHOD')
         } catch (e) {
           requestMain({ type: 'RPC_RESPONSE', id, ok: false, error: String(e) })
@@ -1553,7 +1586,7 @@ stdin.on('line', (line) => {
           const n = String((p as any)?.name ?? '').toLowerCase()
           if (!n) return false
           const token = n.replace(/\.exe$/i, '').replace(/[\s._-]+/g, '')
-          return token.includes('powerpnt') || token.includes('pptview') || token.includes('powerpoint')
+          return token.includes('powerpnt') || token.includes('pptview') || token.includes('powerpoint') || token === 'wpp' || token.includes('wpp')
         })
 
         if (hasPptProc && !pptProbeInFlight) {
@@ -1566,15 +1599,15 @@ stdin.on('line', (line) => {
                 const foreground = runtimeWindows.get('foreground') as any
                 const fgName = String(foreground?.window?.processName ?? '')
                 const canTrustForeground = Boolean(fgName)
-                const ok = Boolean(status?.ok)
                 const hwnd = asFiniteNumber(status?.hwnd)
-                if (ok || hwnd !== undefined || !canTrustForeground) {
+                const pptFullscreen = isPptControlDataReady(status)
+                if (pptFullscreen || hwnd !== undefined || !canTrustForeground) {
                   state[ACTIVE_APP_UI_STATE_KEY] = 'ppt'
-                  state[PPT_FULLSCREEN_UI_STATE_KEY] = ok
+                  state[PPT_FULLSCREEN_UI_STATE_KEY] = pptFullscreen
                   emitEvent('UI_STATE_PUT', { windowId: UI_STATE_APP_WINDOW_ID, key: ACTIVE_APP_UI_STATE_KEY, value: 'ppt' })
-                  emitEvent('UI_STATE_PUT', { windowId: UI_STATE_APP_WINDOW_ID, key: PPT_FULLSCREEN_UI_STATE_KEY, value: ok })
+                  emitEvent('UI_STATE_PUT', { windowId: UI_STATE_APP_WINDOW_ID, key: PPT_FULLSCREEN_UI_STATE_KEY, value: pptFullscreen })
                   applyPptStatusToUiState(state, status)
-                  const visible = ok && isPptControlDataReady(status)
+                  const visible = pptFullscreen
                   if (visible !== lastPptMutPageVisible) {
                     lastPptMutPageVisible = visible
                     requestMain({ type: 'SET_MUT_PAGE_VISIBLE', source: 'ppt', visible })
@@ -1620,9 +1653,9 @@ stdin.on('line', (line) => {
           }
         }
 
-        if (activeApp === 'ppt' && Boolean(status?.ok)) {
-          pptFullscreen = true
-        }
+        const ready = isPptControlDataReady(status)
+        if (ready) activeApp = 'ppt'
+        if (activeApp === 'ppt') pptFullscreen = pptFullscreen || ready
 
         state[ACTIVE_APP_UI_STATE_KEY] = activeApp
         state[PPT_FULLSCREEN_UI_STATE_KEY] = pptFullscreen
@@ -1630,7 +1663,7 @@ stdin.on('line', (line) => {
 
         emitEvent('UI_STATE_PUT', { windowId: UI_STATE_APP_WINDOW_ID, key: ACTIVE_APP_UI_STATE_KEY, value: activeApp })
         emitEvent('UI_STATE_PUT', { windowId: UI_STATE_APP_WINDOW_ID, key: PPT_FULLSCREEN_UI_STATE_KEY, value: pptFullscreen })
-        const showMutPage = activeApp === 'ppt' && pptFullscreen && isPptControlDataReady(status)
+        const showMutPage = activeApp === 'ppt' && pptFullscreen
         if (showMutPage !== lastPptMutPageVisible) {
           lastPptMutPageVisible = showMutPage
           requestMain({ type: 'SET_MUT_PAGE_VISIBLE', source: 'ppt', visible: showMutPage })

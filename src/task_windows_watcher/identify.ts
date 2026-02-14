@@ -17,6 +17,8 @@ function looksLikePowerPointTitle(title: string): boolean {
   if (title.includes('microsoft powerpoint')) return true
   if (title.includes('powerpoint')) return true
   if (title.includes('powerpnt')) return true
+  if (title.includes('wps 演示') || title.includes('wps演示')) return true
+  if (title.includes('wps presentation')) return true
   if (/\.(pptx|pptm|ppt|ppsx|ppsm|pps)\b/i.test(title)) return true
   if (title.includes('幻灯片') || title.includes('演示文稿')) return true
   return false
@@ -38,6 +40,11 @@ export function identifyActiveApp(sample: ForegroundWindowSample | undefined): {
   const title = normalizeTitle(sample.title)
 
   if (nameToken.includes('winword') || nameToken === 'word' || nameToken.includes('microsoftword')) return { activeApp: 'word', pptFullscreen: false }
+
+  if (nameToken === 'wpp' || nameToken.includes('wpp') || nameToken.includes('wpspresentation')) {
+    const pptFullscreen = looksLikePptSlideShowTitle(title)
+    return { activeApp: 'ppt', pptFullscreen }
+  }
 
   let pptScore = 0
   if (nameToken === 'powerpnt' || nameToken.includes('powerpnt')) pptScore += 3

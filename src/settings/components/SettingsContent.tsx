@@ -18,6 +18,7 @@ import {
   SYSTEM_UIA_TOPMOST_KV_KEY,
   SYSTEM_UIA_TOPMOST_UI_STATE_KEY,
   SYSTEM_MERGE_RENDERER_PIPELINE_KV_KEY,
+  SYSTEM_WINDOW_PRELOAD_KV_KEY,
   ADMIN_STATUS_UI_STATE_KEY,
   WHITEBOARD_BG_COLOR_KV_KEY,
   WHITEBOARD_BG_COLOR_UI_STATE_KEY,
@@ -1926,6 +1927,10 @@ function SystemSettings() {
     validate: (v): v is boolean => typeof v === 'boolean'
   })
 
+  const [windowPreload, setWindowPreload] = usePersistedState<boolean>(SYSTEM_WINDOW_PRELOAD_KV_KEY, false, {
+    validate: (v): v is boolean => typeof v === 'boolean'
+  })
+
   const persistUiaTopmost = (next: boolean) => {
     setUiaTopmost(next)
     void (async () => {
@@ -1945,6 +1950,15 @@ function SystemSettings() {
     void (async () => {
       try {
         await putKv(SYSTEM_MERGE_RENDERER_PIPELINE_KV_KEY, next)
+      } catch {}
+    })()
+  }
+
+  const persistWindowPreload = (next: boolean) => {
+    setWindowPreload(next)
+    void (async () => {
+      try {
+        await putKv(SYSTEM_WINDOW_PRELOAD_KV_KEY, next)
       } catch {}
     })()
   }
@@ -1985,6 +1999,14 @@ function SystemSettings() {
             label="合并渲染管线（共享 renderer）"
             size="md"
           />
+        </div>
+      </div>
+
+      <div className="settingsFormCard">
+        <div className="settingsFormTitle">窗口预加载</div>
+        <div className="settingsFormDescription">开启后会提前创建并加载常用窗口，然后保持收起状态</div>
+        <div className="settingsFormGroup">
+          <Switch checked={windowPreload} onChange={(e) => persistWindowPreload(e.currentTarget.checked)} label="启用窗口预加载" size="md" />
         </div>
       </div>
     </div>

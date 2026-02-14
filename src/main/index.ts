@@ -36,6 +36,7 @@ const LEGACY_WINDOW_IMPL_KV_KEY = 'legacy-window-implementation'
 const VIDEO_SHOW_MERGE_LAYERS_KV_KEY = 'video-show-merge-layers'
 const SYSTEM_UIA_TOPMOST_KV_KEY = 'system-uia-topmost'
 const SYSTEM_MERGE_RENDERER_PIPELINE_KV_KEY = 'system-merge-renderer-pipeline'
+const SYSTEM_WINDOW_PRELOAD_KV_KEY = 'system-window-preload'
 const SYSTEM_UIA_TOPMOST_UI_STATE_KEY = 'systemUiaTopmost'
 const ADMIN_STATUS_UI_STATE_KEY = 'isAdmin'
 const SHARED_RENDERER_AFFINITY = 'lanstartwrite-ui'
@@ -61,6 +62,7 @@ let nativeMicaEnabled = false
 let legacyWindowImplementation = false
 let mergeRendererPipelineEnabled = false
 let systemUiaTopmostEnabled = true
+let systemWindowPreloadEnabled = false
 let isRunningAsAdmin = false
 let topmostRelativeLevel = 0
 let stopToolbarTopmostPolling: (() => void) | undefined
@@ -142,6 +144,15 @@ const pendingBackendRpc = new Map<
   { resolve: (value: unknown) => void; reject: (reason?: unknown) => void; timer: NodeJS.Timeout }
 >()
 
+let backendRestartTimer: NodeJS.Timeout | undefined
+let backendRestartAttempt = 0
+let backendExtraEnv: Record<string, string> | undefined
+
+let isAppQuitting = false
+let isAppRestarting = false
+let allowQuitToProceed = false
+let backendShutdownInFlight = false
+
 function requestBackendRpc<T>(method: string, params?: unknown): Promise<T> {
   const proc = backendProcess
   if (!proc || !proc.stdin.writable) return Promise.reject(new Error('backend_not_ready'))
@@ -156,6 +167,111 @@ function requestBackendRpc<T>(method: string, params?: unknown): Promise<T> {
     pendingBackendRpc.set(id, { resolve: resolve as unknown as (value: unknown) => void, reject, timer })
     sendToBackend({ type: 'RPC_REQUEST', id, method, params })
   })
+}
+
+function waitForChildExit(proc: ChildProcessWithoutNullStreams, timeoutMs: number): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    let settled = false
+    const done = (err?: unknown) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      proc.off('exit', onExit)
+      proc.off('close', onClose)
+      if (err) reject(err)
+      else resolve()
+    }
+
+    const onExit = () => done()
+    const onClose = () => done()
+    const timer = setTimeout(() => done(new Error('wait_child_exit_timeout')), Math.max(1, Math.floor(timeoutMs)))
+
+    proc.once('exit', onExit)
+    proc.once('close', onClose)
+  })
+}
+
+async function shutdownBackendGracefully(timeoutMs = 1800): Promise<void> {
+  const proc = backendProcess
+  if (!proc) return
+  if (backendShutdownInFlight) {
+    await waitForChildExit(proc, timeoutMs).catch(() => undefined)
+    return
+  }
+
+  backendShutdownInFlight = true
+  try {
+    await requestBackendRpc('shutdown', null)
+  } catch {}
+
+  await waitForChildExit(proc, timeoutMs).catch(() => undefined)
+
+  try {
+    if (backendProcess && !backendProcess.killed) backendProcess.kill()
+  } catch {}
+
+  backendShutdownInFlight = false
+}
+
+function spawnRestartGuardian(): void {
+  const execPath = process.execPath
+  const args = process.argv.slice(1)
+  const cwd = process.cwd()
+  const env = { ...process.env }
+  delete (env as any).ELECTRON_RUN_AS_NODE
+
+  const payload = Buffer.from(JSON.stringify({ ppid: process.pid, execPath, args, cwd, env }), 'utf8').toString('base64')
+  const script = `
+const payload = process.argv[2] || ''
+let cfg = null
+try { cfg = JSON.parse(Buffer.from(payload, 'base64').toString('utf8')) } catch { process.exit(2) }
+const { ppid, execPath, args, cwd, env } = cfg || {}
+function alive(pid) { try { process.kill(pid, 0); return true } catch { return false } }
+const startedAt = Date.now()
+function tick() {
+  if (!alive(ppid)) {
+    try {
+      const { spawn } = require('node:child_process')
+      const cp = spawn(execPath, Array.isArray(args) ? args : [], { detached: true, stdio: 'ignore', cwd: cwd || undefined, env: env || process.env, windowsHide: true })
+      cp.unref()
+      process.exit(0)
+    } catch {
+      process.exit(3)
+    }
+    return
+  }
+  if (Date.now() - startedAt > 20000) process.exit(1)
+  setTimeout(tick, 200)
+}
+tick()
+`.trim()
+
+  try {
+    const proc = spawn(execPath, ['-e', script, payload], {
+      detached: true,
+      stdio: 'ignore',
+      windowsHide: true,
+      env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' }
+    })
+    proc.unref()
+  } catch {}
+}
+
+function requestAppQuit(): void {
+  if (isAppQuitting || isAppRestarting) return
+  isAppQuitting = true
+  try {
+    app.quit()
+  } catch {}
+}
+
+function requestAppRestart(): void {
+  if (isAppRestarting) return
+  isAppRestarting = true
+  spawnRestartGuardian()
+  try {
+    app.quit()
+  } catch {}
 }
 
 const lanstartwriteLink = createLanstartwriteLinkController({
@@ -234,26 +350,13 @@ function ensureTray(): void {
     {
       label: '快速重启',
       click: () => {
-        try {
-          backendProcess?.kill()
-        } catch {}
-        try {
-          app.relaunch()
-        } catch {}
-        try {
-          app.exit(0)
-        } catch {}
+        requestAppRestart()
       }
     },
     {
       label: '退出',
       click: () => {
-        try {
-          backendProcess?.kill()
-        } catch {}
-        try {
-          app.quit()
-        } catch {}
+        requestAppQuit()
       }
     },
   ])
@@ -403,9 +506,44 @@ function applyLegacyWindowImplementation(enabled: boolean, opts?: { rebuild?: bo
 }
 
 function applyMergeRendererPipeline(enabled: boolean, opts?: { rebuild?: boolean }): void {
+  if (mergeRendererPipelineEnabled === enabled) return
   mergeRendererPipelineEnabled = enabled
   if (opts?.rebuild === false) return
   rebuildAllUiWindows()
+}
+
+let windowPreloadInFlight = false
+function preloadAllUiWindows(): void {
+  if (windowPreloadInFlight) return
+  windowPreloadInFlight = true
+  setTimeout(() => {
+    windowPreloadInFlight = false
+    if (!systemWindowPreloadEnabled) return
+    const toolbar = floatingToolbarWindow
+    if (!toolbar || toolbar.isDestroyed()) return
+
+    try {
+      getOrCreateToolbarNoticeWindow()
+    } catch {}
+
+    for (const kind of ['feature-panel', 'events', 'clock', 'db']) {
+      try {
+        getOrCreateToolbarSubwindow(kind, 'bottom')
+      } catch {}
+    }
+
+    try {
+      const mp = getOrCreateMultiPageControlWindow()
+      getOrCreateMutPageHandleWindow(mp)
+      getOrCreateMutPageThumbnailsMenuWindow(mp)
+    } catch {}
+
+    try {
+      appWindowsManager.getOrCreate('settings')
+      appWindowsManager.getOrCreate('watcher')
+      appWindowsManager.getOrCreate('child')
+    } catch {}
+  }, 0)
 }
 
 function applyToolbarUiZoom(zoom: number): void {
@@ -941,14 +1079,16 @@ function repositionMultiPageControlWindow(): void {
   const ownerBounds = owner && !owner.isDestroyed() ? owner.getBounds() : screen.getPrimaryDisplay().bounds
   const anchor = mutPageAnchorBounds
   const display = screen.getDisplayMatching(anchor ?? ownerBounds)
-  const area = anchor ? display.workArea : owner === whiteboardBackgroundWindow && owner && !owner.isDestroyed() ? display.bounds : display.workArea
+  const useFullBounds =
+    mutPageDesiredFromPpt || !!anchor || (owner === whiteboardBackgroundWindow && owner && !owner.isDestroyed())
+  const area = useFullBounds ? display.bounds : display.workArea
 
   const base = mutPageUiBounds
   const widthLimit = Math.max(140, area.width - 20)
   const heightLimit = Math.max(40, area.height - 20)
   const width = Math.max(140, Math.min(widthLimit, Math.round(base?.width ?? 360)))
   const height = Math.max(40, Math.min(heightLimit, Math.round(base?.height ?? 66)))
-  const margin = 14
+  const margin = mutPageDesiredFromPpt ? 0 : 14
   const x = area.x + margin
   const y = area.y + area.height - height - margin
 
@@ -1032,7 +1172,11 @@ function getOrCreateMultiPageControlWindow(): BrowserWindow {
   const existing = multiPageControlWindow
   if (existing && !existing.isDestroyed()) return existing
 
-  const owner = whiteboardBackgroundWindow ?? floatingToolbarWindow
+  const bg = whiteboardBackgroundWindow
+  const owner =
+    bg && !bg.isDestroyed() && bg.isVisible()
+      ? bg
+      : floatingToolbarWindow
   if (!owner || owner.isDestroyed()) throw new Error('mut_page_owner_missing')
 
   const base = mutPageUiBounds
@@ -1871,6 +2015,7 @@ function createScreenAnnotationOverlayWindow(): BrowserWindow {
     maximizable: false,
     fullscreenable: false,
     skipTaskbar: true,
+    focusable: false,
     title: '屏幕批注层',
     backgroundColor: '#00000000',
     webPreferences: {
@@ -1893,7 +2038,7 @@ function createScreenAnnotationOverlayWindow(): BrowserWindow {
 
   win.once('ready-to-show', () => {
     try {
-      win.setAlwaysOnTop(true, 'floating')
+      win.setAlwaysOnTop(true, 'screen-saver', topmostRelativeLevel)
     } catch {}
     try {
       win.setBounds(bounds, false)
@@ -2227,6 +2372,12 @@ function handleBackendControlMessage(message: any): void {
     return
   }
 
+  if (message.type === 'SET_WINDOW_PRELOAD') {
+    systemWindowPreloadEnabled = Boolean((message as any).enabled)
+    if (systemWindowPreloadEnabled) preloadAllUiWindows()
+    return
+  }
+
   if (message.type === 'SET_UI_ZOOM') {
     const zoom = Number(message.zoom)
     if (Number.isFinite(zoom)) {
@@ -2460,7 +2611,7 @@ function handleBackendControlMessage(message: any): void {
       const applyOverlayZOrder = () => {
         if (overlay.isDestroyed()) return
         try {
-          overlay.setAlwaysOnTop(true, 'floating')
+          overlay.setAlwaysOnTop(true, 'screen-saver', topmostRelativeLevel)
         } catch {}
         try {
           overlay.moveTop()
@@ -2469,6 +2620,7 @@ function handleBackendControlMessage(message: any): void {
           overlay.setIgnoreMouseEvents(false)
         } catch {}
         applyToolbarOnTopLevel('screen-saver')
+        applyMutPageVisibility()
       }
 
       const doShow = () => {
@@ -2723,6 +2875,7 @@ async function ensurePptWrapperStarted(): Promise<{ port: number; baseUrl: strin
 }
 
 function startBackend(extraEnv?: Record<string, string>): void {
+  backendExtraEnv = extraEnv
   const dbPath = join(app.getPath('userData'), 'leveldb')
   const transport = process.env.LANSTART_BACKEND_TRANSPORT === 'http' ? 'http' : 'stdio'
   const host = process.env.LANSTART_BACKEND_HOST ?? '127.0.0.1'
@@ -2785,6 +2938,11 @@ function startBackend(extraEnv?: Record<string, string>): void {
 
   sendToBackend({ type: 'PROCESS_STATUS', name: 'backend', status: 'spawned', pid: backendProcess.pid, ts: Date.now() })
 
+  const spawnedBackendProc = backendProcess
+  setTimeout(() => {
+    if (backendProcess === spawnedBackendProc && spawnedBackendProc && !spawnedBackendProc.killed) backendRestartAttempt = 0
+  }, 5000)
+
   backendProcess.stdin.on('error', () => undefined)
 
   backendProcess.on('exit', () => {
@@ -2793,6 +2951,18 @@ function startBackend(extraEnv?: Record<string, string>): void {
       pendingBackendRpc.delete(id)
       clearTimeout(pending.timer)
       pending.reject(new Error('backend_exited'))
+    }
+
+    if (!isAppQuitting && !isAppRestarting) {
+      if (backendRestartTimer) clearTimeout(backendRestartTimer)
+      backendRestartAttempt += 1
+      const delay = Math.min(6000, 600 + backendRestartAttempt * 600)
+      backendRestartTimer = setTimeout(() => {
+        backendRestartTimer = undefined
+        try {
+          startBackend(backendExtraEnv)
+        } catch {}
+      }, delay)
     }
   })
 
@@ -2865,6 +3035,7 @@ if (hasSingleInstanceLock) {
       let loadedLegacyWindowImplementation: boolean | undefined
       let loadedSystemUiaTopmost: boolean | undefined
       let loadedMergeRendererPipeline: boolean | undefined
+      let loadedSystemWindowPreload: boolean | undefined
 
       for (let attempt = 0; attempt < 3; attempt++) {
         let backendResponded = false
@@ -2917,6 +3088,16 @@ if (hasSingleInstanceLock) {
           if (String(e).includes('kv_not_found')) backendResponded = true
         }
 
+        try {
+          const raw = await backendGetKv(SYSTEM_WINDOW_PRELOAD_KV_KEY)
+          backendResponded = true
+          if (typeof raw === 'boolean') loadedSystemWindowPreload = raw
+          else if (raw === 'true' || raw === 1 || raw === '1') loadedSystemWindowPreload = true
+          else if (raw === 'false' || raw === 0 || raw === '0') loadedSystemWindowPreload = false
+        } catch (e) {
+          if (String(e).includes('kv_not_found')) backendResponded = true
+        }
+
         if (backendResponded) break
         await new Promise((r) => setTimeout(r, 220))
       }
@@ -2926,6 +3107,7 @@ if (hasSingleInstanceLock) {
       applyNativeMica(loadedNativeMica ?? false)
       applyAppearance(loadedAppearance ?? currentAppearance)
       systemUiaTopmostEnabled = loadedSystemUiaTopmost ?? true
+      systemWindowPreloadEnabled = loadedSystemWindowPreload ?? false
 
       isRunningAsAdmin = await detectWindowsAdmin().catch(() => false)
       topmostRelativeLevel = isRunningAsAdmin ? 20 : 0
@@ -2950,6 +3132,8 @@ if (hasSingleInstanceLock) {
             if (h && !h.isDestroyed()) out.push(h)
             const notice = toolbarNoticeWindow
             if (notice && !notice.isDestroyed()) out.push(notice)
+            const screenOverlay = screenAnnotationOverlayWindow
+            if (screenOverlay && !screenOverlay.isDestroyed()) out.push(screenOverlay)
             const mp = multiPageControlWindow
             if (mp && !mp.isDestroyed()) out.push(mp)
             const mph = mutPageHandleWindow
@@ -2983,6 +3167,7 @@ if (hasSingleInstanceLock) {
         if (!handle.isDestroyed()) handle.showInactive()
         applyToolbarOnTopLevel('screen-saver')
         void maybeShowRestoreNotesNotice()
+        if (systemWindowPreloadEnabled) preloadAllUiWindows()
       })
 
       app.on('activate', () => {
@@ -3008,14 +3193,35 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
 })
 
-app.on('before-quit', () => {
+app.on('before-quit', (event) => {
+  if (allowQuitToProceed) return
+
+  if (backendRestartTimer) clearTimeout(backendRestartTimer)
+
   sendToBackend({ type: 'PROCESS_STATUS', name: 'main', status: 'before-quit', pid: process.pid, ts: Date.now() })
   sendToBackend({ type: 'CLEANUP_RUNTIME' })
   try {
     stopToolbarTopmostPolling?.()
   } catch {}
   taskWatcher?.stop()
-  if (backendProcess && !backendProcess.killed) backendProcess.kill()
+
+  if (backendProcess && !backendProcess.killed) {
+    event.preventDefault()
+    void (async () => {
+      await shutdownBackendGracefully().catch(() => undefined)
+      if (pptWrapperRestartTimer) clearTimeout(pptWrapperRestartTimer)
+      try {
+        if (pptWrapperProcess && !pptWrapperProcess.killed) pptWrapperProcess.kill()
+      } catch {}
+      allowQuitToProceed = true
+      try {
+        app.quit()
+      } catch {}
+    })()
+    return
+  }
+
+  allowQuitToProceed = true
   if (pptWrapperRestartTimer) clearTimeout(pptWrapperRestartTimer)
   if (pptWrapperProcess && !pptWrapperProcess.killed) pptWrapperProcess.kill()
 })

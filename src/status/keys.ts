@@ -93,6 +93,7 @@ export const SYSTEM_UIA_TOPMOST_KV_KEY = 'system-uia-topmost'
 export const SYSTEM_UIA_TOPMOST_UI_STATE_KEY = 'systemUiaTopmost'
 
 export const SYSTEM_MERGE_RENDERER_PIPELINE_KV_KEY = 'system-merge-renderer-pipeline'
+export const SYSTEM_WINDOW_PRELOAD_KV_KEY = 'system-window-preload'
 
 export const ADMIN_STATUS_UI_STATE_KEY = 'isAdmin'
 
