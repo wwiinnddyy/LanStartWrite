@@ -74,6 +74,8 @@ function AppearanceSettings() {
     setLegacyWindowImplementation,
     windowBackgroundMode,
     setWindowBackgroundMode,
+    toolbarButtonHintsEnabled,
+    setToolbarButtonHintsEnabled,
     transitionPreset,
     setTransitionPreset,
     backgroundTransition,
@@ -122,6 +124,17 @@ function AppearanceSettings() {
           </div>
           <span className="settingsAppearanceLabel">深色</span>
         </Button>
+      </div>
+
+      <div className="settingsSubSection">
+        <h3 className="settingsSubTitle">浮动工具栏</h3>
+        <p className="settingsSubDescription">开启后，浮动工具栏按钮下方显示文字提示</p>
+        <Switch
+          checked={toolbarButtonHintsEnabled}
+          onChange={(e) => setToolbarButtonHintsEnabled(e.currentTarget.checked)}
+          label="显示按钮文字提示"
+          size="md"
+        />
       </div>
 
       <div className="settingsSubSection">

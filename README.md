@@ -93,3 +93,11 @@ pnpm dev
 
 更完整的运行指南请看 [run.md](./run.md)。
 
+## 项目引用
+
+- 智绘教 Inkeys（GPL-3.0）：https://github.com/Alan-CRL/Inkeys
+
+## 开源许可
+
+本项目以 GPL-3.0 许可证开源发布，详见 [LICENSE](./LICENSE)。
+

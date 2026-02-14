@@ -14,6 +14,7 @@ import {
   useUiStateBus
 } from '../status'
 import { Button } from '../button'
+import { useAppearanceSettings } from '../settings'
 import { useZoomOnWheel } from '../toolbar/hooks/useZoomOnWheel'
 import '../toolbar/styles/toolbar.css'
 import exitIconSvgRaw from '../../iconpack/flent_icon/fluent--arrow-exit-20-regular.svg?raw'
@@ -41,6 +42,7 @@ export function MultiPageControlWindow() {
   useZoomOnWheel()
   const bus = useUiStateBus(UI_STATE_APP_WINDOW_ID)
   const contentRef = useRef<HTMLDivElement | null>(null)
+  const { toolbarButtonHintsEnabled } = useAppearanceSettings()
 
   const activeAppRaw = bus.state[ACTIVE_APP_UI_STATE_KEY]
   const activeApp = isActiveApp(activeAppRaw) ? activeAppRaw : 'unknown'
@@ -63,6 +65,17 @@ export function MultiPageControlWindow() {
 
   const outerPadding = 10
   const gap = 10
+  const buttonHeight = toolbarButtonHintsEnabled ? 54 : 40
+
+  const withButtonHint = (icon: React.ReactNode, label: string) => {
+    if (!toolbarButtonHintsEnabled) return icon
+    return (
+      <span className="toolbarButtonStack">
+        <span className="toolbarButtonIcon">{icon}</span>
+        <span className="toolbarButtonHint">{label}</span>
+      </span>
+    )
+  }
   const pageLabel = useMemo(() => {
     if (isPpt) return index >= 0 && total >= 1 ? `${index + 1}/${total}` : '--/--'
     if (appMode !== 'video-show') return `${index + 1}/${total}`
@@ -133,7 +146,11 @@ export function MultiPageControlWindow() {
         background: 'transparent'
       }}
     >
-      <div className="toolbarRoot" style={{ width: 'auto', height: 'auto' }}>
+      <div
+        className="toolbarRoot"
+        data-toolbar-button-hints={toolbarButtonHintsEnabled ? 'true' : undefined}
+        style={{ width: 'auto', height: 'auto' }}
+      >
         <div ref={contentRef} className="toolbarDragArea" style={{ padding: outerPadding }}>
           <div className="toolbarLayout" style={{ gap }}>
             <div className="toolbarBarRow" style={{ display: 'inline-flex', alignItems: 'center', gap }}>
@@ -143,9 +160,8 @@ export function MultiPageControlWindow() {
                 ariaLabel="上一页"
                 title="上一页"
                 onClick={() => postCommand('app.prevPage', {}).catch(() => undefined)}
-                style={{ fontSize: 18, lineHeight: 1 }}
               >
-                ‹
+                {withButtonHint(<span style={{ fontSize: 18, lineHeight: 1 }}>‹</span>, '上一页')}
               </Button>
 
               <Button
@@ -156,7 +172,7 @@ export function MultiPageControlWindow() {
                 disabled={activeApp === 'ppt' || index < 0 || total < 1}
                 onClick={() => postCommand('app.togglePageThumbnailsMenu', {}).catch(() => undefined)}
                 style={{
-                  height: 40,
+                  height: buttonHeight,
                   minWidth: 86,
                   fontWeight: 600,
                   fontVariantNumeric: 'tabular-nums'
@@ -171,9 +187,8 @@ export function MultiPageControlWindow() {
                 ariaLabel="下一页"
                 title="下一页"
                 onClick={() => postCommand('app.nextPage', {}).catch(() => undefined)}
-                style={{ fontSize: 18, lineHeight: 1 }}
               >
-                ›
+                {withButtonHint(<span style={{ fontSize: 18, lineHeight: 1 }}>›</span>, '下一页')}
               </Button>
             </div>
           </div>
@@ -186,12 +201,23 @@ export function MultiPageControlWindow() {
 export function MultiPageControlHandleWindow() {
   useZoomOnWheel()
   const bus = useUiStateBus(UI_STATE_APP_WINDOW_ID)
+  const { toolbarButtonHintsEnabled } = useAppearanceSettings()
   const activeAppRaw = bus.state[ACTIVE_APP_UI_STATE_KEY]
   const activeApp = isActiveApp(activeAppRaw) ? activeAppRaw : 'unknown'
   const pptFullscreen = bus.state[PPT_FULLSCREEN_UI_STATE_KEY] === true
   const isPpt = activeApp === 'ppt' && pptFullscreen
   const appModeRaw = bus.state[APP_MODE_UI_STATE_KEY]
   const appMode = isAppMode(appModeRaw) ? appModeRaw : 'toolbar'
+
+  const withButtonHint = (icon: React.ReactNode, label: string) => {
+    if (!toolbarButtonHintsEnabled) return icon
+    return (
+      <span className="toolbarButtonStack">
+        <span className="toolbarButtonIcon">{icon}</span>
+        <span className="toolbarButtonHint">{label}</span>
+      </span>
+    )
+  }
 
   const action = useMemo(() => {
     if (activeApp === 'ppt') {
@@ -226,7 +252,7 @@ export function MultiPageControlHandleWindow() {
   }, [activeApp, isPpt, appMode])
 
   return (
-    <div className="toolbarRoot">
+    <div className="toolbarRoot" data-toolbar-button-hints={toolbarButtonHintsEnabled ? 'true' : undefined}>
       <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 10, boxSizing: 'border-box' }}>
         {action.visible ? (
           <Button
@@ -236,10 +262,19 @@ export function MultiPageControlHandleWindow() {
             title={action.title}
             onClick={action.onClick}
           >
-            {action.icon}
+            {withButtonHint(
+              action.icon,
+              action.ariaLabel === '拍摄按钮'
+                ? '拍摄'
+                : action.ariaLabel === '结束放映'
+                  ? '结束'
+                  : action.ariaLabel === '新建页面'
+                    ? '新建'
+                    : action.ariaLabel
+            )}
           </Button>
         ) : (
-          <div style={{ width: 40, height: 40 }} />
+          <div style={{ width: 40, height: toolbarButtonHintsEnabled ? 54 : 40 }} />
         )}
       </div>
     </div>

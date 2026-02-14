@@ -15,6 +15,7 @@ const BACKGROUND_TRANSITION_KEY = 'background-transition'
 const NATIVE_MICA_KEY = 'native-mica-enabled'
 const LEGACY_WINDOW_IMPL_KEY = 'legacy-window-implementation'
 const WINDOW_BG_MODE_KEY = 'window-background-mode'
+const TOOLBAR_BUTTON_HINTS_KEY = 'toolbar-button-hints'
 
 // 默认强调色
 const DEFAULT_ACCENT_COLOR = PRESET_ACCENT_COLORS[0] // 蓝色
@@ -39,6 +40,9 @@ export type AppearanceSettings = {
 
   windowBackgroundMode: WindowBackgroundMode
   setWindowBackgroundMode: (mode: WindowBackgroundMode) => void
+
+  toolbarButtonHintsEnabled: boolean
+  setToolbarButtonHintsEnabled: (enabled: boolean) => void
   
   // 过渡设置
   transitionPreset: TransitionPreset
@@ -63,6 +67,7 @@ export function useAppearanceSettings(): AppearanceSettings {
   const [nativeMicaEnabledValue, setNativeMicaEnabledValue] = useState<boolean>(false)
   const [legacyWindowImplementationValue, setLegacyWindowImplementationValue] = useState<boolean>(false)
   const [windowBackgroundModeValue, setWindowBackgroundModeValue] = useState<WindowBackgroundMode>(DEFAULT_WINDOW_BG_MODE)
+  const [toolbarButtonHintsEnabledValue, setToolbarButtonHintsEnabledValue] = useState<boolean>(false)
   
   // 过渡设置状态
   const [transitionPresetValue, setTransitionPresetValue] = useState<string>(DEFAULT_TRANSITION_PRESET.value)
@@ -118,6 +123,22 @@ export function useAppearanceSettings(): AppearanceSettings {
       const savedBackgroundTransition = await safeGet<string>(BACKGROUND_TRANSITION_KEY)
       if (savedBackgroundTransition) {
         setBackgroundTransitionValue(savedBackgroundTransition)
+      }
+
+      const savedToolbarButtonHintsEnabled = await safeGet<unknown>(TOOLBAR_BUTTON_HINTS_KEY)
+      if (typeof savedToolbarButtonHintsEnabled === 'boolean') setToolbarButtonHintsEnabledValue(savedToolbarButtonHintsEnabled)
+      else if (
+        savedToolbarButtonHintsEnabled === 'true' ||
+        savedToolbarButtonHintsEnabled === 1 ||
+        savedToolbarButtonHintsEnabled === '1'
+      ) {
+        setToolbarButtonHintsEnabledValue(true)
+      } else if (
+        savedToolbarButtonHintsEnabled === 'false' ||
+        savedToolbarButtonHintsEnabled === 0 ||
+        savedToolbarButtonHintsEnabled === '0'
+      ) {
+        setToolbarButtonHintsEnabledValue(false)
       }
     }
     
@@ -185,6 +206,15 @@ export function useAppearanceSettings(): AppearanceSettings {
     }
   }, [])
 
+  const setToolbarButtonHintsEnabled = useCallback(async (enabled: boolean) => {
+    setToolbarButtonHintsEnabledValue(enabled)
+    try {
+      await putKv(TOOLBAR_BUTTON_HINTS_KEY, enabled)
+    } catch (e) {
+      console.error('[useAppearanceSettings] Failed to save toolbar button hints enabled:', e)
+    }
+  }, [])
+
   useEffect(() => {
     if (!legacyWindowImplementationValue && nativeMicaEnabledValue) {
       setNativeMicaEnabled(false)
@@ -241,6 +271,9 @@ export function useAppearanceSettings(): AppearanceSettings {
 
     if (legacyWindowImplementationValue) root.removeAttribute('data-window-bg')
     else root.setAttribute('data-window-bg', windowBackgroundModeValue)
+
+    if (toolbarButtonHintsEnabledValue) root.setAttribute('data-toolbar-button-hints', 'true')
+    else root.removeAttribute('data-toolbar-button-hints')
   }, [
     appearance,
     accentColor,
@@ -249,6 +282,7 @@ export function useAppearanceSettings(): AppearanceSettings {
     nativeMicaEnabledValue,
     legacyWindowImplementationValue,
     windowBackgroundModeValue,
+    toolbarButtonHintsEnabledValue,
   ])
   
   // 当设置改变时自动应用
@@ -265,6 +299,8 @@ export function useAppearanceSettings(): AppearanceSettings {
     setLegacyWindowImplementation,
     windowBackgroundMode: windowBackgroundModeValue,
     setWindowBackgroundMode,
+    toolbarButtonHintsEnabled: toolbarButtonHintsEnabledValue,
+    setToolbarButtonHintsEnabled,
     transitionPreset,
     setTransitionPreset,
     backgroundTransition,

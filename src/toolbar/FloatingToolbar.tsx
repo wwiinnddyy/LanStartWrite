@@ -352,8 +352,7 @@ function FloatingToolbarInner() {
   const watcherWasShownRef = useRef(false)
   const lastWatcherClosedAtRef = useRef(0)
 
-  // 应用外观设置（强调色等）
-  useAppearanceSettings()
+  const { toolbarButtonHintsEnabled } = useAppearanceSettings()
 
   useToolbarWindowAutoResize({ root: contentRef.current })
   useZoomOnWheel()
@@ -452,16 +451,27 @@ function FloatingToolbarInner() {
   const pinnedSecondaryButtonsOrder = state.pinnedSecondaryButtonsOrder ?? []
   const secondaryButtonsOrder = state.secondaryButtonsOrder ?? DEFAULT_SECONDARY_BUTTONS_ORDER
 
+  const withButtonHint = (icon: React.ReactNode, label: string) => {
+    if (!toolbarButtonHintsEnabled) return icon
+    return (
+      <span className="toolbarButtonStack">
+        <span className="toolbarButtonIcon">{icon}</span>
+        <span className="toolbarButtonHint">{label}</span>
+      </span>
+    )
+  }
+
   const renderPrimaryButton = (id: PrimaryButtonId) => {
     if (id === 'mouse') {
       const visibility = getAppButtonVisibility('mouse')
+      const ariaLabel = '鼠标'
       return (
         <Button
           key="mouse"
           size={uiButtonSize}
           variant={tool === 'mouse' ? 'light' : 'default'}
-          ariaLabel="鼠标"
-          title="鼠标"
+          ariaLabel={ariaLabel}
+          title={ariaLabel}
           showInToolbar={visibility.showInToolbar}
           showInFeaturePanel={visibility.showInFeaturePanel}
           onClick={() => {
@@ -469,96 +479,101 @@ function FloatingToolbarInner() {
             void postCommand('app.setTool', { tool: 'mouse' })
           }}
         >
-          <ToolbarToolIcon kind="mouse" />
+          {withButtonHint(<ToolbarToolIcon kind="mouse" />, ariaLabel)}
         </Button>
       )
     }
 
     if (id === 'pen') {
       const visibility = getAppButtonVisibility('pen')
+      const ariaLabel = '笔'
       return (
         <Button
           key="pen"
           size={uiButtonSize}
           variant={tool === 'pen' ? 'light' : 'default'}
-          ariaLabel="笔"
+          ariaLabel={ariaLabel}
           title={tool === 'pen' ? '笔（再次点击打开设置）' : '笔'}
           showInToolbar={visibility.showInToolbar}
           showInFeaturePanel={visibility.showInFeaturePanel}
           onClick={handlePenClick}
         >
-          <ToolbarToolIcon kind="pen" />
+          {withButtonHint(<ToolbarToolIcon kind="pen" />, ariaLabel)}
         </Button>
       )
     }
 
     if (id === 'eraser') {
       const visibility = getAppButtonVisibility('eraser')
+      const ariaLabel = '橡皮'
       return (
         <Button
           key="eraser"
           size={uiButtonSize}
           variant={tool === 'eraser' ? 'light' : 'default'}
-          ariaLabel="橡皮"
+          ariaLabel={ariaLabel}
           title={tool === 'eraser' ? '橡皮（再次点击打开设置）' : '橡皮'}
           showInToolbar={visibility.showInToolbar}
           showInFeaturePanel={visibility.showInFeaturePanel}
           onClick={handleEraserClick}
         >
-          <ToolbarToolIcon kind="eraser" />
+          {withButtonHint(<ToolbarToolIcon kind="eraser" />, ariaLabel)}
         </Button>
       )
     }
 
     if (id === 'whiteboard') {
       const visibility = getAppButtonVisibility('whiteboard')
+      const ariaLabel = '白板'
       return (
         <Button
           key="whiteboard"
           size={uiButtonSize}
           variant={whiteboardActive ? 'light' : 'default'}
-          ariaLabel="白板"
-          title="白板"
+          ariaLabel={ariaLabel}
+          title={ariaLabel}
           showInToolbar={visibility.showInToolbar}
           showInFeaturePanel={visibility.showInFeaturePanel}
           onClick={() => {
             setAppMode(whiteboardActive ? 'toolbar' : 'whiteboard')
           }}
         >
-          <ToolbarToolIcon kind="whiteboard" />
+          {withButtonHint(<ToolbarToolIcon kind="whiteboard" />, ariaLabel)}
         </Button>
       )
     }
 
     if (id === 'video-show') {
       const visibility = getAppButtonVisibility('video-show')
+      const ariaLabel = '视频展台'
       return (
         <Button
           key="video-show"
           size={uiButtonSize}
           variant={videoShowActive ? 'light' : 'default'}
-          ariaLabel="视频展台"
-          title="视频展台"
+          ariaLabel={ariaLabel}
+          title={ariaLabel}
           showInToolbar={visibility.showInToolbar}
           showInFeaturePanel={visibility.showInFeaturePanel}
           onClick={() => {
             setAppMode(videoShowActive ? 'toolbar' : 'video-show')
           }}
         >
-          <ToolbarToolIcon kind="video-show" />
+          {withButtonHint(<ToolbarToolIcon kind="video-show" />, ariaLabel)}
         </Button>
       )
     }
 
     if (id === 'pdf') {
       const visibility = getAppButtonVisibility('pdf')
+      const ariaLabel = 'PDF'
       return (
         <Button
           key="pdf"
           size={uiButtonSize}
           variant={pdfActive ? 'light' : 'default'}
-          ariaLabel="PDF"
-          title="PDF"
+          ariaLabel={ariaLabel}
+          title={ariaLabel}
           showInToolbar={visibility.showInToolbar}
           showInFeaturePanel={visibility.showInFeaturePanel}
           onClick={() => {
@@ -581,7 +596,7 @@ function FloatingToolbarInner() {
             })()
           }}
         >
-          <ToolbarToolIcon kind="pdf" />
+          {withButtonHint(<ToolbarToolIcon kind="pdf" />, ariaLabel)}
         </Button>
       )
     }
@@ -592,118 +607,127 @@ function FloatingToolbarInner() {
   const renderSecondaryButton = (id: SecondaryButtonId) => {
     if (id === 'undo') {
       const visibility = getAppButtonVisibility('undo')
+      const ariaLabel = '撤销'
       return (
         <Button
           key="undo"
           size={uiButtonSize}
-          ariaLabel="撤销"
-          title="撤销"
+          ariaLabel={ariaLabel}
+          title={ariaLabel}
           showInToolbar={visibility.showInToolbar}
           showInFeaturePanel={visibility.showInFeaturePanel}
           onClick={() => {
             void postCommand('app.undo')
           }}
         >
-          <UndoIcon />
+          {withButtonHint(<UndoIcon />, ariaLabel)}
         </Button>
       )
     }
 
     if (id === 'redo') {
       const visibility = getAppButtonVisibility('redo')
+      const ariaLabel = '重做'
       return (
         <Button
           key="redo"
           size={uiButtonSize}
-          ariaLabel="重做"
-          title="重做"
+          ariaLabel={ariaLabel}
+          title={ariaLabel}
           showInToolbar={visibility.showInToolbar}
           showInFeaturePanel={visibility.showInFeaturePanel}
           onClick={() => {
             void postCommand('app.redo')
           }}
         >
-          <RedoIcon />
+          {withButtonHint(<RedoIcon />, ariaLabel)}
         </Button>
       )
     }
 
     if (id === 'clock') {
       const visibility = getAppButtonVisibility('clock')
+      const ariaLabel = '时钟'
       return (
         <Button
           key="clock"
           size={uiButtonSize}
-          ariaLabel="时钟"
-          title="时钟"
+          ariaLabel={ariaLabel}
+          title={ariaLabel}
           showInToolbar={visibility.showInToolbar}
           showInFeaturePanel={visibility.showInFeaturePanel}
           onClick={() => {
             void postCommand('toggle-subwindow', { kind: 'clock', placement: 'bottom' })
           }}
         >
-          <ClockIcon />
+          {withButtonHint(<ClockIcon />, ariaLabel)}
         </Button>
       )
     }
 
     if (id === 'events') {
       const visibility = getAppButtonVisibility('events')
+      const ariaLabel = '事件'
       return (
         <Button
           key="events"
           size={uiButtonSize}
-          ariaLabel="事件"
-          title="事件"
+          ariaLabel={ariaLabel}
+          title={ariaLabel}
           showInToolbar={visibility.showInToolbar}
           showInFeaturePanel={visibility.showInFeaturePanel}
           onClick={() => {
             void postCommand('toggle-subwindow', { kind: 'events', placement: 'bottom' })
           }}
         >
-          <EventsIcon />
+          {withButtonHint(<EventsIcon />, ariaLabel)}
         </Button>
       )
     }
 
     if (id === 'watcher') {
       const visibility = getAppButtonVisibility('watcher')
+      const ariaLabel = '监视器'
       return (
         <Button
           key="watcher"
           size={uiButtonSize}
-          ariaLabel="监视器"
-          title="监视器"
+          ariaLabel={ariaLabel}
+          title={ariaLabel}
           showInToolbar={visibility.showInToolbar}
           showInFeaturePanel={visibility.showInFeaturePanel}
           onClick={() => {
             void postCommand('watcher.openWindow')
           }}
         >
-          <WatcherIcon />
+          {withButtonHint(<WatcherIcon />, ariaLabel)}
         </Button>
       )
     }
 
     const visibility = getAppButtonVisibility('feature-panel')
+    const ariaLabel = '功能面板'
     return (
       <Button
         key="feature-panel"
         size={uiButtonSize}
-        ariaLabel="功能面板"
-        title="功能面板"
+        ariaLabel={ariaLabel}
+        title={ariaLabel}
         showInToolbar={visibility.showInToolbar}
         showInFeaturePanel={visibility.showInFeaturePanel}
         onClick={() => {
           void postCommand('toggle-subwindow', { kind: 'feature-panel', placement: 'bottom' })
         }}
       >
-        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 20 20">
-          <path
-            fill="currentColor"
-            d="M4.5 17a1.5 1.5 0 0 1-1.493-1.355L3 15.501v-11a1.5 1.5 0 0 1 1.356-1.493L4.5 3H9a1.5 1.5 0 0 1 1.493 1.355l.007.145v.254l2.189-2.269a1.5 1.5 0 0 1 2.007-.138l.116.101l2.757 2.725a1.5 1.5 0 0 1 .111 2.011l-.103.116l-2.311 2.2h.234a1.5 1.5 0 0 1 1.493 1.356L17 11v4.5a1.5 1.5 0 0 1-1.355 1.493L15.5 17zm5-6.5H4v5a.5.5 0 0 0 .326.47l.084.023l.09.008h5zm6 0h-5V16h5a.5.5 0 0 0 .492-.41L16 15.5V11a.5.5 0 0 0-.41-.491zm-5-2.79V9.5h1.79zM9 4H4.5a.5.5 0 0 0-.492.411L4 4.501v5h5.5v-5a.5.5 0 0 0-.326-.469L9.09 4.01zm5.122-.826a.5.5 0 0 0-.645-.053l-.068.06l-2.616 2.713a.5.5 0 0 0-.057.623l.063.078l2.616 2.615a.5.5 0 0 0 .62.07l.078-.061l2.758-2.627a.5.5 0 0 0 .054-.638l-.059-.069z"
-          />
-        </svg>
+        {withButtonHint(
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 20 20">
+            <path
+              fill="currentColor"
+              d="M4.5 17a1.5 1.5 0 0 1-1.493-1.355L3 15.501v-11a1.5 1.5 0 0 1 1.356-1.493L4.5 3H9a1.5 1.5 0 0 1 1.493 1.355l.007.145v.254l2.189-2.269a1.5 1.5 0 0 1 2.007-.138l.116.101l2.757 2.725a1.5 1.5 0 0 1 .111 2.011l-.103.116l-2.311 2.2h.234a1.5 1.5 0 0 1 1.493 1.356L17 11v4.5a1.5 1.5 0 0 1-1.355 1.493L15.5 17zm5-6.5H4v5a.5.5 0 0 0 .326.47l.084.023l.09.008h5zm6 0h-5V16h5a.5.5 0 0 0 .492-.41L16 15.5V11a.5.5 0 0 0-.41-.491zm-5-2.79V9.5h1.79zM9 4H4.5a.5.5 0 0 0-.492.411L4 4.501v5h5.5v-5a.5.5 0 0 0-.326-.469L9.09 4.01zm5.122-.826a.5.5 0 0 0-.645-.053l-.068.06l-2.616 2.713a.5.5 0 0 0-.057.623l.063.078l2.616 2.615a.5.5 0 0 0 .62.07l.078-.061l2.758-2.627a.5.5 0 0 0 .054-.638l-.059-.069z"
+            />
+          </svg>,
+          ariaLabel
+        )}
       </Button>
     )
   }
@@ -712,6 +736,7 @@ function FloatingToolbarInner() {
     <motion.div
       ref={rootRef}
       className="toolbarRoot"
+      data-toolbar-button-hints={toolbarButtonHintsEnabled ? 'true' : undefined}
       initial={reduceMotion ? false : { opacity: 0, y: 6, scale: 0.985 }}
       animate={reduceMotion ? undefined : { opacity: 1, y: 0, scale: 1 }}
       transition={reduceMotion ? undefined : { duration: 0.18, ease: [0.2, 0.8, 0.2, 1] }}
@@ -740,7 +765,7 @@ function FloatingToolbarInner() {
               showInFeaturePanel={visibility.showInFeaturePanel}
               onClick={toggleExpanded}
             >
-              {isExpanded ? <ChevronLeftIcon /> : <ChevronRightIcon />}
+              {withButtonHint(isExpanded ? <ChevronLeftIcon /> : <ChevronRightIcon />, isExpanded ? '折叠' : '展开')}
             </Button>
               )
             })()}

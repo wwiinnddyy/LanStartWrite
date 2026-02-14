@@ -850,10 +850,14 @@ function buildUiWebPreferences(): any {
 }
 
 function createFloatingToolbarWindow(): BrowserWindow {
+  floatingToolbarBoundsReportedAt = 0
+  floatingToolbarBoundsWaiters = []
+
   const win = new BrowserWindow({
     ...(APP_ICON_PATH ? { icon: APP_ICON_PATH } : {}),
     width: 360,
     height: 160,
+    show: false,
     ...(legacyWindowImplementation ? { type: 'toolbar' as const } : {}),
     frame: false,
     autoHideMenuBar: true,
@@ -936,6 +940,7 @@ function createFloatingToolbarHandleWindow(owner: BrowserWindow): BrowserWindow 
     ...(APP_ICON_PATH ? { icon: APP_ICON_PATH } : {}),
     width: TOOLBAR_HANDLE_WIDTH,
     height: ownerBounds.height,
+    show: false,
     ...(legacyWindowImplementation ? { type: 'toolbar' as const } : {}),
     frame: false,
     autoHideMenuBar: true,
@@ -1580,6 +1585,134 @@ function easeOutBack(t: number) {
   const c1 = 1.08
   const c3 = c1 + 1
   return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2)
+}
+
+let floatingToolbarBoundsReportedAt = 0
+let floatingToolbarBoundsWaiters: Array<() => void> = []
+
+function notifyFloatingToolbarBoundsReported() {
+  floatingToolbarBoundsReportedAt = Date.now()
+  const waiters = floatingToolbarBoundsWaiters
+  floatingToolbarBoundsWaiters = []
+  for (const w of waiters) {
+    try {
+      w()
+    } catch {}
+  }
+}
+
+function waitForFloatingToolbarBoundsReported(timeoutMs = 900): Promise<void> {
+  if (floatingToolbarBoundsReportedAt > 0) return Promise.resolve()
+  return new Promise((resolve) => {
+    let resolved = false
+    const done = () => {
+      if (resolved) return
+      resolved = true
+      resolve()
+    }
+    floatingToolbarBoundsWaiters.push(done)
+    setTimeout(() => {
+      if (resolved) return
+      floatingToolbarBoundsWaiters = floatingToolbarBoundsWaiters.filter((w) => w !== done)
+      done()
+    }, Math.max(0, Math.round(timeoutMs)))
+  })
+}
+
+let startupHardwareConfirmed: boolean | undefined
+
+async function confirmStartupHardwareReady(timeoutMs = 1600): Promise<boolean> {
+  if (startupHardwareConfirmed !== undefined) return startupHardwareConfirmed
+  if (process.platform !== 'win32') {
+    startupHardwareConfirmed = true
+    return true
+  }
+
+  const adapter = createTaskWatcherAdapter('win32')
+  const run = Promise.allSettled([adapter.getProcesses(), adapter.getForegroundWindow()]).then(() => true)
+  const timeout = new Promise<boolean>((resolve) => setTimeout(() => resolve(false), Math.max(0, Math.round(timeoutMs))))
+
+  try {
+    const ok = await Promise.race([run, timeout])
+    startupHardwareConfirmed = ok
+    return ok
+  } catch {
+    startupHardwareConfirmed = false
+    return false
+  }
+}
+
+function waitForWindowReadyToShow(win: BrowserWindow): Promise<void> {
+  if (!win || win.isDestroyed()) return Promise.resolve()
+  if (!win.webContents.isLoading()) return Promise.resolve()
+  return new Promise((resolve) => {
+    const done = () => resolve()
+    win.once('ready-to-show', done)
+  })
+}
+
+function computeStartupToolbarBounds() {
+  const display = screen.getPrimaryDisplay()
+  const bounds = display.bounds
+  const workArea = display.workArea
+
+  const toolbar = floatingToolbarWindow
+  if (!toolbar || toolbar.isDestroyed()) return undefined
+
+  const z = getUiZoomFactor()
+  const gap = Math.round(TOOLBAR_HANDLE_GAP * z)
+  const handleWidth = TOOLBAR_HANDLE_WIDTH
+
+  const { width, height } = toolbar.getBounds()
+  const totalWidth = width + gap + handleWidth
+
+  const x = Math.round(bounds.x + (bounds.width - totalWidth) / 2)
+  const targetMargin = Math.round(8 * z)
+  const targetY = Math.round(workArea.y + workArea.height - height - targetMargin)
+  const startY = Math.round(bounds.y + bounds.height + Math.round(6 * z))
+
+  return { x, startY, targetY }
+}
+
+function animateStartupToolbarEntrance(durationMs = 650) {
+  const toolbar = floatingToolbarWindow
+  if (!toolbar || toolbar.isDestroyed()) return
+
+  const computed = computeStartupToolbarBounds()
+  if (!computed) return
+
+  const { x, startY, targetY } = computed
+  const initial = toolbar.getBounds()
+  const width = initial.width
+  const height = initial.height
+
+  try {
+    toolbar.setBounds({ x, y: startY, width, height }, false)
+  } catch {}
+
+  try {
+    if (!toolbar.isVisible()) toolbar.showInactive()
+  } catch {}
+
+  const startAt = Date.now()
+  const tick = () => {
+    const win = floatingToolbarWindow
+    if (!win || win.isDestroyed()) return
+    if (!win.isVisible()) return
+
+    const t = Math.max(0, Math.min(1, (Date.now() - startAt) / Math.max(1, durationMs)))
+    const eased = easeOutCubic(t)
+    const nextY = Math.round(startY + (targetY - startY) * eased)
+
+    try {
+      const b = win.getBounds()
+      if (b.x !== x || b.y !== nextY) win.setBounds({ ...b, x, y: nextY }, false)
+    } catch {}
+
+    if (t >= 1) return
+    setTimeout(tick, 16)
+  }
+  setTimeout(tick, 0)
 }
 
 function animateToolbarSubwindowTo(item: { win: BrowserWindow; animationTimer?: NodeJS.Timeout }, to: Bounds, atEdge: boolean) {
@@ -2718,6 +2851,7 @@ function handleBackendControlMessage(message: any): void {
     const nextHeight = Math.max(1, Math.min(600, Math.round(height)))
     win.setBounds({ ...bounds, width: nextWidth, height: nextHeight }, false)
     scheduleRepositionToolbarSubwindows('resize')
+    notifyFloatingToolbarBoundsReported()
     return
   }
 
@@ -3161,14 +3295,15 @@ if (hasSingleInstanceLock) {
         })
         stopToolbarTopmostPolling = poller.stop
       }
-      win.once('ready-to-show', () => {
-        win.show()
+      void (async () => {
+        await Promise.all([waitForWindowReadyToShow(win), waitForWindowReadyToShow(handle)])
+        await Promise.all([waitForFloatingToolbarBoundsReported(), confirmStartupHardwareReady()])
+        animateStartupToolbarEntrance()
         scheduleRepositionToolbarSubwindows('other')
-        if (!handle.isDestroyed()) handle.showInactive()
         applyToolbarOnTopLevel('screen-saver')
         void maybeShowRestoreNotesNotice()
         if (systemWindowPreloadEnabled) preloadAllUiWindows()
-      })
+      })()
 
       app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) {
@@ -3176,11 +3311,13 @@ if (hasSingleInstanceLock) {
           floatingToolbarWindow = toolbar
           const nextHandle = createFloatingToolbarHandleWindow(toolbar)
           floatingToolbarHandleWindow = nextHandle
-          toolbar.once('ready-to-show', () => {
-            toolbar.show()
+          void (async () => {
+            await Promise.all([waitForWindowReadyToShow(toolbar), waitForWindowReadyToShow(nextHandle)])
+            await Promise.all([waitForFloatingToolbarBoundsReported(), confirmStartupHardwareReady()])
+            animateStartupToolbarEntrance()
             scheduleRepositionToolbarSubwindows('other')
-            if (!nextHandle.isDestroyed()) nextHandle.showInactive()
-          })
+            applyToolbarOnTopLevel('screen-saver')
+          })()
         }
       })
     })
