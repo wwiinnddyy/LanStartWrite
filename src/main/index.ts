@@ -2531,6 +2531,23 @@ function handleBackendControlMessage(message: any): void {
           return
         }
 
+        if (method === 'selectDirectory') {
+          const parent =
+            BrowserWindow.getFocusedWindow() ??
+            whiteboardBackgroundWindow ??
+            annotationOverlayWindow ??
+            screenAnnotationOverlayWindow ??
+            undefined
+          const options: OpenDialogOptions = {
+            properties: ['openDirectory', 'createDirectory']
+          }
+          const res = parent ? await dialog.showOpenDialog(parent, options) : await dialog.showOpenDialog(options)
+          const dir = res.canceled || !res.filePaths?.[0] ? undefined : res.filePaths[0]
+          const dirUrl = dir ? pathToFileURL(dir).toString() : undefined
+          sendToBackend({ type: 'MAIN_RPC_RESPONSE', id, ok: true, result: { dir, dirUrl } })
+          return
+        }
+
         throw new Error('UNKNOWN_MAIN_RPC_METHOD')
       } catch (e) {
         sendToBackend({ type: 'MAIN_RPC_RESPONSE', id, ok: false, error: String(e) })

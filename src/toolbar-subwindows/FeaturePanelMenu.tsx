@@ -5,6 +5,7 @@ import { markQuitting, postCommand } from '../toolbar/hooks/useBackend'
 import { useZoomOnWheel } from '../toolbar/hooks/useZoomOnWheel'
 import { getAppButtonVisibility, type AppButtonId } from '../toolbar/utils/constants'
 import { APP_BUTTON_DEFINITIONS } from '../button'
+import { NOTES_RELOAD_REV_UI_STATE_KEY, UI_STATE_APP_WINDOW_ID, VIDEO_SHOW_CAPTURE_REV_UI_STATE_KEY, putUiStateKey, selectDirectory } from '../status'
 import {
   WatcherIcon,
   EventsIcon,
@@ -98,6 +99,7 @@ export function FeaturePanelMenu(props: { kind: string }) {
   const reduceMotion = useReducedMotion()
   const [pageIndex, setPageIndex] = useState(0)
   const [pagerViewportWidth, setPagerViewportWidth] = useState(0)
+  const [busy, setBusy] = useState<null | { kind: 'export' | 'import'; title: string; startedAt: number }>(null)
 
   useEffect(() => {
     const root = rootRef.current
@@ -179,6 +181,8 @@ export function FeaturePanelMenu(props: { kind: string }) {
       if (id === 'watcher') return 'watcher'
       if (id === 'clock') return 'clock'
       if (id === 'settings') return 'gear'
+      if (id === 'cunox-export') return 'doc'
+      if (id === 'cunox-import') return 'doc'
       if (id === 'quit') return 'quit'
       return 'grid'
     }
@@ -194,6 +198,51 @@ export function FeaturePanelMenu(props: { kind: string }) {
       if (id === 'clock') return () => void postCommand('toggle-subwindow', { kind: 'clock', placement: 'bottom' })
       if (id === 'watcher') return () => void postCommand('watcher.openWindow')
       if (id === 'settings') return () => void postCommand('app.openSettingsWindow')
+      if (id === 'cunox-export')
+        return () =>
+          void (async () => {
+            const { dir } = await selectDirectory()
+            if (!dir) return
+            setBusy({ kind: 'export', title: '正在生成 CUNOX…', startedAt: Date.now() })
+            try {
+              const res = (await window.lanstart?.apiRequest({ method: 'POST', path: '/cunox/export', body: { dir } })) as any
+              const ok = res && Number(res.status) >= 200 && Number(res.status) < 300 && res.body && res.body.ok === true
+              const outDir = typeof res?.body?.outDir === 'string' ? res.body.outDir : ''
+              if (!ok) throw new Error(String(res?.body?.error ?? 'export_failed'))
+              if (outDir) {
+                try {
+                  await window.lanstart?.clipboardWriteText(outDir)
+                } catch {}
+                window.alert(`导出完成：\n${outDir}\n\n路径已复制到剪贴板`)
+              } else {
+                window.alert('导出完成')
+              }
+            } catch (e) {
+              window.alert(`导出失败：${e instanceof Error ? e.message : String(e)}`)
+            } finally {
+              setBusy(null)
+            }
+          })()
+      if (id === 'cunox-import')
+        return () =>
+          void (async () => {
+            if (!window.confirm('导入会覆盖当前数据，是否继续？')) return
+            const { dir } = await selectDirectory()
+            if (!dir) return
+            setBusy({ kind: 'import', title: '正在导入 CUNOX…', startedAt: Date.now() })
+            try {
+              const res = (await window.lanstart?.apiRequest({ method: 'POST', path: '/cunox/import', body: { dir } })) as any
+              const ok = res && Number(res.status) >= 200 && Number(res.status) < 300 && res.body && res.body.ok === true
+              if (!ok) throw new Error(String(res?.body?.error ?? 'import_failed'))
+              await putUiStateKey(UI_STATE_APP_WINDOW_ID, NOTES_RELOAD_REV_UI_STATE_KEY, Date.now())
+              await putUiStateKey(UI_STATE_APP_WINDOW_ID, VIDEO_SHOW_CAPTURE_REV_UI_STATE_KEY, { rev: Date.now(), index: 0, total: 1, name: '' })
+              window.alert('导入完成')
+            } catch (e) {
+              window.alert(`导入失败：${e instanceof Error ? e.message : String(e)}`)
+            } finally {
+              setBusy(null)
+            }
+          })()
       if (id === 'quit')
         return () => {
           markQuitting()
@@ -237,6 +286,17 @@ export function FeaturePanelMenu(props: { kind: string }) {
       animate={reduceMotion ? undefined : { opacity: 1, y: 0, scale: 1 }}
       transition={reduceMotion ? undefined : { duration: 0.18, ease: [0.2, 0.8, 0.2, 1] }}
     >
+      {busy ? (
+        <div className="subwindowBusyOverlay">
+          <div className="subwindowBusyCard">
+            <div className="subwindowBusyTitle">{busy.title}</div>
+            <div className="subwindowBusyBar">
+              <div className="subwindowBusyBarInner" />
+            </div>
+            <div className="subwindowBusyHint">请保持窗口打开，生成完成后会提示导出路径</div>
+          </div>
+        </div>
+      ) : null}
       <div ref={cardRef} className="subwindowCard animate-ls-pop-in">
         <div ref={measureRef} className="subwindowMeasure">
           <div className="subwindowTitle">

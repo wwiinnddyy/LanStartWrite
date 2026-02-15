@@ -263,6 +263,14 @@ export async function selectPdfFile(): Promise<{ fileUrl?: string }> {
   return { fileUrl }
 }
 
+export async function selectDirectory(): Promise<{ dir?: string; dirUrl?: string }> {
+  const res = (await requireLanstart().apiRequest({ method: 'POST', path: '/dialog/select-directory' })) as any
+  const body = res?.body as any
+  const dir = typeof body?.dir === 'string' ? body.dir : undefined
+  const dirUrl = typeof body?.dirUrl === 'string' ? body.dirUrl : undefined
+  return { dir, dirUrl }
+}
+
 export async function getUiState(windowId: string): Promise<Record<string, unknown>> {
   return await requireLanstart().getUiState(windowId)
 }

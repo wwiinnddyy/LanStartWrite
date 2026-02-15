@@ -3,9 +3,11 @@ import { node } from '@elysiajs/node'
 import { createInterface } from 'node:readline'
 import { randomUUID } from 'node:crypto'
 import { open, stat } from 'node:fs/promises'
+import { join } from 'node:path'
 import { networkInterfaces } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { deleteByPrefix, deleteValue, getValue, openLeavelDb, putValue } from '../LeavelDB'
+import { exportDbToCunoxDir, importCunoxDirToDb } from '../CUNOX'
 import {
   ACTIVE_APP_UI_STATE_KEY,
   APPEARANCE_KV_KEY,
@@ -1719,6 +1721,12 @@ const api = new Elysia({ adapter: node() })
     const fileUrl = typeof (result as any)?.fileUrl === 'string' ? (result as any).fileUrl : undefined
     return { ok: true, fileUrl }
   })
+  .post('/dialog/select-directory', async () => {
+    const result = await requestMainRpc<{ dir?: string; dirUrl?: string }>('selectDirectory')
+    const dir = typeof (result as any)?.dir === 'string' ? (result as any).dir : undefined
+    const dirUrl = typeof (result as any)?.dirUrl === 'string' ? (result as any).dirUrl : undefined
+    return { ok: true, dir, dirUrl }
+  })
   .post(
     '/pdf/load',
     async ({ body, set }) => {
@@ -1966,6 +1974,74 @@ const api = new Elysia({ adapter: node() })
     }
     return await res.text()
   })
+  .post(
+    '/cunox/export',
+    async ({ body, set }) => {
+      try {
+        const rawDir = String(body.dir ?? '')
+        const baseDir = rawDir.startsWith('file:') ? fileURLToPath(rawDir) : rawDir
+        if (!baseDir) throw new Error('BAD_DIR')
+
+        const rawName = typeof (body as any)?.name === 'string' ? String((body as any).name) : ''
+        const safeName = rawName.replace(/[\\/:*?"<>|\r\n]+/g, '-').replace(/\s+/g, ' ').trim()
+
+        const outDir =
+          baseDir.toLowerCase().endsWith('.cunox') && !rawName
+            ? baseDir
+            : join(
+                baseDir,
+                (safeName || `LanStartWrite-${new Date().toISOString().replace(/[:.]/g, '-')}`).replace(/\.cunox$/i, '') + '.cunox'
+              )
+
+        emitEvent('CUNOX_EXPORT_START', { outDir })
+        const res = await exportDbToCunoxDir(db, {
+          outDir,
+          overwrite: Boolean(body.overwrite),
+          include: body.include ?? undefined
+        })
+        emitEvent('CUNOX_EXPORT_DONE', { outDir: res.outDir })
+        return { ok: true, outDir: res.outDir, manifest: res.manifest }
+      } catch (e) {
+        emitEvent('CUNOX_EXPORT_ERROR', { error: String(e) })
+        set.status = 400
+        return { ok: false, error: String(e) }
+      }
+    },
+    {
+      body: t.Object({
+        dir: t.String(),
+        name: t.Optional(t.String()),
+        overwrite: t.Optional(t.Boolean()),
+        include: t.Optional(
+          t.Object({
+            board: t.Optional(t.Boolean()),
+            ppt: t.Optional(t.Boolean()),
+            screen: t.Optional(t.Boolean()),
+            video_booth: t.Optional(t.Boolean())
+          })
+        )
+      })
+    }
+  )
+  .post(
+    '/cunox/import',
+    async ({ body, set }) => {
+      try {
+        const rawDir = String(body.dir ?? '')
+        const dir = rawDir.startsWith('file:') ? fileURLToPath(rawDir) : rawDir
+        await importCunoxDirToDb(db, { dir, mode: 'replace' })
+        return { ok: true }
+      } catch (e) {
+        set.status = 400
+        return { ok: false, error: String(e) }
+      }
+    },
+    {
+      body: t.Object({
+        dir: t.String()
+      })
+    }
+  )
   .get(
     '/kv/:key',
     async ({ params, set }) => {
