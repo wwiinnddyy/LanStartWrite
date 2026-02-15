@@ -635,6 +635,7 @@ export function PageThumbnailsMenuWindow() {
   const pdfUiFileUrl = isFileOrDataUrl(pdfUiFileUrlRaw) ? String(pdfUiFileUrlRaw ?? '') : ''
   const pdfFileUrl = pdfUiFileUrl || persistedPdfFileUrl
   const [pdfDoc, setPdfDoc] = useState<any | null>(null)
+  const [pdfError, setPdfError] = useState('')
   const pdfDocRef = useRef<any | null>(null)
   const pdfLoadTaskRef = useRef<any | null>(null)
   const pdfTokenRef = useRef<string | null>(null)
@@ -747,6 +748,7 @@ export function PageThumbnailsMenuWindow() {
     void (async () => {
       let token: string | null = null
       try {
+        setPdfError('')
         const pdfjs = await loadPdfjs()
         const openRes = await window.lanstart?.apiRequest({ method: 'POST', path: '/pdf/open', body: { fileUrl: pdfFileUrl } })
         const openBody = (openRes as any)?.body as any
@@ -784,8 +786,9 @@ export function PageThumbnailsMenuWindow() {
         }
         pdfDocRef.current = doc
         setPdfDoc(doc)
-      } catch {
-        return
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e)
+        setPdfError(msg || 'PDF_OPEN_FAILED')
       } finally {
         if (token) {
           window.lanstart?.apiRequest({ method: 'POST', path: '/pdf/close', body: { token } }).catch(() => undefined)
@@ -941,6 +944,11 @@ export function PageThumbnailsMenuWindow() {
                 关闭
               </Button>
             </div>
+            {appMode === 'pdf' && pdfError ? (
+              <div style={{ padding: '0 12px 10px 12px', color: 'rgba(255,255,255,0.86)', fontSize: 12, lineHeight: 1.4 }}>
+                PDF 打开失败：{pdfError}
+              </div>
+            ) : null}
 
             <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: 12, paddingTop: 0 }}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 10 }}>

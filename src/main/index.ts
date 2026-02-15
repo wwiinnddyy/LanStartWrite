@@ -153,7 +153,7 @@ let isAppRestarting = false
 let allowQuitToProceed = false
 let backendShutdownInFlight = false
 
-function requestBackendRpc<T>(method: string, params?: unknown): Promise<T> {
+function requestBackendRpc<T>(method: string, params?: unknown, timeoutMs = 10 * 60 * 1000): Promise<T> {
   const proc = backendProcess
   if (!proc || !proc.stdin.writable) return Promise.reject(new Error('backend_not_ready'))
 
@@ -163,7 +163,7 @@ function requestBackendRpc<T>(method: string, params?: unknown): Promise<T> {
     const timer = setTimeout(() => {
       pendingBackendRpc.delete(id)
       reject(new Error('backend_rpc_timeout'))
-    }, 2400)
+    }, Math.max(1, Math.floor(timeoutMs)))
     pendingBackendRpc.set(id, { resolve: resolve as unknown as (value: unknown) => void, reject, timer })
     sendToBackend({ type: 'RPC_REQUEST', id, method, params })
   })
@@ -201,7 +201,7 @@ async function shutdownBackendGracefully(timeoutMs = 1800): Promise<void> {
 
   backendShutdownInFlight = true
   try {
-    await requestBackendRpc('shutdown', null)
+    await requestBackendRpc('shutdown', null, Math.max(1, Math.floor(timeoutMs)))
   } catch {}
 
   await waitForChildExit(proc, timeoutMs).catch(() => undefined)

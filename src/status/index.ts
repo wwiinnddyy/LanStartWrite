@@ -256,6 +256,18 @@ export async function selectImageFile(): Promise<{ fileUrl?: string }> {
   return { fileUrl }
 }
 
+export async function readImageFileUrlAsDataUrl(fileUrl: string): Promise<{ dataUrl?: string }> {
+  const res = (await requireLanstart().apiRequest({
+    method: 'POST',
+    path: '/img/file-to-data-url',
+    body: { fileUrl }
+  })) as any
+  const body = res?.body as any
+  if (res?.status !== 200 || body?.ok !== true) throw new Error(String(body?.error ?? 'IMAGE_READ_FAILED'))
+  const dataUrl = typeof body?.dataUrl === 'string' ? body.dataUrl : undefined
+  return { dataUrl }
+}
+
 export async function selectPdfFile(): Promise<{ fileUrl?: string }> {
   const res = (await requireLanstart().apiRequest({ method: 'POST', path: '/dialog/select-pdf-file' })) as any
   const body = res?.body as any

@@ -30,6 +30,7 @@ import {
   isLeaferSettings,
   putKv,
   putUiStateKey,
+  readImageFileUrlAsDataUrl,
   selectImageFile,
   type LeaferSettings,
   useAppAppearance,
@@ -1620,9 +1621,12 @@ function WhiteboardSettings() {
       const res = await selectImageFile()
       const url = typeof res?.fileUrl === 'string' ? res.fileUrl : ''
       if (!url) return
-      await putUiStateKey(UI_STATE_APP_WINDOW_ID, WHITEBOARD_BG_IMAGE_URL_UI_STATE_KEY, url)
-    } catch {
-      return
+      const converted = await readImageFileUrlAsDataUrl(url)
+      const dataUrl = typeof converted?.dataUrl === 'string' ? converted.dataUrl : ''
+      if (!dataUrl) return
+      await putUiStateKey(UI_STATE_APP_WINDOW_ID, WHITEBOARD_BG_IMAGE_URL_UI_STATE_KEY, dataUrl)
+    } catch (e) {
+      window.alert(`导入背景图失败：${e instanceof Error ? e.message : String(e)}`)
     }
   }
 

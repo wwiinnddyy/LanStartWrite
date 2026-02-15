@@ -35,6 +35,7 @@ export function PdfBackgroundApp() {
   const [resizeRev, setResizeRev] = React.useState(0)
   const [loading, setLoading] = React.useState(false)
   const [loadingRatio, setLoadingRatio] = React.useState<number | null>(null)
+  const [errorText, setErrorText] = React.useState('')
 
   const base64ToU8 = React.useCallback((base64: string): Uint8Array => {
     const raw = globalThis.atob(base64)
@@ -93,6 +94,7 @@ export function PdfBackgroundApp() {
     ;(async () => {
       let token: string | null = null
       try {
+        setErrorText('')
         setLoading(true)
         setLoadingRatio(null)
         const pdfjs = await loadPdfjs()
@@ -151,9 +153,11 @@ export function PdfBackgroundApp() {
         if (boundedIndex !== pageIndexRef.current) busRef.current.setKey(NOTES_PAGE_INDEX_UI_STATE_KEY, boundedIndex).catch(() => undefined)
         setLoading(false)
         setLoadingRatio(1)
-      } catch {
+      } catch (e) {
         setLoading(false)
         setLoadingRatio(null)
+        const msg = e instanceof Error ? e.message : String(e)
+        setErrorText(`PDF 打开失败：${msg || '请检查文件是否存在、是否被占用、或是否无权限读取'}`)
         busRef.current.setKey(NOTES_PAGE_TOTAL_UI_STATE_KEY, 1).catch(() => undefined)
         busRef.current.setKey(NOTES_PAGE_INDEX_UI_STATE_KEY, 0).catch(() => undefined)
       } finally {
@@ -279,6 +283,36 @@ export function PdfBackgroundApp() {
                 }}
               />
             </div>
+          </div>
+        </div>
+      ) : null}
+      {fileUrl && !loading && errorText ? (
+        <div
+          style={{
+            position: 'fixed',
+            left: 0,
+            top: 0,
+            right: 0,
+            bottom: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'rgba(0,0,0,0.18)',
+            pointerEvents: 'none'
+          }}
+        >
+          <div
+            style={{
+              maxWidth: '78vw',
+              padding: '10px 12px',
+              borderRadius: 10,
+              background: 'rgba(0,0,0,0.55)',
+              color: 'rgba(255,255,255,0.92)',
+              fontSize: 13,
+              lineHeight: 1.4
+            }}
+          >
+            {errorText}
           </div>
         </div>
       ) : null}

@@ -2,8 +2,8 @@ import { Elysia, t } from 'elysia'
 import { node } from '@elysiajs/node'
 import { createInterface } from 'node:readline'
 import { randomUUID } from 'node:crypto'
-import { open, stat } from 'node:fs/promises'
-import { join } from 'node:path'
+import { open, readFile, readdir, stat } from 'node:fs/promises'
+import { extname, join } from 'node:path'
 import { networkInterfaces } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { deleteByPrefix, deleteValue, getValue, openLeavelDb, putValue } from '../LeavelDB'
@@ -202,6 +202,39 @@ async function getDefaultWhiteboardBackground(): Promise<{ bgColor: string; bgIm
     const v = await getValue(db, WHITEBOARD_BG_IMAGE_URL_KV_KEY)
     if (isFileOrDataUrl(v)) bgImageUrl = v
   } catch {}
+  if (bgImageUrl && bgImageUrl.startsWith('file:')) {
+    let normalized = ''
+    try {
+      const filePath = fileURLToPath(bgImageUrl)
+      const ext = extname(filePath).toLowerCase()
+      const mime =
+        ext === '.png'
+          ? 'image/png'
+          : ext === '.jpg' || ext === '.jpeg'
+            ? 'image/jpeg'
+            : ext === '.webp'
+              ? 'image/webp'
+              : ext === '.bmp'
+                ? 'image/bmp'
+                : ext === '.gif'
+                  ? 'image/gif'
+                  : ''
+      if (mime) {
+        const st = await stat(filePath)
+        const size = Number(st.size)
+        if (Number.isFinite(size) && size > 0 && size <= 15 * 1024 * 1024) {
+          const buf = await readFile(filePath)
+          normalized = `data:${mime};base64,${buf.toString('base64')}`
+        }
+      }
+    } catch {}
+
+    bgImageUrl = normalized
+    try {
+      await putValue(db, WHITEBOARD_BG_IMAGE_URL_KV_KEY, bgImageUrl)
+      emitEvent('KV_PUT', { key: WHITEBOARD_BG_IMAGE_URL_KV_KEY })
+    } catch {}
+  }
   try {
     const v = await getValue(db, WHITEBOARD_BG_IMAGE_OPACITY_KV_KEY)
     const n = typeof v === 'number' ? v : typeof v === 'string' ? Number(v) : NaN
@@ -1728,6 +1761,67 @@ const api = new Elysia({ adapter: node() })
     return { ok: true, dir, dirUrl }
   })
   .post(
+    '/img/file-to-data-url',
+    async ({ body, set }) => {
+      const fileUrl = typeof (body as any)?.fileUrl === 'string' ? String((body as any).fileUrl) : ''
+      const maxBytesRaw = (body as any)?.maxBytes
+      const maxBytes = Number.isFinite(Number(maxBytesRaw)) ? Math.max(1024, Math.floor(Number(maxBytesRaw))) : 15 * 1024 * 1024
+
+      if (!fileUrl || !fileUrl.startsWith('file:')) {
+        set.status = 400
+        return { ok: false, error: 'BAD_FILE_URL' }
+      }
+
+      let filePath = ''
+      try {
+        filePath = fileURLToPath(fileUrl)
+      } catch {
+        set.status = 400
+        return { ok: false, error: 'BAD_FILE_URL' }
+      }
+
+      const ext = extname(filePath).toLowerCase()
+      const mime =
+        ext === '.png'
+          ? 'image/png'
+          : ext === '.jpg' || ext === '.jpeg'
+            ? 'image/jpeg'
+            : ext === '.webp'
+              ? 'image/webp'
+              : ext === '.bmp'
+                ? 'image/bmp'
+                : ext === '.gif'
+                  ? 'image/gif'
+                  : ''
+
+      if (!mime) {
+        set.status = 415
+        return { ok: false, error: 'UNSUPPORTED_IMAGE_TYPE' }
+      }
+
+      try {
+        const st = await stat(filePath)
+        const size = Number(st.size)
+        if (!Number.isFinite(size) || size <= 0) {
+          set.status = 400
+          return { ok: false, error: 'BAD_FILE_SIZE' }
+        }
+        if (size > maxBytes) {
+          set.status = 413
+          return { ok: false, error: 'FILE_TOO_LARGE', size, maxBytes }
+        }
+
+        const buf = await readFile(filePath)
+        const dataUrl = `data:${mime};base64,${buf.toString('base64')}`
+        return { ok: true, dataUrl, mime, size }
+      } catch (e) {
+        set.status = 500
+        return { ok: false, error: String(e) }
+      }
+    },
+    { body: t.Object({ fileUrl: t.String(), maxBytes: t.Optional(t.Number()) }) }
+  )
+  .post(
     '/pdf/load',
     async ({ body, set }) => {
       set.status = 410
@@ -1985,13 +2079,22 @@ const api = new Elysia({ adapter: node() })
         const rawName = typeof (body as any)?.name === 'string' ? String((body as any).name) : ''
         const safeName = rawName.replace(/[\\/:*?"<>|\r\n]+/g, '-').replace(/\s+/g, ' ').trim()
 
-        const outDir =
+        let outDir =
           baseDir.toLowerCase().endsWith('.cunox') && !rawName
             ? baseDir
             : join(
                 baseDir,
                 (safeName || `LanStartWrite-${new Date().toISOString().replace(/[:.]/g, '-')}`).replace(/\.cunox$/i, '') + '.cunox'
               )
+
+        if (!body.overwrite) {
+          const existed = await stat(outDir)
+            .then(() => true)
+            .catch(() => false)
+          if (existed) {
+            outDir = outDir.replace(/\.cunox$/i, '') + `-${new Date().toISOString().replace(/[:.]/g, '-')}.cunox`
+          }
+        }
 
         emitEvent('CUNOX_EXPORT_START', { outDir })
         const res = await exportDbToCunoxDir(db, {
@@ -2028,7 +2131,29 @@ const api = new Elysia({ adapter: node() })
     async ({ body, set }) => {
       try {
         const rawDir = String(body.dir ?? '')
-        const dir = rawDir.startsWith('file:') ? fileURLToPath(rawDir) : rawDir
+        let dir = rawDir.startsWith('file:') ? fileURLToPath(rawDir) : rawDir
+        const manifestPath = join(dir, 'cunox.ucixml')
+        const hasManifest = await stat(manifestPath)
+          .then(() => true)
+          .catch(() => false)
+        if (!hasManifest) {
+          const entries = await readdir(dir, { withFileTypes: true }).catch(() => [])
+          const candidates: string[] = []
+          for (const ent of entries) {
+            if (!ent.isDirectory()) continue
+            const name = ent.name
+            if (!name.toLowerCase().endsWith('.cunox')) continue
+            const abs = join(dir, name)
+            const ok = await stat(join(abs, 'cunox.ucixml'))
+              .then(() => true)
+              .catch(() => false)
+            if (ok) candidates.push(abs)
+            if (candidates.length > 1) break
+          }
+          if (candidates.length === 1) dir = candidates[0]
+          else throw new Error('CUNOX_DIR_NOT_FOUND')
+        }
+
         await importCunoxDirToDb(db, { dir, mode: 'replace' })
         return { ok: true }
       } catch (e) {

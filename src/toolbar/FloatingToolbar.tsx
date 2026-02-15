@@ -582,17 +582,22 @@ function FloatingToolbarInner() {
               return
             }
             void (async () => {
-              setAppMode('pdf')
-              await new Promise((r) => setTimeout(r, 150))
+              try {
+                setAppMode('pdf')
+                await new Promise((r) => setTimeout(r, 150))
 
-              const selected = await selectPdfFile()
-              const fileUrl = selected.fileUrl
-              if (!fileUrl) {
+                const selected = await selectPdfFile()
+                const fileUrl = selected.fileUrl
+                if (!fileUrl) {
+                  setAppMode('toolbar')
+                  return
+                }
+                await putKv(PDF_FILE_URL_KV_KEY, fileUrl)
+                await putUiStateKey(UI_STATE_APP_WINDOW_ID, PDF_FILE_URL_UI_STATE_KEY, fileUrl)
+              } catch (e) {
                 setAppMode('toolbar')
-                return
+                window.alert(`打开 PDF 失败：${e instanceof Error ? e.message : String(e)}`)
               }
-              await putKv(PDF_FILE_URL_KV_KEY, fileUrl)
-              await putUiStateKey(UI_STATE_APP_WINDOW_ID, PDF_FILE_URL_UI_STATE_KEY, fileUrl)
             })()
           }}
         >
