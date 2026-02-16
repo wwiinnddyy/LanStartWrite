@@ -741,7 +741,7 @@ export function VideoShowBackgroundApp() {
       </div>
       {mergeLayers ? (
         <div style={{ position: 'absolute', inset: 0 }}>
-          <AnnotationOverlayApp />
+          <AnnotationOverlayApp forcedAppMode="video-show" />
         </div>
       ) : null}
       {overlayText ? (

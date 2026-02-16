@@ -5,19 +5,28 @@ import {
   PDF_FILE_URL_KV_KEY,
   PDF_FILE_URL_UI_STATE_KEY,
   UI_STATE_APP_WINDOW_ID,
-  isFileOrDataUrl,
   usePersistedState,
   useUiStateBus
 } from '../status'
 import { loadPdfjs } from './pdfjs'
 
+function normalizePdfFileRef(v: unknown): string {
+  if (typeof v !== 'string') return ''
+  if (!v) return ''
+  if (v.startsWith('file:')) return v
+  if (/^[a-zA-Z]:[\\/]/.test(v) || v.startsWith('\\\\')) return v
+  return ''
+}
+
 export function PdfBackgroundApp() {
   const bus = useUiStateBus(UI_STATE_APP_WINDOW_ID)
   const busRef = React.useRef(bus)
   busRef.current = bus
-  const [persistedFileUrl] = usePersistedState(PDF_FILE_URL_KV_KEY, '', { validate: isFileOrDataUrl })
+  const [persistedFileUrl] = usePersistedState(PDF_FILE_URL_KV_KEY, '', {
+    validate: (v): v is string => typeof v === 'string' && (!v || v.startsWith('file:') || /^[a-zA-Z]:[\\/]/.test(v) || v.startsWith('\\\\'))
+  })
   const uiFileUrl = bus.state[PDF_FILE_URL_UI_STATE_KEY]
-  const fileUrl = isFileOrDataUrl(uiFileUrl) ? String(uiFileUrl ?? '') : persistedFileUrl
+  const fileUrl = normalizePdfFileRef(uiFileUrl) || normalizePdfFileRef(persistedFileUrl)
 
   const pageIndexRaw = bus.state[NOTES_PAGE_INDEX_UI_STATE_KEY]
   const pageIndex = typeof pageIndexRaw === 'number' ? pageIndexRaw : typeof pageIndexRaw === 'string' ? Number(pageIndexRaw) : 0

@@ -5,7 +5,14 @@ import { markQuitting, postCommand } from '../toolbar/hooks/useBackend'
 import { useZoomOnWheel } from '../toolbar/hooks/useZoomOnWheel'
 import { getAppButtonVisibility, type AppButtonId } from '../toolbar/utils/constants'
 import { APP_BUTTON_DEFINITIONS } from '../button'
-import { NOTES_RELOAD_REV_UI_STATE_KEY, UI_STATE_APP_WINDOW_ID, VIDEO_SHOW_CAPTURE_REV_UI_STATE_KEY, putUiStateKey, selectDirectory } from '../status'
+import {
+  NOTES_RELOAD_REV_UI_STATE_KEY,
+  UI_STATE_APP_WINDOW_ID,
+  VIDEO_SHOW_CAPTURE_REV_UI_STATE_KEY,
+  putUiStateKey,
+  selectCunoxExportFile,
+  selectCunoxImportFile
+} from '../status'
 import {
   WatcherIcon,
   EventsIcon,
@@ -14,8 +21,11 @@ import {
   DatabaseIcon,
 } from '../toolbar/components/ToolbarIcons'
 import './styles/subwindow.css'
+import notebookIconSvgRaw from '../../iconpack/flent_icon/fluent--notebook-20-regular.svg?raw'
 
-type GridIconKind = 'grid' | 'plus' | 'gear' | 'doc' | 'db' | 'events' | 'watcher' | 'clock' | 'quit'
+const notebookIconSvg = notebookIconSvgRaw.replace('width="20"', 'width="18"').replace('height="20"', 'height="18"')
+
+type GridIconKind = 'grid' | 'plus' | 'gear' | 'doc' | 'notebook' | 'db' | 'events' | 'watcher' | 'clock' | 'quit'
 
 function GridIcon(props: { kind: GridIconKind }) {
   const stroke = 'currentColor'
@@ -77,6 +87,12 @@ function GridIcon(props: { kind: GridIconKind }) {
     )
   }
 
+  if (props.kind === 'notebook') {
+    return (
+      <span style={{ width: 18, height: 18, display: 'inline-flex', lineHeight: 0 }} dangerouslySetInnerHTML={{ __html: notebookIconSvg }} />
+    )
+  }
+
   if (props.kind === 'quit') {
     return <QuitIcon />
   }
@@ -100,6 +116,7 @@ export function FeaturePanelMenu(props: { kind: string }) {
   const [pageIndex, setPageIndex] = useState(0)
   const [pagerViewportWidth, setPagerViewportWidth] = useState(0)
   const [busy, setBusy] = useState<null | { kind: 'export' | 'import'; title: string; startedAt: number }>(null)
+  const isNotesMenu = props.kind === 'notes'
 
   useEffect(() => {
     const root = rootRef.current
@@ -174,15 +191,74 @@ export function FeaturePanelMenu(props: { kind: string }) {
     }
   }, [])
 
+  const doCunoxExport = async () => {
+    const { file } = await selectCunoxExportFile()
+    if (!file) return
+    setBusy({ kind: 'export', title: '正在生成 CUNOX…', startedAt: Date.now() })
+    try {
+      const res = (await window.lanstart?.apiRequest({ method: 'POST', path: '/cunox/export', body: { outFile: file } })) as any
+      const ok = res && Number(res.status) >= 200 && Number(res.status) < 300 && res.body && res.body.ok === true
+      const outFile = typeof res?.body?.outFile === 'string' ? res.body.outFile : ''
+      if (!ok) throw new Error(String(res?.body?.error ?? 'export_failed'))
+      if (outFile) {
+        try {
+          await window.lanstart?.clipboardWriteText(outFile)
+        } catch {}
+        window.alert(`导出完成：\n${outFile}\n\n路径已复制到剪贴板`)
+      } else {
+        window.alert('导出完成')
+      }
+    } catch (e) {
+      window.alert(`导出失败：${e instanceof Error ? e.message : String(e)}`)
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const doCunoxImport = async () => {
+    if (!window.confirm('导入会覆盖当前数据，是否继续？')) return
+    const { file } = await selectCunoxImportFile()
+    if (!file) return
+    setBusy({ kind: 'import', title: '正在导入 CUNOX…', startedAt: Date.now() })
+    try {
+      const res = (await window.lanstart?.apiRequest({ method: 'POST', path: '/cunox/import', body: { file } })) as any
+      const ok = res && Number(res.status) >= 200 && Number(res.status) < 300 && res.body && res.body.ok === true
+      if (!ok) throw new Error(String(res?.body?.error ?? 'import_failed'))
+      await putUiStateKey(UI_STATE_APP_WINDOW_ID, NOTES_RELOAD_REV_UI_STATE_KEY, Date.now())
+      await putUiStateKey(UI_STATE_APP_WINDOW_ID, VIDEO_SHOW_CAPTURE_REV_UI_STATE_KEY, { rev: Date.now(), index: 0, total: 1, name: '' })
+      window.alert('导入完成')
+    } catch (e) {
+      window.alert(`导入失败：${e instanceof Error ? e.message : String(e)}`)
+    } finally {
+      setBusy(null)
+    }
+  }
+
   const items = useMemo(() => {
+    if (isNotesMenu) {
+      return [
+        {
+          key: 'cunox-export',
+          title: '导出 CUNOX',
+          icon: 'doc' as const,
+          onClick: () => void doCunoxExport()
+        },
+        {
+          key: 'cunox-import',
+          title: '导入 CUNOX',
+          icon: 'doc' as const,
+          onClick: () => void doCunoxImport()
+        }
+      ]
+    }
+
     const iconFor = (id: AppButtonId): GridIconKind => {
       if (id === 'db') return 'db'
       if (id === 'events') return 'events'
       if (id === 'watcher') return 'watcher'
       if (id === 'clock') return 'clock'
       if (id === 'settings') return 'gear'
-      if (id === 'cunox-export') return 'doc'
-      if (id === 'cunox-import') return 'doc'
+      if (id === 'notes') return 'notebook'
       if (id === 'quit') return 'quit'
       return 'grid'
     }
@@ -198,51 +274,7 @@ export function FeaturePanelMenu(props: { kind: string }) {
       if (id === 'clock') return () => void postCommand('toggle-subwindow', { kind: 'clock', placement: 'bottom' })
       if (id === 'watcher') return () => void postCommand('watcher.openWindow')
       if (id === 'settings') return () => void postCommand('app.openSettingsWindow')
-      if (id === 'cunox-export')
-        return () =>
-          void (async () => {
-            const { dir } = await selectDirectory()
-            if (!dir) return
-            setBusy({ kind: 'export', title: '正在生成 CUNOX…', startedAt: Date.now() })
-            try {
-              const res = (await window.lanstart?.apiRequest({ method: 'POST', path: '/cunox/export', body: { dir } })) as any
-              const ok = res && Number(res.status) >= 200 && Number(res.status) < 300 && res.body && res.body.ok === true
-              const outDir = typeof res?.body?.outDir === 'string' ? res.body.outDir : ''
-              if (!ok) throw new Error(String(res?.body?.error ?? 'export_failed'))
-              if (outDir) {
-                try {
-                  await window.lanstart?.clipboardWriteText(outDir)
-                } catch {}
-                window.alert(`导出完成：\n${outDir}\n\n路径已复制到剪贴板`)
-              } else {
-                window.alert('导出完成')
-              }
-            } catch (e) {
-              window.alert(`导出失败：${e instanceof Error ? e.message : String(e)}`)
-            } finally {
-              setBusy(null)
-            }
-          })()
-      if (id === 'cunox-import')
-        return () =>
-          void (async () => {
-            if (!window.confirm('导入会覆盖当前数据，是否继续？')) return
-            const { dir } = await selectDirectory()
-            if (!dir) return
-            setBusy({ kind: 'import', title: '正在导入 CUNOX…', startedAt: Date.now() })
-            try {
-              const res = (await window.lanstart?.apiRequest({ method: 'POST', path: '/cunox/import', body: { dir } })) as any
-              const ok = res && Number(res.status) >= 200 && Number(res.status) < 300 && res.body && res.body.ok === true
-              if (!ok) throw new Error(String(res?.body?.error ?? 'import_failed'))
-              await putUiStateKey(UI_STATE_APP_WINDOW_ID, NOTES_RELOAD_REV_UI_STATE_KEY, Date.now())
-              await putUiStateKey(UI_STATE_APP_WINDOW_ID, VIDEO_SHOW_CAPTURE_REV_UI_STATE_KEY, { rev: Date.now(), index: 0, total: 1, name: '' })
-              window.alert('导入完成')
-            } catch (e) {
-              window.alert(`导入失败：${e instanceof Error ? e.message : String(e)}`)
-            } finally {
-              setBusy(null)
-            }
-          })()
+      if (id === 'notes') return () => void postCommand('toggle-subwindow', { kind: 'notes', placement: 'bottom' })
       if (id === 'quit')
         return () => {
           markQuitting()
@@ -255,17 +287,27 @@ export function FeaturePanelMenu(props: { kind: string }) {
     return APP_BUTTON_DEFINITIONS
       .filter((d) => getAppButtonVisibility(d.id).showInFeaturePanel)
       .map((d) => ({
-        id: d.id,
+        key: d.id,
+        buttonId: d.id,
         title: d.label,
         icon: iconFor(d.id),
         variant: variantFor(d.id),
         onClick: onClickFor(d.id)
       }))
-  }, [])
+  }, [doCunoxExport, doCunoxImport, isNotesMenu])
 
   const pages = useMemo(() => {
     const pageSize = 16
-    const result: Array<Array<{ id: AppButtonId; title: string; icon: GridIconKind; variant?: 'default' | 'light' | 'danger'; onClick: () => void }>> = []
+    const result: Array<
+      Array<{
+        key: string
+        buttonId?: AppButtonId
+        title: string
+        icon: GridIconKind
+        variant?: 'default' | 'light' | 'danger'
+        onClick: () => void
+      }>
+    > = []
     for (let i = 0; i < items.length; i += pageSize) {
       result.push(items.slice(i, i + pageSize))
     }
@@ -300,7 +342,7 @@ export function FeaturePanelMenu(props: { kind: string }) {
       <div ref={cardRef} className="subwindowCard animate-ls-pop-in">
         <div ref={measureRef} className="subwindowMeasure">
           <div className="subwindowTitle">
-            <span>功能面板</span>
+            <span>{isNotesMenu ? '笔记管理' : '功能面板'}</span>
             <span className="subwindowMeta">{items.length}</span>
           </div>
 
@@ -331,13 +373,13 @@ export function FeaturePanelMenu(props: { kind: string }) {
                     <div className="subwindowIconGrid">
                       {pageItems.map((item) => (
                         <Button
-                          key={item.id}
+                          key={item.key}
                           size="sm"
                           ariaLabel={item.title}
                           title={item.title}
                           variant={item.variant}
-                          showInToolbar={getAppButtonVisibility(item.id).showInToolbar}
-                          showInFeaturePanel={getAppButtonVisibility(item.id).showInFeaturePanel}
+                          showInToolbar={item.buttonId ? getAppButtonVisibility(item.buttonId).showInToolbar : undefined}
+                          showInFeaturePanel={item.buttonId ? getAppButtonVisibility(item.buttonId).showInFeaturePanel : undefined}
                           onClick={item.onClick}
                         >
                           <GridIcon kind={item.icon} />

@@ -579,6 +579,7 @@ let floatingToolbarWindow: BrowserWindow | undefined
 let floatingToolbarHandleWindow: BrowserWindow | undefined
 let toolbarNoticeWindow: BrowserWindow | undefined
 let toolbarNoticeDesiredVisible = false
+let toolbarNoticeKind = ''
 let toolbarNoticeItem:
   | {
       win: BrowserWindow
@@ -913,7 +914,7 @@ function createFloatingToolbarWindow(): BrowserWindow {
     const handle = floatingToolbarHandleWindow
     if (handle && !handle.isDestroyed() && handle.isVisible()) handle.hide()
     const notice = toolbarNoticeWindow
-    if (notice && !notice.isDestroyed() && notice.isVisible()) notice.hide()
+    if (notice && !notice.isDestroyed() && notice.isVisible() && toolbarNoticeKind !== 'clockFloat') notice.hide()
     for (const item of toolbarSubwindows.values()) {
       if (item.win.isDestroyed()) continue
       item.win.hide()
@@ -2396,6 +2397,7 @@ async function maybeShowRestoreNotesNotice(): Promise<void> {
   }
 
   backendPutUiStateKey('app', 'noticeKind', 'notesRestore').catch(() => undefined)
+  toolbarNoticeKind = 'notesRestore'
   toolbarNoticeDesiredVisible = true
   try {
     showToolbarNoticeWindow()
@@ -2424,8 +2426,11 @@ function toggleToolbarSubwindow(kind: string, placement: 'top' | 'bottom') {
     return
   }
 
-  toolbarNoticeDesiredVisible = false
-  hideToolbarNoticeWindow()
+  const shouldHideNotice = kind === 'clock' ? true : toolbarNoticeKind !== 'clockFloat'
+  if (shouldHideNotice) {
+    toolbarNoticeDesiredVisible = false
+    hideToolbarNoticeWindow()
+  }
 
   item.effectivePlacement = placement
   closeOtherToolbarSubwindows(kind)
@@ -2545,6 +2550,51 @@ function handleBackendControlMessage(message: any): void {
           const dir = res.canceled || !res.filePaths?.[0] ? undefined : res.filePaths[0]
           const dirUrl = dir ? pathToFileURL(dir).toString() : undefined
           sendToBackend({ type: 'MAIN_RPC_RESPONSE', id, ok: true, result: { dir, dirUrl } })
+          return
+        }
+
+        if (method === 'selectCunoxExportFile') {
+          const parent =
+            BrowserWindow.getFocusedWindow() ??
+            whiteboardBackgroundWindow ??
+            annotationOverlayWindow ??
+            screenAnnotationOverlayWindow ??
+            undefined
+          const now = new Date().toISOString().replace(/[:.]/g, '-')
+          const options = {
+            defaultPath: `LanStartWrite-${now}.cunox`,
+            filters: [
+              { name: 'CUNOX', extensions: ['cunox'] },
+              { name: 'Zip', extensions: ['zip'] },
+              { name: 'All Files', extensions: ['*'] }
+            ]
+          }
+          const res = parent ? await dialog.showSaveDialog(parent, options as any) : await dialog.showSaveDialog(options as any)
+          const file = res.canceled || !res.filePath ? undefined : res.filePath
+          const fileUrl = file ? pathToFileURL(file).toString() : undefined
+          sendToBackend({ type: 'MAIN_RPC_RESPONSE', id, ok: true, result: { file, fileUrl } })
+          return
+        }
+
+        if (method === 'selectCunoxImportFile') {
+          const parent =
+            BrowserWindow.getFocusedWindow() ??
+            whiteboardBackgroundWindow ??
+            annotationOverlayWindow ??
+            screenAnnotationOverlayWindow ??
+            undefined
+          const options: OpenDialogOptions = {
+            properties: ['openFile'],
+            filters: [
+              { name: 'CUNOX', extensions: ['cunox'] },
+              { name: 'Zip', extensions: ['zip'] },
+              { name: 'All Files', extensions: ['*'] }
+            ]
+          }
+          const res = parent ? await dialog.showOpenDialog(parent, options) : await dialog.showOpenDialog(options)
+          const file = res.canceled || !res.filePaths?.[0] ? undefined : res.filePaths[0]
+          const fileUrl = file ? pathToFileURL(file).toString() : undefined
+          sendToBackend({ type: 'MAIN_RPC_RESPONSE', id, ok: true, result: { file, fileUrl } })
           return
         }
 
@@ -2904,7 +2954,24 @@ function handleBackendControlMessage(message: any): void {
     const placement = placementRaw === 'top' ? 'top' : placementRaw === 'bottom' ? 'bottom' : undefined
     if (!kind || !placement) return
     try {
+      const prev = toolbarSubwindows.get(kind)
+      const wasVisible = Boolean(prev && !prev.win.isDestroyed() && prev.win.isVisible())
       toggleToolbarSubwindow(kind, placement)
+      if (kind === 'clock' && wasVisible) {
+        requestBackendRpc<Record<string, unknown>>('getUiState', { windowId: 'app' })
+          .then((state) => {
+            const timerRunning = Boolean((state as any)?.clockTimerRunning)
+            const countdownRunning = Boolean((state as any)?.clockCountdownRunning)
+            if (!timerRunning && !countdownRunning) return
+            backendPutUiStateKey('app', 'noticeKind', 'clockFloat').catch(() => undefined)
+            toolbarNoticeKind = 'clockFloat'
+            toolbarNoticeDesiredVisible = true
+            try {
+              showToolbarNoticeWindow()
+            } catch {}
+          })
+          .catch(() => undefined)
+      }
     } catch {
       return
     }
@@ -2938,6 +3005,7 @@ function handleBackendControlMessage(message: any): void {
     if (visible) showToolbarNoticeWindow()
     else {
       backendPutUiStateKey('app', 'noticeKind', '').catch(() => undefined)
+      toolbarNoticeKind = ''
       hideToolbarNoticeWindow()
     }
     return

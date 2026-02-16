@@ -28,6 +28,7 @@ import {
   isFileOrDataUrl,
   isHexColor,
   isLeaferSettings,
+  postCommand,
   putKv,
   putUiStateKey,
   readImageFileUrlAsDataUrl,
@@ -37,6 +38,7 @@ import {
   usePersistedState,
   useUiStateBus
 } from '../../status'
+import notebookIconSvgRaw from '../../../iconpack/flent_icon/fluent--notebook-20-regular.svg?raw'
 import {
   Button,
   APP_BUTTON_DEFINITIONS,
@@ -58,6 +60,8 @@ import { useAppearanceSettings } from '../hooks/useAppearanceSettings'
 import LanStartLogoSvg from '../../../iconpack/3d1b23de6a48e1d67f4c637d117897cd26c5594cfbb15bc6092a3546d8cc425a(1).svg'
 import { DatabaseIcon, EventsIcon, QuitIcon, SettingsIcon, WatcherIcon } from '../../toolbar/components/ToolbarIcons'
 import './SettingsContent.css'
+
+const notebookIconSvg = notebookIconSvgRaw.replace('width="20"', 'width="18"').replace('height="20"', 'height="18"')
 
 interface SettingsContentProps {
   activeTab: SettingsTab
@@ -1037,7 +1041,7 @@ function ToolbarSettings() {
 }
 
 function FeaturePanelSettings() {
-  type GridIconKind = 'grid' | 'plus' | 'gear' | 'doc' | 'db' | 'events' | 'watcher' | 'clock' | 'quit'
+  type GridIconKind = 'grid' | 'plus' | 'gear' | 'doc' | 'notebook' | 'db' | 'events' | 'watcher' | 'clock' | 'quit'
   const reduceMotion = useReducedMotion()
   const pagerViewportRef = React.useRef<HTMLDivElement | null>(null)
   const [pageIndex, setPageIndex] = React.useState(0)
@@ -1094,6 +1098,7 @@ function FeaturePanelSettings() {
     if (id === 'watcher') return 'watcher'
     if (id === 'clock') return 'clock'
     if (id === 'settings') return 'gear'
+    if (id === 'notes') return 'notebook'
     if (id === 'quit') return 'quit'
     return 'grid'
   }, [])
@@ -1156,6 +1161,12 @@ function FeaturePanelSettings() {
           <path d="M9 14h6" />
           <path d="M9 17h4" />
         </svg>
+      )
+    }
+
+    if (props.kind === 'notebook') {
+      return (
+        <span style={{ width: 18, height: 18, display: 'inline-flex', lineHeight: 0 }} dangerouslySetInnerHTML={{ __html: notebookIconSvg }} />
       )
     }
 
@@ -1624,7 +1635,8 @@ function WhiteboardSettings() {
       const converted = await readImageFileUrlAsDataUrl(url)
       const dataUrl = typeof converted?.dataUrl === 'string' ? converted.dataUrl : ''
       if (!dataUrl) return
-      await putUiStateKey(UI_STATE_APP_WINDOW_ID, WHITEBOARD_BG_IMAGE_URL_UI_STATE_KEY, dataUrl)
+      bus.setKey(WHITEBOARD_BG_IMAGE_URL_UI_STATE_KEY, dataUrl).catch(() => undefined)
+      postCommand('settings.setWhiteboardBackground', { bgImageUrl: dataUrl }).catch(() => undefined)
     } catch (e) {
       window.alert(`导入背景图失败：${e instanceof Error ? e.message : String(e)}`)
     }
@@ -1644,7 +1656,10 @@ function WhiteboardSettings() {
               ariaLabel={preset.label}
               title={`${preset.label} ${preset.value}`}
               className={`settingsWhiteboardColorSwatch ${bgColor === preset.value ? 'settingsWhiteboardColorSwatch--active' : ''}`}
-              onClick={() => putUiStateKey(UI_STATE_APP_WINDOW_ID, WHITEBOARD_BG_COLOR_UI_STATE_KEY, preset.value).catch(() => undefined)}
+              onClick={() => {
+                bus.setKey(WHITEBOARD_BG_COLOR_UI_STATE_KEY, preset.value).catch(() => undefined)
+                postCommand('settings.setWhiteboardBackground', { bgColor: preset.value }).catch(() => undefined)
+              }}
               style={{ background: preset.value }}
             >
               <span className="settingsWhiteboardColorSwatchInner" />
@@ -1697,7 +1712,8 @@ function WhiteboardSettings() {
                 onChange={(e) => {
                   const v = Number(e.target.value)
                   const next = Number.isFinite(v) ? Math.max(0, Math.min(1, v / 100)) : 0.5
-                  putUiStateKey(UI_STATE_APP_WINDOW_ID, WHITEBOARD_BG_IMAGE_OPACITY_UI_STATE_KEY, next).catch(() => undefined)
+                  bus.setKey(WHITEBOARD_BG_IMAGE_OPACITY_UI_STATE_KEY, next).catch(() => undefined)
+                  postCommand('settings.setWhiteboardBackground', { bgImageOpacity: next }).catch(() => undefined)
                 }}
                 style={{ flex: 1 }}
               />
@@ -1710,7 +1726,10 @@ function WhiteboardSettings() {
                 size="md"
                 appRegion="no-drag"
                 ariaLabel="删除背景图片"
-                onClick={() => putUiStateKey(UI_STATE_APP_WINDOW_ID, WHITEBOARD_BG_IMAGE_URL_UI_STATE_KEY, '').catch(() => undefined)}
+                onClick={() => {
+                  bus.setKey(WHITEBOARD_BG_IMAGE_URL_UI_STATE_KEY, '').catch(() => undefined)
+                  postCommand('settings.setWhiteboardBackground', { bgImageUrl: '' }).catch(() => undefined)
+                }}
               >
                 删除背景图片
               </Button>

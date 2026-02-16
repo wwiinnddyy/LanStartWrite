@@ -109,6 +109,7 @@ export default function App() {
     if (kind === 'events') return <WithAppearance><EventsMenu kind="events" /></WithAppearance>
     if (kind === 'clock') return <WithAppearance><ClockMenu kind="clock" /></WithAppearance>
     if (kind === 'feature-panel') return <WithAppearance><FeaturePanelMenu kind="feature-panel" /></WithAppearance>
+    if (kind === 'notes') return <WithAppearance><FeaturePanelMenu kind="notes" /></WithAppearance>
     if (kind === 'settings') return <WithAppearance><SettingsMenu kind="settings" /></WithAppearance>
     if (kind === 'pen') return <WithAppearance><PenSubmenu kind="pen" /></WithAppearance>
     if (kind === 'eraser') return <WithAppearance><EraserSubmenu kind="eraser" /></WithAppearance>

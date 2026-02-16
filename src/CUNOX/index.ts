@@ -7,5 +7,14 @@ export {
   type PersistedAnnotationNodeV1,
   type InkmlexcV1
 } from './inkml'
-export { exportDbToCunoxDir, importCunoxDirToDb, parseCunoxDir, type CunoxExportOptions, type CunoxImportOptions } from './cunoxDir'
-
+export {
+  exportDbToCunoxDir,
+  exportDbToCunoxFile,
+  importCunoxDirToDb,
+  importCunoxFileToDb,
+  parseCunoxDir,
+  type CunoxExportFileOptions,
+  type CunoxExportOptions,
+  type CunoxImportFileOptions,
+  type CunoxImportOptions
+} from './cunoxDir'

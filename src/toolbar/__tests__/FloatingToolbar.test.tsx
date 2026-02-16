@@ -91,6 +91,38 @@ describe('FloatingToolbar', () => {
     expect(uiStateCalls).toContainEqual({ windowId: 'app', key: 'mode', value: 'whiteboard' })
   })
 
+  it('restores notes page state when switching modes', async () => {
+    const user = userEvent.setup()
+    const uiStateCalls: Array<{ windowId: string; key: string; value: unknown }> = []
+    window.lanstart = {
+      postCommand: async () => null,
+      getEvents: async () => ({ items: [], latest: 0 }),
+      getKv: async (key) => {
+        if (key === 'notes-page-index:whiteboard') return 2
+        if (key === 'notes-page-total:whiteboard') return 5
+        throw new Error('kv_not_found')
+      },
+      putKv: async () => null,
+      getUiState: async () => ({ notesPageIndex: 0, notesPageTotal: 1, mode: 'toolbar' }),
+      putUiStateKey: async (windowId, key, value) => {
+        uiStateCalls.push({ windowId, key, value })
+        return null
+      },
+      deleteUiStateKey: async () => null,
+      apiRequest: async () => ({ status: 200, body: { ok: true } }),
+      clipboardWriteText: async () => null,
+      setZoomLevel: () => {},
+      getZoomLevel: () => 1
+    }
+
+    render(<FloatingToolbarApp />)
+    await user.click(await screen.findByRole('button', { name: '白板' }))
+    await new Promise((r) => setTimeout(r, 0))
+
+    expect(uiStateCalls).toContainEqual({ windowId: 'app', key: 'notesPageTotal', value: 5 })
+    expect(uiStateCalls).toContainEqual({ windowId: 'app', key: 'notesPageIndex', value: 2 })
+  })
+
   it('does not raise unhandled rejection on quit', async () => {
     const user = userEvent.setup()
     window.lanstart = {

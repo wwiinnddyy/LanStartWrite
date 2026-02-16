@@ -154,9 +154,30 @@ describe('Annotation notes partition', () => {
       expect(putCalls.some((c) => c.key === 'annotation-notes-pdf')).toBe(true)
     })
     d.unmount()
+
+    putCalls.length = 0
+
+    window.lanstart = {
+      ...window.lanstart,
+      getUiState: async () => ({
+        mode: 'whiteboard',
+        tool: 'pen',
+        penType: 'writing',
+        penColor: '#333333',
+        penThickness: 6,
+        eraserType: 'pixel',
+        eraserThickness: 18
+      })
+    }
+
+    const e = render(<AnnotationOverlayApp forcedAppMode="video-show" />)
+    await waitFor(() => {
+      expect(putCalls.some((c) => c.key === 'annotation-notes-video-show')).toBe(true)
+    })
+    e.unmount()
   }, 20000)
 
-  it('rotates notes on startup and keeps only last history', async () => {
+  it('does not auto-restore history without explicit restore', async () => {
     vi.resetModules()
     ;(globalThis as any).CanvasRenderingContext2D ??= function CanvasRenderingContext2D() {}
     ;(globalThis as any).Path2D ??= function Path2D() {}
@@ -212,13 +233,16 @@ describe('Annotation notes partition', () => {
         }
       ]
     } as const
+    const emptyBook = { version: 2, currentPage: 0, pages: [{ version: 1, nodes: [] }] } as const
+    const prevBook = { version: 2, currentPage: 0, pages: [oldDoc] } as const
 
     window.lanstart = {
       postCommand: async () => null,
       getEvents: async () => ({ items: [], latest: 0 }),
       getKv: async (key: string) => {
         if (key === 'leafer-settings') return SVG_LEAFER_SETTINGS as any
-        if (key === 'annotation-notes-whiteboard') return oldDoc as any
+        if (key === 'annotation-notes-whiteboard') return emptyBook as any
+        if (key === 'annotation-notes-whiteboard-prev') return prevBook as any
         throw new Error('kv_not_found')
       },
       putKv: async (key: string, value: unknown) => {
@@ -244,12 +268,11 @@ describe('Annotation notes partition', () => {
 
     const a = render(<AnnotationOverlayApp />)
     await waitFor(() => {
-      expect(putCalls.some((c) => c.key === 'annotation-notes-whiteboard-prev')).toBe(true)
+      expect(putCalls.some((c) => c.key === 'annotation-notes-whiteboard')).toBe(true)
     })
     a.unmount()
 
-    const prevCall = putCalls.find((c) => c.key === 'annotation-notes-whiteboard-prev')
-    expect(prevCall?.value).toEqual({ version: 2, currentPage: 0, pages: [oldDoc] })
+    expect(putCalls.some((c) => c.key.endsWith('-prev'))).toBe(false)
 
     const currentCalls = putCalls.filter((c) => c.key === 'annotation-notes-whiteboard')
     const lastCurrent = currentCalls[currentCalls.length - 1]?.value as any

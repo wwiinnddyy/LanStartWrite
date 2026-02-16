@@ -1,8 +1,22 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from '../Framer_Motion'
 import { cn } from '../Tailwind'
-import { postCommand } from '../toolbar/hooks/useBackend'
+import { getUiState, postCommand, putUiStateKey } from '../toolbar/hooks/useBackend'
 import { useZoomOnWheel } from '../toolbar/hooks/useZoomOnWheel'
+import {
+  CLOCK_COUNTDOWN_END_MS_UI_STATE_KEY,
+  CLOCK_COUNTDOWN_PRESET_MS_UI_STATE_KEY,
+  CLOCK_COUNTDOWN_REMAINING_MS_UI_STATE_KEY,
+  CLOCK_COUNTDOWN_RUNNING_UI_STATE_KEY,
+  CLOCK_TAB_UI_STATE_KEY,
+  CLOCK_TIMER_ELAPSED_MS_UI_STATE_KEY,
+  CLOCK_TIMER_RUNNING_UI_STATE_KEY,
+  CLOCK_TIMER_START_MS_UI_STATE_KEY,
+  NOTICE_KIND_UI_STATE_KEY,
+  UI_STATE_APP_WINDOW_ID,
+  useUiStateBus,
+  type ClockTab
+} from '../status'
 import './styles/subwindow.css'
 
 const CLOCK_MENU_BOUNDS = { width: 420, height: 320 } as const
@@ -189,8 +203,10 @@ export function ClockMenu(props: { kind: string }) {
   const rootRef = useRef<HTMLDivElement | null>(null)
   const cardRef = useRef<HTMLDivElement | null>(null)
   const reduceMotion = useReducedMotion()
+  const bus = useUiStateBus(UI_STATE_APP_WINDOW_ID)
+  const [windowVisible, setWindowVisible] = useState(() => document.visibilityState === 'visible')
   const [nowMs, setNowMs] = useState(() => Date.now())
-  const [tab, setTab] = useState<'clock' | 'timer' | 'countdown'>('clock')
+  const [tab, setTab] = useState<ClockTab>('clock')
 
   const [timerRunning, setTimerRunning] = useState(false)
   const [timerStartMs, setTimerStartMs] = useState<number | null>(null)
@@ -200,6 +216,92 @@ export function ClockMenu(props: { kind: string }) {
   const [countdownEndMs, setCountdownEndMs] = useState<number | null>(null)
   const [countdownPresetMs, setCountdownPresetMs] = useState(5 * 60 * 1000)
   const [countdownRemainingMs, setCountdownRemainingMs] = useState(5 * 60 * 1000)
+
+  const setClockTab = (next: ClockTab) => {
+    setTab(next)
+    putUiStateKey(UI_STATE_APP_WINDOW_ID, CLOCK_TAB_UI_STATE_KEY, next).catch(() => undefined)
+  }
+
+  const putClockKey = (key: string, value: unknown) => {
+    putUiStateKey(UI_STATE_APP_WINDOW_ID, key, value).catch(() => undefined)
+  }
+
+  useEffect(() => {
+    const update = () => setWindowVisible(document.visibilityState === 'visible')
+    document.addEventListener('visibilitychange', update)
+    update()
+    return () => {
+      document.removeEventListener('visibilitychange', update)
+    }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    getUiState(UI_STATE_APP_WINDOW_ID)
+      .then((state) => {
+        if (cancelled) return
+
+        const tabRaw = (state as any)?.[CLOCK_TAB_UI_STATE_KEY]
+        const nextTab: ClockTab | undefined = tabRaw === 'clock' || tabRaw === 'timer' || tabRaw === 'countdown' ? tabRaw : undefined
+        if (nextTab) setTab(nextTab)
+
+        const timerRunningRaw = (state as any)?.[CLOCK_TIMER_RUNNING_UI_STATE_KEY]
+        const timerStartMsRaw = (state as any)?.[CLOCK_TIMER_START_MS_UI_STATE_KEY]
+        const timerElapsedMsRaw = (state as any)?.[CLOCK_TIMER_ELAPSED_MS_UI_STATE_KEY]
+        const nextTimerRunning = Boolean(timerRunningRaw)
+        const nextTimerStartMs = Number(timerStartMsRaw)
+        const nextTimerElapsedMs = Number(timerElapsedMsRaw)
+        setTimerRunning(nextTimerRunning)
+        setTimerStartMs(nextTimerRunning && Number.isFinite(nextTimerStartMs) ? nextTimerStartMs : null)
+        setTimerElapsedMs(Number.isFinite(nextTimerElapsedMs) && nextTimerElapsedMs >= 0 ? nextTimerElapsedMs : 0)
+
+        const countdownRunningRaw = (state as any)?.[CLOCK_COUNTDOWN_RUNNING_UI_STATE_KEY]
+        const countdownEndMsRaw = (state as any)?.[CLOCK_COUNTDOWN_END_MS_UI_STATE_KEY]
+        const countdownPresetMsRaw = (state as any)?.[CLOCK_COUNTDOWN_PRESET_MS_UI_STATE_KEY]
+        const countdownRemainingMsRaw = (state as any)?.[CLOCK_COUNTDOWN_REMAINING_MS_UI_STATE_KEY]
+        const nextCountdownRunning = Boolean(countdownRunningRaw)
+        const nextCountdownEndMs = Number(countdownEndMsRaw)
+        const nextCountdownPresetMs = Number(countdownPresetMsRaw)
+        const nextCountdownRemainingMs = Number(countdownRemainingMsRaw)
+        const presetMs =
+          Number.isFinite(nextCountdownPresetMs) && nextCountdownPresetMs > 0 ? nextCountdownPresetMs : 5 * 60 * 1000
+        setCountdownPresetMs(presetMs)
+        if (nextCountdownRunning) {
+          if (Number.isFinite(nextCountdownEndMs)) {
+            setCountdownEndMs(nextCountdownEndMs)
+            setCountdownRemainingMs(Math.max(0, nextCountdownEndMs - Date.now()))
+          } else if (Number.isFinite(nextCountdownRemainingMs) && nextCountdownRemainingMs >= 0) {
+            setCountdownEndMs(Date.now() + nextCountdownRemainingMs)
+            setCountdownRemainingMs(nextCountdownRemainingMs)
+          } else {
+            setCountdownEndMs(null)
+            setCountdownRemainingMs(presetMs)
+          }
+        } else {
+          setCountdownEndMs(null)
+          setCountdownRemainingMs(Number.isFinite(nextCountdownRemainingMs) && nextCountdownRemainingMs >= 0 ? nextCountdownRemainingMs : presetMs)
+        }
+        setCountdownRunning(nextCountdownRunning)
+
+        const noticeKindRaw = (state as any)?.[NOTICE_KIND_UI_STATE_KEY]
+        const noticeKind = typeof noticeKindRaw === 'string' ? noticeKindRaw : ''
+        if (noticeKind === 'clockFloat' && document.visibilityState === 'visible') {
+          void postCommand('win.setNoticeVisible', { visible: false })
+        }
+      })
+      .catch(() => undefined)
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const noticeKindRaw = bus.state[NOTICE_KIND_UI_STATE_KEY]
+  const noticeKind = typeof noticeKindRaw === 'string' ? noticeKindRaw : ''
+  useEffect(() => {
+    if (noticeKind !== 'clockFloat') return
+    if (!windowVisible) return
+    void postCommand('win.setNoticeVisible', { visible: false })
+  }, [noticeKind, windowVisible])
 
   const clockText = useMemo(() => formatClock(nowMs), [nowMs])
 
@@ -230,6 +332,9 @@ export function ClockMenu(props: { kind: string }) {
     setCountdownRunning(false)
     setCountdownEndMs(null)
     setCountdownRemainingMs(0)
+    putClockKey(CLOCK_COUNTDOWN_RUNNING_UI_STATE_KEY, false)
+    putClockKey(CLOCK_COUNTDOWN_END_MS_UI_STATE_KEY, null)
+    putClockKey(CLOCK_COUNTDOWN_REMAINING_MS_UI_STATE_KEY, 0)
   }, [countdownDisplayMs, countdownRunning])
 
   const countdownPresetHms = useMemo(() => msToHms(countdownPresetMs), [countdownPresetMs])
@@ -271,13 +376,20 @@ export function ClockMenu(props: { kind: string }) {
                       whileTap={reduceMotion ? undefined : { scale: 0.96 }}
                       onClick={() => {
                         if (timerRunning) {
-                          if (timerStartMs) setTimerElapsedMs((v) => v + Math.max(0, nowMs - timerStartMs))
+                          const nextElapsed = timerStartMs ? timerElapsedMs + Math.max(0, nowMs - timerStartMs) : timerElapsedMs
+                          setTimerElapsedMs(nextElapsed)
                           setTimerStartMs(null)
                           setTimerRunning(false)
+                          putClockKey(CLOCK_TIMER_RUNNING_UI_STATE_KEY, false)
+                          putClockKey(CLOCK_TIMER_START_MS_UI_STATE_KEY, null)
+                          putClockKey(CLOCK_TIMER_ELAPSED_MS_UI_STATE_KEY, nextElapsed)
                           return
                         }
                         setTimerStartMs(nowMs)
                         setTimerRunning(true)
+                        putClockKey(CLOCK_TIMER_RUNNING_UI_STATE_KEY, true)
+                        putClockKey(CLOCK_TIMER_START_MS_UI_STATE_KEY, nowMs)
+                        putClockKey(CLOCK_TIMER_ELAPSED_MS_UI_STATE_KEY, timerElapsedMs)
                       }}
                     >
                       <AnimatePresence mode="wait" initial={false}>
@@ -303,6 +415,9 @@ export function ClockMenu(props: { kind: string }) {
                         setTimerRunning(false)
                         setTimerStartMs(null)
                         setTimerElapsedMs(0)
+                        putClockKey(CLOCK_TIMER_RUNNING_UI_STATE_KEY, false)
+                        putClockKey(CLOCK_TIMER_START_MS_UI_STATE_KEY, null)
+                        putClockKey(CLOCK_TIMER_ELAPSED_MS_UI_STATE_KEY, 0)
                       }}
                     >
                       <ResetIcon />
@@ -346,6 +461,8 @@ export function ClockMenu(props: { kind: string }) {
                             const next = hmsToMs(h, countdownPresetHms.m, countdownPresetHms.s)
                             setCountdownPresetMs(next)
                             setCountdownRemainingMs(next)
+                            putClockKey(CLOCK_COUNTDOWN_PRESET_MS_UI_STATE_KEY, next)
+                            putClockKey(CLOCK_COUNTDOWN_REMAINING_MS_UI_STATE_KEY, next)
                           }}
                         />
                         <div className="clockWheelSep" aria-hidden="true">
@@ -362,6 +479,8 @@ export function ClockMenu(props: { kind: string }) {
                             const next = hmsToMs(countdownPresetHms.h, m, countdownPresetHms.s)
                             setCountdownPresetMs(next)
                             setCountdownRemainingMs(next)
+                            putClockKey(CLOCK_COUNTDOWN_PRESET_MS_UI_STATE_KEY, next)
+                            putClockKey(CLOCK_COUNTDOWN_REMAINING_MS_UI_STATE_KEY, next)
                           }}
                         />
                         <div className="clockWheelSep" aria-hidden="true">
@@ -378,6 +497,8 @@ export function ClockMenu(props: { kind: string }) {
                             const next = hmsToMs(countdownPresetHms.h, countdownPresetHms.m, s)
                             setCountdownPresetMs(next)
                             setCountdownRemainingMs(next)
+                            putClockKey(CLOCK_COUNTDOWN_PRESET_MS_UI_STATE_KEY, next)
+                            putClockKey(CLOCK_COUNTDOWN_REMAINING_MS_UI_STATE_KEY, next)
                           }}
                         />
                       </motion.div>
@@ -393,16 +514,26 @@ export function ClockMenu(props: { kind: string }) {
                       whileTap={reduceMotion ? undefined : { scale: 0.96 }}
                       onClick={() => {
                         if (countdownRunning) {
-                          if (countdownEndMs) setCountdownRemainingMs(Math.max(0, countdownEndMs - nowMs))
+                          const nextRemaining = countdownEndMs ? Math.max(0, countdownEndMs - nowMs) : countdownRemainingMs
+                          setCountdownRemainingMs(nextRemaining)
                           setCountdownEndMs(null)
                           setCountdownRunning(false)
+                          putClockKey(CLOCK_COUNTDOWN_RUNNING_UI_STATE_KEY, false)
+                          putClockKey(CLOCK_COUNTDOWN_END_MS_UI_STATE_KEY, null)
+                          putClockKey(CLOCK_COUNTDOWN_PRESET_MS_UI_STATE_KEY, countdownPresetMs)
+                          putClockKey(CLOCK_COUNTDOWN_REMAINING_MS_UI_STATE_KEY, nextRemaining)
                           return
                         }
                         const remaining = countdownRemainingMs > 0 ? countdownRemainingMs : countdownPresetMs
                         if (remaining <= 0) return
                         if (countdownRemainingMs !== remaining) setCountdownRemainingMs(remaining)
-                        setCountdownEndMs(nowMs + remaining)
+                        const nextEndMs = nowMs + remaining
+                        setCountdownEndMs(nextEndMs)
                         setCountdownRunning(true)
+                        putClockKey(CLOCK_COUNTDOWN_RUNNING_UI_STATE_KEY, true)
+                        putClockKey(CLOCK_COUNTDOWN_END_MS_UI_STATE_KEY, nextEndMs)
+                        putClockKey(CLOCK_COUNTDOWN_PRESET_MS_UI_STATE_KEY, countdownPresetMs)
+                        putClockKey(CLOCK_COUNTDOWN_REMAINING_MS_UI_STATE_KEY, remaining)
                       }}
                     >
                       <AnimatePresence mode="wait" initial={false}>
@@ -428,6 +559,10 @@ export function ClockMenu(props: { kind: string }) {
                         setCountdownRunning(false)
                         setCountdownEndMs(null)
                         setCountdownRemainingMs(countdownPresetMs)
+                        putClockKey(CLOCK_COUNTDOWN_RUNNING_UI_STATE_KEY, false)
+                        putClockKey(CLOCK_COUNTDOWN_END_MS_UI_STATE_KEY, null)
+                        putClockKey(CLOCK_COUNTDOWN_PRESET_MS_UI_STATE_KEY, countdownPresetMs)
+                        putClockKey(CLOCK_COUNTDOWN_REMAINING_MS_UI_STATE_KEY, countdownPresetMs)
                       }}
                     >
                       <ResetIcon />
@@ -447,7 +582,7 @@ export function ClockMenu(props: { kind: string }) {
               aria-selected={tab === 'clock'}
               className={cn('clockTabButton', tab === 'clock' && 'clockTabButton--active')}
               whileTap={reduceMotion ? undefined : { scale: 0.98 }}
-              onClick={() => setTab('clock')}
+              onClick={() => setClockTab('clock')}
             >
               {tab === 'clock' && <motion.div layoutId="clockTabActiveBg" className="clockTabActiveBg" />}
               <span className="clockTabLabel">时钟</span>
@@ -458,7 +593,7 @@ export function ClockMenu(props: { kind: string }) {
               aria-selected={tab === 'timer'}
               className={cn('clockTabButton', tab === 'timer' && 'clockTabButton--active')}
               whileTap={reduceMotion ? undefined : { scale: 0.98 }}
-              onClick={() => setTab('timer')}
+              onClick={() => setClockTab('timer')}
             >
               {tab === 'timer' && <motion.div layoutId="clockTabActiveBg" className="clockTabActiveBg" />}
               <span className="clockTabLabel">计时器</span>
@@ -469,7 +604,7 @@ export function ClockMenu(props: { kind: string }) {
               aria-selected={tab === 'countdown'}
               className={cn('clockTabButton', tab === 'countdown' && 'clockTabButton--active')}
               whileTap={reduceMotion ? undefined : { scale: 0.98 }}
-              onClick={() => setTab('countdown')}
+              onClick={() => setClockTab('countdown')}
             >
               {tab === 'countdown' && <motion.div layoutId="clockTabActiveBg" className="clockTabActiveBg" />}
               <span className="clockTabLabel">倒计时</span>

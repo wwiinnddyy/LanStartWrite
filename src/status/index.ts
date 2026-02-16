@@ -16,6 +16,14 @@ import {
   NOTES_PAGE_TOTAL_UI_STATE_KEY,
   NOTES_RELOAD_REV_UI_STATE_KEY,
   NOTICE_KIND_UI_STATE_KEY,
+  CLOCK_TAB_UI_STATE_KEY,
+  CLOCK_TIMER_RUNNING_UI_STATE_KEY,
+  CLOCK_TIMER_START_MS_UI_STATE_KEY,
+  CLOCK_TIMER_ELAPSED_MS_UI_STATE_KEY,
+  CLOCK_COUNTDOWN_RUNNING_UI_STATE_KEY,
+  CLOCK_COUNTDOWN_END_MS_UI_STATE_KEY,
+  CLOCK_COUNTDOWN_PRESET_MS_UI_STATE_KEY,
+  CLOCK_COUNTDOWN_REMAINING_MS_UI_STATE_KEY,
   PDF_FILE_URL_KV_KEY,
   PDF_FILE_URL_UI_STATE_KEY,
   PEN_COLOR_UI_STATE_KEY,
@@ -86,6 +94,7 @@ import {
   type OfficePptMode,
   type VideoShowSource,
   type VideoShowViewTransform,
+  type ClockTab,
   type WritingFramework
 } from './keys'
 
@@ -106,6 +115,14 @@ export {
   NOTES_PAGE_TOTAL_UI_STATE_KEY,
   NOTES_RELOAD_REV_UI_STATE_KEY,
   NOTICE_KIND_UI_STATE_KEY,
+  CLOCK_TAB_UI_STATE_KEY,
+  CLOCK_TIMER_RUNNING_UI_STATE_KEY,
+  CLOCK_TIMER_START_MS_UI_STATE_KEY,
+  CLOCK_TIMER_ELAPSED_MS_UI_STATE_KEY,
+  CLOCK_COUNTDOWN_RUNNING_UI_STATE_KEY,
+  CLOCK_COUNTDOWN_END_MS_UI_STATE_KEY,
+  CLOCK_COUNTDOWN_PRESET_MS_UI_STATE_KEY,
+  CLOCK_COUNTDOWN_REMAINING_MS_UI_STATE_KEY,
   PDF_FILE_URL_KV_KEY,
   PDF_FILE_URL_UI_STATE_KEY,
   PEN_COLOR_UI_STATE_KEY,
@@ -176,6 +193,7 @@ export {
   type OfficePptMode,
   type VideoShowSource,
   type VideoShowViewTransform,
+  type ClockTab,
   type WritingFramework
 } from './keys'
 
@@ -281,6 +299,22 @@ export async function selectDirectory(): Promise<{ dir?: string; dirUrl?: string
   const dir = typeof body?.dir === 'string' ? body.dir : undefined
   const dirUrl = typeof body?.dirUrl === 'string' ? body.dirUrl : undefined
   return { dir, dirUrl }
+}
+
+export async function selectCunoxExportFile(): Promise<{ file?: string; fileUrl?: string }> {
+  const res = (await requireLanstart().apiRequest({ method: 'POST', path: '/dialog/select-cunox-export-file' })) as any
+  const body = res?.body as any
+  const file = typeof body?.file === 'string' ? body.file : undefined
+  const fileUrl = typeof body?.fileUrl === 'string' ? body.fileUrl : undefined
+  return { file, fileUrl }
+}
+
+export async function selectCunoxImportFile(): Promise<{ file?: string; fileUrl?: string }> {
+  const res = (await requireLanstart().apiRequest({ method: 'POST', path: '/dialog/select-cunox-import-file' })) as any
+  const body = res?.body as any
+  const file = typeof body?.file === 'string' ? body.file : undefined
+  const fileUrl = typeof body?.fileUrl === 'string' ? body.fileUrl : undefined
+  return { file, fileUrl }
 }
 
 export async function getUiState(windowId: string): Promise<Record<string, unknown>> {
@@ -482,14 +516,57 @@ export function useAppAppearance() {
 
 export function useAppMode() {
   const [appMode, setAppModeState] = usePersistedState<AppMode>(APP_MODE_KV_KEY, 'toolbar', {
-    validate: isAppMode,
-    mapLoad: (v) => (v === 'pdf' ? 'toolbar' : v),
-    mapSave: (v) => (v === 'pdf' ? 'toolbar' : v)
+    validate: isAppMode
   })
   const bus = useUiStateBus(UI_STATE_APP_WINDOW_ID)
+  const busRef = useRef(bus)
+  busRef.current = bus
+  const lastBusModeRef = useRef<AppMode | null>(null)
+  const lastRestoredModeRef = useRef<AppMode | null>(null)
 
   const busModeRaw = bus.state[APP_MODE_UI_STATE_KEY]
   const busMode: AppMode | undefined = isAppMode(busModeRaw) ? busModeRaw : undefined
+
+  const readNotesPageState = (snapshot: Record<string, unknown>): { index: number; total: number } => {
+    const totalRaw = snapshot[NOTES_PAGE_TOTAL_UI_STATE_KEY]
+    const totalNum = typeof totalRaw === 'number' ? totalRaw : typeof totalRaw === 'string' ? Number(totalRaw) : NaN
+    const total = Number.isFinite(totalNum) ? Math.max(1, Math.min(2000, Math.floor(totalNum))) : 1
+    const indexRaw = snapshot[NOTES_PAGE_INDEX_UI_STATE_KEY]
+    const indexNum = typeof indexRaw === 'number' ? indexRaw : typeof indexRaw === 'string' ? Number(indexRaw) : NaN
+    const index = Number.isFinite(indexNum) ? Math.max(0, Math.min(total - 1, Math.floor(indexNum))) : 0
+    return { index, total }
+  }
+
+  const notesPageIndexKvKey = (mode: AppMode): string => `notes-page-index:${mode}`
+  const notesPageTotalKvKey = (mode: AppMode): string => `notes-page-total:${mode}`
+
+  const persistNotesPageStateForMode = async (mode: AppMode, snapshot: Record<string, unknown>): Promise<void> => {
+    const { index, total } = readNotesPageState(snapshot)
+    try {
+      await Promise.all([putKv(notesPageIndexKvKey(mode), index), putKv(notesPageTotalKvKey(mode), total)])
+    } catch {}
+  }
+
+  const restoreNotesPageStateForMode = async (mode: AppMode): Promise<void> => {
+    const [indexRes, totalRes] = await Promise.allSettled([getKv<unknown>(notesPageIndexKvKey(mode)), getKv<unknown>(notesPageTotalKvKey(mode))])
+    const indexRaw = indexRes.status === 'fulfilled' ? indexRes.value : undefined
+    const totalRaw = totalRes.status === 'fulfilled' ? totalRes.value : undefined
+    const totalNum = typeof totalRaw === 'number' ? totalRaw : typeof totalRaw === 'string' ? Number(totalRaw) : NaN
+    const total = Number.isFinite(totalNum) ? Math.max(1, Math.min(2000, Math.floor(totalNum))) : 1
+    const indexNum = typeof indexRaw === 'number' ? indexRaw : typeof indexRaw === 'string' ? Number(indexRaw) : NaN
+    const index = Number.isFinite(indexNum) ? Math.max(0, Math.min(total - 1, Math.floor(indexNum))) : 0
+    try {
+      await busRef.current.setKey(NOTES_PAGE_TOTAL_UI_STATE_KEY, total)
+      await busRef.current.setKey(NOTES_PAGE_INDEX_UI_STATE_KEY, index)
+    } catch {}
+  }
+
+  useEffect(() => {
+    if (busMode) return
+    busRef.current.setKey(APP_MODE_UI_STATE_KEY, appMode).catch(() => undefined)
+    postCommand('settings.setAppMode', { mode: appMode }).catch(() => undefined)
+    restoreNotesPageStateForMode(appMode).catch(() => undefined)
+  }, [appMode, busMode])
 
   useEffect(() => {
     if (!busMode) return
@@ -497,11 +574,25 @@ export function useAppMode() {
     setAppModeState(busMode)
   }, [appMode, busMode, setAppModeState])
 
+  useEffect(() => {
+    if (!busMode) return
+    if (lastRestoredModeRef.current === busMode) return
+
+    const prev = lastBusModeRef.current
+    lastBusModeRef.current = busMode
+    lastRestoredModeRef.current = busMode
+
+    if (prev && prev !== busMode) persistNotesPageStateForMode(prev, bus.state).catch(() => undefined)
+    restoreNotesPageStateForMode(busMode).catch(() => undefined)
+  }, [busMode])
+
   const setAppMode = (next: AppMode) => {
     if (next === appMode) return
+    persistNotesPageStateForMode(appMode, bus.state).catch(() => undefined)
     setAppModeState(next)
     bus.setKey(APP_MODE_UI_STATE_KEY, next).catch(() => undefined)
     postCommand('settings.setAppMode', { mode: next }).catch(() => undefined)
+    restoreNotesPageStateForMode(next).catch(() => undefined)
   }
 
   return { appMode, setAppMode }

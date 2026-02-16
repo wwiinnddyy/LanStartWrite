@@ -61,8 +61,6 @@ type PersistedAnnotationDocV1 = { version: 1; nodes: PersistedAnnotationNodeV1[]
 
 type PersistedAnnotationBookV2 = { version: 2; currentPage: number; pages: PersistedAnnotationDocV1[] }
 
-const rotatedNotesKvKeys = new Set<string>()
-
 function isPersistedAnnotationDocV1(v: unknown): v is PersistedAnnotationDocV1 {
   if (!v || typeof v !== 'object') return false
   const d = v as any
@@ -175,7 +173,11 @@ const DEFAULT_LEAFER_SETTINGS: LeaferSettings = {
   postBakeOptimizeOnce: false
 }
 
-export function AnnotationOverlayApp() {
+type AnnotationOverlayAppProps = {
+  forcedAppMode?: 'toolbar' | 'whiteboard' | 'video-show' | 'pdf'
+}
+
+export function AnnotationOverlayApp(props: AnnotationOverlayAppProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const bus = useUiStateBus(UI_STATE_APP_WINDOW_ID)
   const setUiStateKeyRef = useRef(bus.setKey)
@@ -291,7 +293,7 @@ export function AnnotationOverlayApp() {
     eraserThicknessRef.current = eraserThickness
   }, [eraserThickness])
 
-  const appModeRaw = bus.state[APP_MODE_UI_STATE_KEY]
+  const appModeRaw = props.forcedAppMode ?? bus.state[APP_MODE_UI_STATE_KEY]
   const appMode =
     appModeRaw === 'whiteboard' ? 'whiteboard' : appModeRaw === 'video-show' ? 'video-show' : appModeRaw === 'pdf' ? 'pdf' : 'toolbar'
   const isWhiteboardLike = appMode === 'whiteboard' || appMode === 'video-show' || appMode === 'pdf'
@@ -1220,7 +1222,6 @@ struct VSOut {
             : appMode === 'pdf'
               ? 'annotation-notes-pdf'
               : 'annotation-notes-toolbar'
-    const notesHistoryKvKey = `${notesKvKey}-prev`
     let serializePersistedDoc: null | (() => PersistedAnnotationDocV1) = null
     let persistTimer: number | null = null
     let notesBook: PersistedAnnotationBookV2 = { version: 2, currentPage: 0, pages: [createEmptyDocV1()] }
@@ -1609,28 +1610,12 @@ struct VSOut {
 
       const hydrate = async () => {
         try {
-          if (!rotatedNotesKvKeys.has(notesKvKey)) {
-            rotatedNotesKvKeys.add(notesKvKey)
-
-            let prev: PersistedAnnotationBookV2 | null = null
-            try {
-              const loaded = await getKv<unknown>(notesKvKey)
-              if (isPersistedAnnotationBookV2(loaded)) prev = loaded
-              else if (isPersistedAnnotationDocV1(loaded)) prev = { version: 2, currentPage: 0, pages: [loaded] }
-            } catch {}
-
-            if (prev) putKv(notesHistoryKvKey, prev).catch(() => undefined)
-
-            notesBook = { version: 2, currentPage: 0, pages: [createEmptyDocV1()] }
-            ensureBookShape(0, 1)
-            loadDoc(notesBook.pages[notesPageIndex] ?? createEmptyDocV1())
-            putKv(notesKvKey, notesBook).catch(() => undefined)
-            void putUiStateKey(UI_STATE_APP_WINDOW_ID, NOTES_PAGE_TOTAL_UI_STATE_KEY, notesPageTotal)
-            void putUiStateKey(UI_STATE_APP_WINDOW_ID, NOTES_PAGE_INDEX_UI_STATE_KEY, notesPageIndex)
-            return
+          let loaded: unknown
+          try {
+            loaded = await getKv<unknown>(notesKvKey)
+          } catch {
+            loaded = null
           }
-
-          const loaded = await getKv<unknown>(notesKvKey)
           if (isPersistedAnnotationBookV2(loaded)) {
             notesBook = loaded
           } else if (isPersistedAnnotationDocV1(loaded)) {
@@ -1638,6 +1623,9 @@ struct VSOut {
           } else {
             ensureBookShape(0, 1)
             loadDoc(notesBook.pages[notesPageIndex] ?? createEmptyDocV1())
+            putKv(notesKvKey, notesBook).catch(() => undefined)
+            void putUiStateKey(UI_STATE_APP_WINDOW_ID, NOTES_PAGE_TOTAL_UI_STATE_KEY, notesPageTotal)
+            void putUiStateKey(UI_STATE_APP_WINDOW_ID, NOTES_PAGE_INDEX_UI_STATE_KEY, notesPageIndex)
             return
           }
 
@@ -3131,28 +3119,12 @@ struct VSOut {
 
     const hydrate = async () => {
       try {
-        if (!rotatedNotesKvKeys.has(notesKvKey)) {
-          rotatedNotesKvKeys.add(notesKvKey)
-
-          let prev: PersistedAnnotationBookV2 | null = null
-          try {
-            const loaded = await getKv<unknown>(notesKvKey)
-            if (isPersistedAnnotationBookV2(loaded)) prev = loaded
-            else if (isPersistedAnnotationDocV1(loaded)) prev = { version: 2, currentPage: 0, pages: [loaded] }
-          } catch {}
-
-          if (prev) putKv(notesHistoryKvKey, prev).catch(() => undefined)
-
-          notesBook = { version: 2, currentPage: 0, pages: [createEmptyDocV1()] }
-          ensureBookShape(0, 1)
-          loadDoc(notesBook.pages[notesPageIndex] ?? createEmptyDocV1())
-          putKv(notesKvKey, notesBook).catch(() => undefined)
-          void putUiStateKey(UI_STATE_APP_WINDOW_ID, NOTES_PAGE_TOTAL_UI_STATE_KEY, notesPageTotal)
-          void putUiStateKey(UI_STATE_APP_WINDOW_ID, NOTES_PAGE_INDEX_UI_STATE_KEY, notesPageIndex)
-          return
+        let loaded: unknown
+        try {
+          loaded = await getKv<unknown>(notesKvKey)
+        } catch {
+          loaded = null
         }
-
-        const loaded = await getKv<unknown>(notesKvKey)
         if (isPersistedAnnotationBookV2(loaded)) {
           notesBook = loaded
         } else if (isPersistedAnnotationDocV1(loaded)) {
@@ -3160,6 +3132,9 @@ struct VSOut {
         } else {
           ensureBookShape(0, 1)
           loadDoc(notesBook.pages[notesPageIndex] ?? createEmptyDocV1())
+          putKv(notesKvKey, notesBook).catch(() => undefined)
+          void putUiStateKey(UI_STATE_APP_WINDOW_ID, NOTES_PAGE_TOTAL_UI_STATE_KEY, notesPageTotal)
+          void putUiStateKey(UI_STATE_APP_WINDOW_ID, NOTES_PAGE_INDEX_UI_STATE_KEY, notesPageIndex)
           return
         }
 

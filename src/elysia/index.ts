@@ -2,12 +2,12 @@ import { Elysia, t } from 'elysia'
 import { node } from '@elysiajs/node'
 import { createInterface } from 'node:readline'
 import { randomUUID } from 'node:crypto'
-import { open, readFile, readdir, stat } from 'node:fs/promises'
+import { open, readFile, stat } from 'node:fs/promises'
 import { extname, join } from 'node:path'
 import { networkInterfaces } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { deleteByPrefix, deleteValue, getValue, openLeavelDb, putValue } from '../LeavelDB'
-import { exportDbToCunoxDir, importCunoxDirToDb } from '../CUNOX'
+import { exportDbToCunoxDir, exportDbToCunoxFile, importCunoxDirToDb, importCunoxFileToDb } from '../CUNOX'
 import {
   ACTIVE_APP_UI_STATE_KEY,
   APPEARANCE_KV_KEY,
@@ -168,6 +168,74 @@ function isVideoShowPageBookV1(v: unknown): v is VideoShowPageBookV1 {
   if (b.version !== 1) return false
   if (!Array.isArray(b.pages)) return false
   return true
+}
+
+type PersistedAnnotationNodeV1 = {
+  role: 'stroke' | 'eraserPixel'
+  strokeWidth: number
+  points: number[]
+  color?: string
+  opacity?: number
+  pfh?: boolean
+  groupId?: number
+}
+
+type PersistedAnnotationDocV1 = { version: 1; nodes: PersistedAnnotationNodeV1[] }
+type PersistedAnnotationBookV2 = { version: 2; currentPage: number; pages: PersistedAnnotationDocV1[] }
+
+function createEmptyAnnotationBookV2(): PersistedAnnotationBookV2 {
+  return { version: 2, currentPage: 0, pages: [{ version: 1, nodes: [] }] }
+}
+
+function isEmptyAnnotationNotesValue(v: unknown): boolean {
+  if (!v || typeof v !== 'object') return false
+  const o = v as any
+  if (o.version === 1) return Array.isArray(o.nodes) && o.nodes.length === 0
+  if (o.version !== 2) return false
+  const currentPage = Number(o.currentPage)
+  if (!Number.isFinite(currentPage) || currentPage !== 0) return false
+  if (!Array.isArray(o.pages) || o.pages.length !== 1) return false
+  const p0 = o.pages[0] as any
+  if (!p0 || typeof p0 !== 'object') return false
+  if (p0.version !== 1) return false
+  return Array.isArray(p0.nodes) && p0.nodes.length === 0
+}
+
+function coerceAnnotationNotesHistoryValue(v: unknown): unknown {
+  if (!v || typeof v !== 'object') return v
+  const o = v as any
+  if (o.version === 2 && Array.isArray(o.pages)) return v
+  if (o.version === 1 && Array.isArray(o.nodes)) return { version: 2, currentPage: 0, pages: [v as any] } satisfies PersistedAnnotationBookV2
+  return v
+}
+
+async function rotateNotesKeyOnStartup(key: string): Promise<void> {
+  let loaded: unknown | undefined
+  try {
+    loaded = await getValue(db, key)
+  } catch {
+    loaded = undefined
+  }
+
+  if (loaded !== undefined && !isEmptyAnnotationNotesValue(loaded)) {
+    try {
+      await putValue(db, `${key}-prev`, coerceAnnotationNotesHistoryValue(loaded))
+    } catch {}
+  }
+
+  try {
+    await putValue(db, key, createEmptyAnnotationBookV2())
+  } catch {}
+}
+
+async function initNotesSessionOnStartup(): Promise<void> {
+  await Promise.allSettled([
+    rotateNotesKeyOnStartup('annotation-notes-toolbar'),
+    rotateNotesKeyOnStartup('annotation-notes-whiteboard'),
+    rotateNotesKeyOnStartup('annotation-notes-video-show'),
+    rotateNotesKeyOnStartup('annotation-notes-pdf'),
+    rotateNotesKeyOnStartup('annotation-notes-ppt')
+  ])
 }
 
 function toCnInt(v: number): string {
@@ -404,7 +472,7 @@ type PdfFileSession = {
 
 const pdfFileSessions = new Map<string, PdfFileSession>()
 const PDF_FILE_SESSION_TTL_MS = 10 * 60 * 1000
-const PDF_MAX_BYTES = 80 * 1024 * 1024
+const PDF_MAX_BYTES = 256 * 1024 * 1024
 const PDF_CHUNK_MAX_BYTES = 1024 * 1024
 
 function cleanupPdfFileSessions(): void {
@@ -623,10 +691,7 @@ async function handleCommand(command: string, payload: unknown): Promise<Command
       }
 
       if (action === 'setAppMode') {
-        const modeRaw = coerceString((payload as any)?.mode)
-        const mode = modeRaw === 'whiteboard' ? 'whiteboard' : modeRaw === 'video-show' ? 'video-show' : 'toolbar'
-        requestMain({ type: 'SET_APP_MODE', mode })
-        return { ok: true }
+        return await handleCommand('settings.setAppMode', payload)
       }
 
       if (action === 'setAnnotationInput') {
@@ -728,12 +793,35 @@ async function handleCommand(command: string, payload: unknown): Promise<Command
         const modeRaw = coerceString((payload as any)?.mode)
         const mode = isAppMode(modeRaw) ? modeRaw : undefined
         if (!mode) return { ok: false, error: 'BAD_MODE' }
+        const state = getOrInitUiState(UI_STATE_APP_WINDOW_ID)
+        const prevModeRaw = state[APP_MODE_UI_STATE_KEY]
+        const prevMode = isAppMode(prevModeRaw) ? prevModeRaw : undefined
+        if (prevMode && prevMode !== mode) {
+          const { index, total } = coercePageIndexTotal(state)
+          await Promise.allSettled([
+            putValue(db, `notes-page-index:${prevMode}`, index),
+            putValue(db, `notes-page-total:${prevMode}`, total)
+          ])
+        }
         await putValue(db, APP_MODE_KV_KEY, mode)
         emitEvent('KV_PUT', { key: APP_MODE_KV_KEY })
-        const state = getOrInitUiState(UI_STATE_APP_WINDOW_ID)
         state[APP_MODE_UI_STATE_KEY] = mode
         emitEvent('UI_STATE_PUT', { windowId: UI_STATE_APP_WINDOW_ID, key: APP_MODE_UI_STATE_KEY, value: mode })
         requestMain({ type: 'SET_APP_MODE', mode })
+
+        const [idxRes, totalRes] = await Promise.allSettled([
+          getValue(db, `notes-page-index:${mode}`),
+          getValue(db, `notes-page-total:${mode}`)
+        ])
+        const totalRaw = totalRes.status === 'fulfilled' ? Number(totalRes.value) : NaN
+        const total = Number.isFinite(totalRaw) ? Math.max(1, Math.min(2000, Math.floor(totalRaw))) : 1
+        const idxRaw = idxRes.status === 'fulfilled' ? Number(idxRes.value) : NaN
+        const index = Number.isFinite(idxRaw) ? Math.max(0, Math.min(total - 1, Math.floor(idxRaw))) : 0
+        state[NOTES_PAGE_TOTAL_UI_STATE_KEY] = total
+        state[NOTES_PAGE_INDEX_UI_STATE_KEY] = index
+        emitEvent('UI_STATE_PUT', { windowId: UI_STATE_APP_WINDOW_ID, key: NOTES_PAGE_TOTAL_UI_STATE_KEY, value: total })
+        emitEvent('UI_STATE_PUT', { windowId: UI_STATE_APP_WINDOW_ID, key: NOTES_PAGE_INDEX_UI_STATE_KEY, value: index })
+        await applyWhiteboardBackgroundForPage({ state, index, total })
         return { ok: true }
       }
 
@@ -1760,6 +1848,18 @@ const api = new Elysia({ adapter: node() })
     const dirUrl = typeof (result as any)?.dirUrl === 'string' ? (result as any).dirUrl : undefined
     return { ok: true, dir, dirUrl }
   })
+  .post('/dialog/select-cunox-export-file', async () => {
+    const result = await requestMainRpc<{ file?: string; fileUrl?: string }>('selectCunoxExportFile')
+    const file = typeof (result as any)?.file === 'string' ? (result as any).file : undefined
+    const fileUrl = typeof (result as any)?.fileUrl === 'string' ? (result as any).fileUrl : undefined
+    return { ok: true, file, fileUrl }
+  })
+  .post('/dialog/select-cunox-import-file', async () => {
+    const result = await requestMainRpc<{ file?: string; fileUrl?: string }>('selectCunoxImportFile')
+    const file = typeof (result as any)?.file === 'string' ? (result as any).file : undefined
+    const fileUrl = typeof (result as any)?.fileUrl === 'string' ? (result as any).fileUrl : undefined
+    return { ok: true, file, fileUrl }
+  })
   .post(
     '/img/file-to-data-url',
     async ({ body, set }) => {
@@ -1834,15 +1934,22 @@ const api = new Elysia({ adapter: node() })
     async ({ body, set }) => {
       cleanupPdfFileSessions()
       const fileUrl = typeof (body as any)?.fileUrl === 'string' ? String((body as any).fileUrl) : ''
-      if (!fileUrl || !fileUrl.startsWith('file:')) {
+      if (!fileUrl) {
         set.status = 400
         return { ok: false, error: 'BAD_FILE_URL' }
       }
 
       let filePath = ''
-      try {
-        filePath = fileURLToPath(fileUrl)
-      } catch {
+      if (fileUrl.startsWith('file:')) {
+        try {
+          filePath = fileURLToPath(fileUrl)
+        } catch {
+          set.status = 400
+          return { ok: false, error: 'BAD_FILE_URL' }
+        }
+      } else if (/^[a-zA-Z]:[\\/]/.test(fileUrl) || fileUrl.startsWith('\\\\')) {
+        filePath = fileUrl
+      } else {
         set.status = 400
         return { ok: false, error: 'BAD_FILE_URL' }
       }
@@ -2072,38 +2179,32 @@ const api = new Elysia({ adapter: node() })
     '/cunox/export',
     async ({ body, set }) => {
       try {
-        const rawDir = String(body.dir ?? '')
-        const baseDir = rawDir.startsWith('file:') ? fileURLToPath(rawDir) : rawDir
-        if (!baseDir) throw new Error('BAD_DIR')
-
         const rawName = typeof (body as any)?.name === 'string' ? String((body as any).name) : ''
         const safeName = rawName.replace(/[\\/:*?"<>|\r\n]+/g, '-').replace(/\s+/g, ' ').trim()
+        const rawOutFile = typeof (body as any)?.outFile === 'string' ? String((body as any).outFile) : ''
+        const rawDir = typeof (body as any)?.dir === 'string' ? String((body as any).dir) : ''
+        const baseDir = rawDir && rawDir.startsWith('file:') ? fileURLToPath(rawDir) : rawDir
+        const outFileFromBody = rawOutFile && rawOutFile.startsWith('file:') ? fileURLToPath(rawOutFile) : rawOutFile
 
-        let outDir =
-          baseDir.toLowerCase().endsWith('.cunox') && !rawName
-            ? baseDir
-            : join(
-                baseDir,
-                (safeName || `LanStartWrite-${new Date().toISOString().replace(/[:.]/g, '-')}`).replace(/\.cunox$/i, '') + '.cunox'
-              )
-
-        if (!body.overwrite) {
-          const existed = await stat(outDir)
-            .then(() => true)
-            .catch(() => false)
-          if (existed) {
-            outDir = outDir.replace(/\.cunox$/i, '') + `-${new Date().toISOString().replace(/[:.]/g, '-')}.cunox`
-          }
+        let outFile = outFileFromBody
+        if (!outFile) {
+          if (!baseDir) throw new Error('BAD_DIR')
+          outFile = join(
+            baseDir,
+            (safeName || `LanStartWrite-${new Date().toISOString().replace(/[:.]/g, '-')}`).replace(/\.cunox$/i, '') + '.cunox'
+          )
         }
+        const outLower = outFile.toLowerCase()
+        if (!outLower.endsWith('.cunox') && !outLower.endsWith('.zip')) outFile = outFile + '.cunox'
 
-        emitEvent('CUNOX_EXPORT_START', { outDir })
-        const res = await exportDbToCunoxDir(db, {
-          outDir,
-          overwrite: Boolean(body.overwrite),
-          include: body.include ?? undefined
+        emitEvent('CUNOX_EXPORT_START', { outFile })
+        const res = await exportDbToCunoxFile(db, {
+          outFile,
+          overwrite: Boolean((body as any).overwrite),
+          include: (body as any).include ?? undefined
         })
-        emitEvent('CUNOX_EXPORT_DONE', { outDir: res.outDir })
-        return { ok: true, outDir: res.outDir, manifest: res.manifest }
+        emitEvent('CUNOX_EXPORT_DONE', { outFile: res.outFile })
+        return { ok: true, outFile: res.outFile, manifest: res.manifest }
       } catch (e) {
         emitEvent('CUNOX_EXPORT_ERROR', { error: String(e) })
         set.status = 400
@@ -2112,7 +2213,8 @@ const api = new Elysia({ adapter: node() })
     },
     {
       body: t.Object({
-        dir: t.String(),
+        dir: t.Optional(t.String()),
+        outFile: t.Optional(t.String()),
         name: t.Optional(t.String()),
         overwrite: t.Optional(t.Boolean()),
         include: t.Optional(
@@ -2130,31 +2232,15 @@ const api = new Elysia({ adapter: node() })
     '/cunox/import',
     async ({ body, set }) => {
       try {
-        const rawDir = String(body.dir ?? '')
-        let dir = rawDir.startsWith('file:') ? fileURLToPath(rawDir) : rawDir
-        const manifestPath = join(dir, 'cunox.ucixml')
-        const hasManifest = await stat(manifestPath)
-          .then(() => true)
-          .catch(() => false)
-        if (!hasManifest) {
-          const entries = await readdir(dir, { withFileTypes: true }).catch(() => [])
-          const candidates: string[] = []
-          for (const ent of entries) {
-            if (!ent.isDirectory()) continue
-            const name = ent.name
-            if (!name.toLowerCase().endsWith('.cunox')) continue
-            const abs = join(dir, name)
-            const ok = await stat(join(abs, 'cunox.ucixml'))
-              .then(() => true)
-              .catch(() => false)
-            if (ok) candidates.push(abs)
-            if (candidates.length > 1) break
-          }
-          if (candidates.length === 1) dir = candidates[0]
-          else throw new Error('CUNOX_DIR_NOT_FOUND')
+        const rawFile = typeof (body as any)?.file === 'string' ? String((body as any).file) : ''
+        const rawDir = typeof (body as any)?.dir === 'string' ? String((body as any).dir) : ''
+        if (rawFile) {
+          await importCunoxFileToDb(db, { file: rawFile, mode: 'replace' })
+        } else {
+          const dir = rawDir.startsWith('file:') ? fileURLToPath(rawDir) : rawDir
+          if (!dir) throw new Error('BAD_DIR')
+          await importCunoxDirToDb(db, { dir, mode: 'replace' })
         }
-
-        await importCunoxDirToDb(db, { dir, mode: 'replace' })
         return { ok: true }
       } catch (e) {
         set.status = 400
@@ -2163,7 +2249,8 @@ const api = new Elysia({ adapter: node() })
     },
     {
       body: t.Object({
-        dir: t.String()
+        dir: t.Optional(t.String()),
+        file: t.Optional(t.String())
       })
     }
   )
@@ -2483,6 +2570,10 @@ const castApi = new Elysia({ adapter: node() })
 async function bootstrap(): Promise<void> {
   try {
     await cleanupLegacyPersistedMonitoringData()
+  } catch {}
+
+  try {
+    await initNotesSessionOnStartup()
   } catch {}
 
   try {

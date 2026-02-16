@@ -42,6 +42,14 @@ type PersistedAnnotationNodeV1 = {
 
 type PersistedAnnotationDocV1 = { version: 1; nodes: PersistedAnnotationNodeV1[] }
 
+function normalizePdfFileRef(v: unknown): string {
+  if (typeof v !== 'string') return ''
+  if (!v) return ''
+  if (v.startsWith('file:')) return v
+  if (/^[a-zA-Z]:[\\/]/.test(v) || v.startsWith('\\\\')) return v
+  return ''
+}
+
 type PersistedAnnotationBookV2 = { version: 2; currentPage: number; pages: PersistedAnnotationDocV1[] }
 
 type WhiteboardCanvasPageV1 = { bgColor?: string; bgImageUrl?: string; bgImageOpacity?: number }
@@ -632,7 +640,7 @@ export function PageThumbnailsMenuWindow() {
   const [defaultBg, setDefaultBg] = useState<{ color: string; imageUrl: string; imageOpacity: number }>({ color: '#ffffff', imageUrl: '', imageOpacity: 0.5 })
   const [persistedPdfFileUrl, setPersistedPdfFileUrl] = useState<string>('')
   const pdfUiFileUrlRaw = bus.state[PDF_FILE_URL_UI_STATE_KEY]
-  const pdfUiFileUrl = isFileOrDataUrl(pdfUiFileUrlRaw) ? String(pdfUiFileUrlRaw ?? '') : ''
+  const pdfUiFileUrl = normalizePdfFileRef(pdfUiFileUrlRaw)
   const pdfFileUrl = pdfUiFileUrl || persistedPdfFileUrl
   const [pdfDoc, setPdfDoc] = useState<any | null>(null)
   const [pdfError, setPdfError] = useState('')
@@ -691,7 +699,7 @@ export function PageThumbnailsMenuWindow() {
     if (appMode === 'pdf' && !pdfUiFileUrl) {
       try {
         const loaded = await getKv<unknown>(PDF_FILE_URL_KV_KEY)
-        setPersistedPdfFileUrl(isFileOrDataUrl(loaded) ? String(loaded ?? '') : '')
+        setPersistedPdfFileUrl(normalizePdfFileRef(loaded))
       } catch {
         setPersistedPdfFileUrl('')
       }

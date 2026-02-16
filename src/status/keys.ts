@@ -83,6 +83,16 @@ export type VideoShowViewTransform = { x: number; y: number; scale: number; rot:
 
 export const NOTICE_KIND_UI_STATE_KEY = 'noticeKind'
 
+export type ClockTab = 'clock' | 'timer' | 'countdown'
+export const CLOCK_TAB_UI_STATE_KEY = 'clockTab'
+export const CLOCK_TIMER_RUNNING_UI_STATE_KEY = 'clockTimerRunning'
+export const CLOCK_TIMER_START_MS_UI_STATE_KEY = 'clockTimerStartMs'
+export const CLOCK_TIMER_ELAPSED_MS_UI_STATE_KEY = 'clockTimerElapsedMs'
+export const CLOCK_COUNTDOWN_RUNNING_UI_STATE_KEY = 'clockCountdownRunning'
+export const CLOCK_COUNTDOWN_END_MS_UI_STATE_KEY = 'clockCountdownEndMs'
+export const CLOCK_COUNTDOWN_PRESET_MS_UI_STATE_KEY = 'clockCountdownPresetMs'
+export const CLOCK_COUNTDOWN_REMAINING_MS_UI_STATE_KEY = 'clockCountdownRemainingMs'
+
 export type OfficePptMode = 'inkeys' | 'based' | 'vsto'
 export const OFFICE_PPT_MODE_KV_KEY = 'office-ppt-mode'
 export const OFFICE_PPT_MODE_UI_STATE_KEY = 'officePptMode'

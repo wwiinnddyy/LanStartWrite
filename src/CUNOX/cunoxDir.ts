@@ -1,12 +1,17 @@
 import { createHash } from 'node:crypto'
-import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
-import { basename, extname, join } from 'node:path'
+import { createWriteStream } from 'node:fs'
+import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { basename, extname, join, posix, relative, resolve, sep } from 'node:path'
+import type { Readable } from 'node:stream'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import type { LeavelDb } from '../LeavelDB'
 import { getValue, putValue } from '../LeavelDB'
 import { VIDEO_SHOW_PAGES_KV_KEY, WHITEBOARD_CANVAS_PAGES_KV_KEY } from '../status/keys'
 import { buildCunoxManifestXml, parseCunoxManifestXml, type CunoxManifestV1, type CunoxPageType, type CunoxResource, type CunoxScene, type CunoxSceneKind } from './manifest'
 import { decodeInkmlAndExcToDoc, encodeDocToInkmlAndExc, type PersistedAnnotationBookV2, type PersistedAnnotationDocV1, type PersistedAnnotationNodeV1 } from './inkml'
+import * as yauzl from 'yauzl'
+import * as yazl from 'yazl'
 
 type WhiteboardCanvasPageV1 = { bgColor?: string; bgImageUrl?: string; bgImageOpacity?: number }
 type WhiteboardCanvasBookV1 = { version: 1; pages: WhiteboardCanvasPageV1[] }
@@ -22,6 +27,17 @@ export type CunoxExportOptions = {
 
 export type CunoxImportOptions = {
   dir: string
+  mode?: 'replace'
+}
+
+export type CunoxExportFileOptions = {
+  outFile: string
+  overwrite?: boolean
+  include?: Partial<Record<CunoxSceneKind, boolean>>
+}
+
+export type CunoxImportFileOptions = {
+  file: string
   mode?: 'replace'
 }
 
@@ -244,6 +260,114 @@ async function ensureCleanOutDir(outDir: string, overwrite: boolean | undefined)
   await mkdir(outDir, { recursive: true })
 }
 
+async function zipDirectoryToFile(srcDir: string, outFile: string): Promise<void> {
+  const srcAbs = resolve(srcDir)
+  const outAbs = resolve(outFile)
+  await mkdir(join(outAbs, '..'), { recursive: true })
+
+  const zip = new yazl.ZipFile()
+
+  const walk = async (dir: string) => {
+    const entries = await readdir(dir, { withFileTypes: true })
+    for (const ent of entries) {
+      const abs = join(dir, ent.name)
+      if (ent.isDirectory()) {
+        await walk(abs)
+        continue
+      }
+      if (!ent.isFile()) continue
+      const rel = relative(srcAbs, abs).split(sep).join('/')
+      if (!rel || rel.startsWith('..')) continue
+      zip.addFile(abs, rel)
+    }
+  }
+
+  await walk(srcAbs)
+
+  await new Promise<void>((resolvePromise, rejectPromise) => {
+    const ws = createWriteStream(outAbs)
+    ws.on('error', rejectPromise)
+    ws.on('close', () => resolvePromise())
+    zip.outputStream.pipe(ws)
+    zip.end()
+  })
+}
+
+async function unzipFileToDirectory(zipFilePath: string, outDir: string): Promise<void> {
+  const outAbs = resolve(outDir)
+  await mkdir(outAbs, { recursive: true })
+
+  const isSafeRel = (p: string): string | null => {
+    const rel = String(p ?? '').replace(/\\/g, '/')
+    const normalized = posix.normalize(rel)
+    if (!normalized || normalized === '.' || normalized.startsWith('..')) return null
+    if (posix.isAbsolute(normalized)) return null
+    if (/^[a-zA-Z]:/.test(normalized)) return null
+    return normalized
+  }
+
+  await new Promise<void>((resolvePromise, rejectPromise) => {
+    yauzl.open(zipFilePath, { lazyEntries: true }, (err: Error | null, zip: yauzl.ZipFile | undefined) => {
+      if (err || !zip) return rejectPromise(err ?? new Error('ZIP_OPEN_FAILED'))
+
+      const done = (e?: unknown) => {
+        try {
+          zip.close()
+        } catch {}
+        if (e) rejectPromise(e)
+        else resolvePromise()
+      }
+
+      zip.readEntry()
+      zip.on('entry', (entry: yauzl.Entry) => {
+        const rel = isSafeRel(entry.fileName)
+        if (!rel) return done(new Error('ZIP_PATH_TRAVERSAL'))
+
+        const outPath = resolve(join(outAbs, rel))
+        if (outPath !== outAbs && !outPath.startsWith(outAbs + sep)) return done(new Error('ZIP_PATH_TRAVERSAL'))
+
+        if (entry.fileName.endsWith('/')) {
+          mkdir(outPath, { recursive: true })
+            .then(() => zip.readEntry())
+            .catch(done)
+          return
+        }
+
+        const outDirPath = join(outPath, '..')
+        void mkdir(outDirPath, { recursive: true })
+          .then(
+            () =>
+              new Promise<void>((res, rej) => {
+                zip.openReadStream(entry, (e: Error | null, rs: Readable | undefined) => {
+                  if (e || !rs) return rej(e ?? new Error('ZIP_READSTREAM_FAILED'))
+                  const ws = createWriteStream(outPath)
+                  const cleanup = (x?: unknown) => {
+                    try {
+                      rs.destroy()
+                    } catch {}
+                    try {
+                      ws.destroy()
+                    } catch {}
+                    if (x) rej(x)
+                    else res()
+                  }
+                  ws.on('error', cleanup)
+                  rs.on('error', cleanup)
+                  ws.on('close', () => cleanup())
+                  rs.pipe(ws)
+                })
+              })
+          )
+          .then(() => zip.readEntry())
+          .catch(done)
+      })
+
+      zip.on('end', () => done())
+      zip.on('error', done)
+    })
+  })
+}
+
 async function writeText(outPath: string, text: string): Promise<void> {
   await mkdir(join(outPath, '..'), { recursive: true })
   await writeFile(outPath, text, 'utf8')
@@ -413,6 +537,25 @@ export async function exportDbToCunoxDir(db: LeavelDb, options: CunoxExportOptio
   return { outDir: options.outDir, manifest }
 }
 
+export async function exportDbToCunoxFile(db: LeavelDb, options: CunoxExportFileOptions): Promise<{ outFile: string; manifest: CunoxManifestV1 }> {
+  const rawOut = String(options.outFile ?? '')
+  const outFile = rawOut.startsWith('file:') ? fileURLToPath(rawOut) : rawOut
+  if (!outFile) throw new Error('BAD_OUT_FILE')
+
+  const base = await mkdtemp(join(tmpdir(), 'cunox-export-'))
+  try {
+    const dirRes = await exportDbToCunoxDir(db, { outDir: base, overwrite: true, include: options.include })
+    const existed = await stat(outFile)
+      .then(() => true)
+      .catch(() => false)
+    if (existed && !options.overwrite) throw new Error('OUT_FILE_EXISTS')
+    await zipDirectoryToFile(dirRes.outDir, outFile)
+    return { outFile, manifest: dirRes.manifest }
+  } finally {
+    await rm(base, { recursive: true, force: true }).catch(() => undefined)
+  }
+}
+
 export async function parseCunoxDir(dir: string): Promise<{ dir: string; manifest: CunoxManifestV1 }> {
   const xml = await readFile(join(dir, 'cunox.ucixml'), 'utf8')
   const manifest = parseCunoxManifestXml(xml)
@@ -520,4 +663,18 @@ export async function importCunoxDirToDb(db: LeavelDb, options: CunoxImportOptio
   }
 
   return { ok: true }
+}
+
+export async function importCunoxFileToDb(db: LeavelDb, options: CunoxImportFileOptions): Promise<{ ok: true }> {
+  const rawFile = String(options.file ?? '')
+  const filePath = rawFile.startsWith('file:') ? fileURLToPath(rawFile) : rawFile
+  if (!filePath) throw new Error('BAD_CUNOX_FILE')
+
+  const base = await mkdtemp(join(tmpdir(), 'cunox-import-'))
+  try {
+    await unzipFileToDirectory(filePath, base)
+    return await importCunoxDirToDb(db, { dir: base, mode: options.mode ?? 'replace' })
+  } finally {
+    await rm(base, { recursive: true, force: true }).catch(() => undefined)
+  }
 }
