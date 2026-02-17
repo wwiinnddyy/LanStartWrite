@@ -1,4 +1,4 @@
-import { contextBridge, desktopCapturer, ipcRenderer, screen } from 'electron'
+import { contextBridge, desktopCapturer, ipcRenderer, screen, webFrame } from 'electron'
 
 type CaptureOptions = { maxSide?: number }
 
@@ -68,6 +68,6 @@ contextBridge.exposeInMainWorld('lanstart', {
   deleteUiStateKey: (windowId: string, key: string) => ipcRenderer.invoke('lanstart:deleteUiStateKey', { windowId, key }),
   apiRequest: (input: { method: string; path: string; body?: unknown }) => ipcRenderer.invoke('lanstart:apiRequest', input),
   clipboardWriteText: (text: string) => ipcRenderer.invoke('lanstart:clipboardWriteText', { text }),
-  setZoomLevel: (level: number) => require('electron').webFrame.setZoomLevel(level),
-  getZoomLevel: () => require('electron').webFrame.getZoomLevel()
+  setZoomLevel: (level: number) => webFrame.setZoomLevel(level),
+  getZoomLevel: () => webFrame.getZoomLevel()
 })

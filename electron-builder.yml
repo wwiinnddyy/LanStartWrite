@@ -8,7 +8,6 @@ files:
   - package.json
 asarUnpack:
   - "**/*.node"
-  - out/elysia/**/*
   - out/LeavelDB/**/*
 npmRebuild: false
 extraResources:
@@ -33,8 +32,6 @@ win:
   signAndEditExecutable: false
 nsis:
   artifactName: "${productName}-${version}-nsis.${ext}"
-innoSetup:
-  artifactName: "${productName}-${version}-inno.${ext}"
 appx:
   applicationId: LanStartWrite
   identityName: LanStart.LanStartWrite

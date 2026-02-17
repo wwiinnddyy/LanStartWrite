@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("PptHttpWrapper")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+4b8cfd49db6aab7b0202fb2c8a6d9dd386ba11e3")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+ff48e2e2c0a35be811a3d4e54892a2c8dac0b900")]
 [assembly: System.Reflection.AssemblyProductAttribute("PptHttpWrapper")]
 [assembly: System.Reflection.AssemblyTitleAttribute("PptHttpWrapper")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
