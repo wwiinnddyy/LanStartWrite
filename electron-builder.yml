@@ -22,9 +22,6 @@ win:
     - target: nsis
       arch:
         - x64
-    - target: innoSetup
-      arch:
-        - x64
     - target: appx
       arch:
         - x64
