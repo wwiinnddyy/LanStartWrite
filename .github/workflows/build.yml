@@ -183,6 +183,12 @@ jobs:
             ~/.cache/electron-builder
           key: ${{ runner.os }}-electron-cache-${{ hashFiles('pnpm-lock.yaml') }}
 
+      - name: 确保 pnpm store 目录存在
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$(pnpm store path --silent)"
+
       - name: 应用版本号
         run: node scripts/ci/apply-version.mjs ${{ needs.parse.outputs.version }}
 
@@ -245,6 +251,12 @@ jobs:
             ~/.cache/electron-builder
           key: ${{ runner.os }}-electron-cache-${{ hashFiles('pnpm-lock.yaml') }}
 
+      - name: 确保 pnpm store 目录存在
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$(pnpm store path --silent)"
+
       - name: 应用版本号
         run: node scripts/ci/apply-version.mjs ${{ needs.parse.outputs.version }}
 
@@ -283,3 +295,54 @@ jobs:
         with:
           name: dist-linux-${{ needs.parse.outputs.version }}
           path: dist/**
+
+  release:
+    needs: [parse, build_win, build_mac, build_linux]
+    if: ${{ needs.parse.outputs.tag != '' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: 整理产物
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import pathlib, shutil
+
+          src = pathlib.Path('artifacts')
+          dst = pathlib.Path('release-assets')
+          dst.mkdir(parents=True, exist_ok=True)
+
+          suffixes = {
+            '.zip', '.dmg', '.exe', '.AppImage', '.deb',
+            '.yml', '.yaml', '.blockmap', '.appx', '.appxbundle'
+          }
+
+          for f in src.rglob('*'):
+            if not f.is_file():
+              continue
+            if f.suffix not in suffixes:
+              continue
+
+            rel = f.relative_to(src)
+            group = rel.parts[0] if rel.parts else 'artifact'
+            name = f.name
+            target = dst / name
+            if target.exists():
+              target = dst / f'{group}-{name}'
+            shutil.copy2(f, target)
+          PY
+
+      - name: 发布 Release 草稿
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.parse.outputs.tag }}
+          name: LanStartWrite ${{ needs.parse.outputs.tag }}
+          draft: true
+          prerelease: ${{ contains(needs.parse.outputs.version, '-') }}
+          files: release-assets/**
