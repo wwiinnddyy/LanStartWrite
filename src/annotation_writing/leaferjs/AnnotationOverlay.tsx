@@ -165,6 +165,7 @@ function pointsToPerfectFreehandInput(points: number[], scale = 1): number[][] {
 const DEFAULT_LEAFER_SETTINGS: LeaferSettings = {
   multiTouch: false,
   inkSmoothing: true,
+  bezierSmoothing: false,
   showInkWhenPassthrough: true,
   freezeScreen: false,
   rendererEngine: 'canvas2d',
@@ -208,6 +209,7 @@ export function AnnotationOverlayApp(props: AnnotationOverlayAppProps) {
   const eraserThicknessRef = useRef(eraserThickness)
   const multiTouchRef = useRef(DEFAULT_LEAFER_SETTINGS.multiTouch)
   const inkSmoothingRef = useRef(DEFAULT_LEAFER_SETTINGS.inkSmoothing)
+  const bezierSmoothingRef = useRef(DEFAULT_LEAFER_SETTINGS.bezierSmoothing ?? false)
   const nibModeRef = useRef(DEFAULT_LEAFER_SETTINGS.nibMode ?? 'off')
   const postBakeOptimizeRef = useRef(DEFAULT_LEAFER_SETTINGS.postBakeOptimize ?? false)
   const postBakeOptimizeOnceRef = useRef(DEFAULT_LEAFER_SETTINGS.postBakeOptimizeOnce ?? false)
@@ -260,6 +262,10 @@ export function AnnotationOverlayApp(props: AnnotationOverlayAppProps) {
   useEffect(() => {
     inkSmoothingRef.current = leaferSettings.inkSmoothing
   }, [leaferSettings.inkSmoothing])
+
+  useEffect(() => {
+    bezierSmoothingRef.current = leaferSettings.bezierSmoothing ?? false
+  }, [leaferSettings.bezierSmoothing])
 
   useEffect(() => {
     nibModeRef.current = leaferSettings.nibMode ?? 'off'
@@ -567,11 +573,79 @@ export function AnnotationOverlayApp(props: AnnotationOverlayAppProps) {
       return src
     }
 
-    const bakePolyline = (points: number[], strokeWidth: number): number[] => {
+    const bakePolylineChaikin = (points: number[], strokeWidth: number): number[] => {
       const step = clamp(strokeWidth * 0.32, 1.2, 3.6)
       const resampled = resamplePolyline(points, step)
       const smoothed = chaikin(resampled, 2)
       return smoothed
+    }
+
+    const bakePolylineBezier = (points: number[], strokeWidth: number): number[] => {
+      const step = clamp(strokeWidth * 0.38, 1.3, 4.4)
+      const src = resamplePolyline(points, step)
+      if (src.length <= 6) return src
+
+      const pointCount = Math.floor(src.length / 2)
+      const maxOutPoints = 4096
+      const out: number[] = []
+
+      const pushPoint = (x: number, y: number) => {
+        if (!Number.isFinite(x) || !Number.isFinite(y)) return
+        if (out.length >= 2) {
+          const lx = out[out.length - 2]
+          const ly = out[out.length - 1]
+          if (Math.abs(x - lx) < 1e-6 && Math.abs(y - ly) < 1e-6) return
+        }
+        out.push(x, y)
+      }
+
+      const get = (idx: number) => {
+        const i = clamp(idx, 0, pointCount - 1) | 0
+        return { x: src[i * 2], y: src[i * 2 + 1] }
+      }
+
+      const cubic = (p0: number, p1: number, p2: number, p3: number, t: number) => {
+        const u = 1 - t
+        return u * u * u * p0 + 3 * u * u * t * p1 + 3 * u * t * t * p2 + t * t * t * p3
+      }
+
+      const sampleCubic = (p1: { x: number; y: number }, c1: { x: number; y: number }, c2: { x: number; y: number }, p2: { x: number; y: number }) => {
+        const approx =
+          Math.hypot(c1.x - p1.x, c1.y - p1.y) +
+          Math.hypot(c2.x - c1.x, c2.y - c1.y) +
+          Math.hypot(p2.x - c2.x, p2.y - c2.y)
+        const n = Math.max(1, Math.min(64, Math.ceil(approx / step)))
+        for (let i = 1; i <= n; i++) {
+          const t = i / n
+          const x = cubic(p1.x, c1.x, c2.x, p2.x, t)
+          const y = cubic(p1.y, c1.y, c2.y, p2.y, t)
+          pushPoint(x, y)
+          if (out.length / 2 >= maxOutPoints) return
+        }
+      }
+
+      pushPoint(src[0], src[1])
+      const tension = 1
+      for (let i = 0; i < pointCount - 1; i++) {
+        const p0 = get(i - 1)
+        const p1 = get(i)
+        const p2 = get(i + 1)
+        const p3 = get(i + 2)
+        const c1 = { x: p1.x + ((p2.x - p0.x) / 6) * tension, y: p1.y + ((p2.y - p0.y) / 6) * tension }
+        const c2 = { x: p2.x - ((p3.x - p1.x) / 6) * tension, y: p2.y - ((p3.y - p1.y) / 6) * tension }
+        sampleCubic(p1, c1, c2, p2)
+        if (out.length / 2 >= maxOutPoints) break
+      }
+
+      const lastX = src[src.length - 2]
+      const lastY = src[src.length - 1]
+      pushPoint(lastX, lastY)
+      return out
+    }
+
+    const bakePolyline = (points: number[], strokeWidth: number): number[] => {
+      if (!bezierSmoothingRef.current) return bakePolylineChaikin(points, strokeWidth)
+      return bakePolylineBezier(points, strokeWidth)
     }
 
     const bakePolylineWithTail = (points: number[], strokeWidth: number, tailPoints: number): number[] => {

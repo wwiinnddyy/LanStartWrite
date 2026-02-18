@@ -1329,6 +1329,7 @@ function AnnotationSettings() {
     {
       multiTouch: false,
       inkSmoothing: true,
+      bezierSmoothing: false,
       showInkWhenPassthrough: true,
       freezeScreen: false,
       rendererEngine: 'canvas2d',
@@ -1531,6 +1532,12 @@ function AnnotationSettings() {
               checked={leaferSettings.inkSmoothing}
               onChange={(e) => persistLeaferSettings({ ...leaferSettings, inkSmoothing: e.currentTarget.checked })}
               label="墨迹平滑"
+              size="md"
+            />
+            <Switch
+              checked={leaferSettings.bezierSmoothing ?? false}
+              onChange={(e) => persistLeaferSettings({ ...leaferSettings, bezierSmoothing: e.currentTarget.checked })}
+              label="贝塞尔平滑"
               size="md"
             />
             <Switch

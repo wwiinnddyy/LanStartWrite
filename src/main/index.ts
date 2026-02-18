@@ -738,6 +738,58 @@ const appWindowsManager = new AppWindowsManager({
 
 appWindowsManager.registerIpcHandlers({ ipcMain, requestBackendRpc, coerceString })
 
+ipcMain.handle('lanstart:getToolbarNoticeKind', async () => {
+  return toolbarNoticeKind
+})
+
+ipcMain.handle('lanstart:setToolbarNoticeVisible', async (_event, input: { visible?: unknown; kind?: unknown }) => {
+  const visible = Boolean(input?.visible)
+  const kind = coerceString(input?.kind)
+
+  toolbarNoticeDesiredVisible = visible
+  if (visible) {
+    if (kind) toolbarNoticeKind = kind
+    try {
+      showToolbarNoticeWindow()
+    } catch {}
+    return null
+  }
+
+  try {
+    await requestBackendRpc('putUiStateKey', { windowId: 'app', key: 'noticeKind', value: '' })
+  } catch {}
+
+  toolbarNoticeKind = ''
+  hideToolbarNoticeWindow()
+  return null
+})
+
+ipcMain.handle('lanstart:setToolbarNoticeBounds', async (_event, input: { width?: unknown; height?: unknown }) => {
+  const width = Number(input?.width)
+  const height = Number(input?.height)
+  if (!Number.isFinite(width) || !Number.isFinite(height)) return null
+  setToolbarNoticeBounds({ width, height })
+  return null
+})
+
+ipcMain.handle('lanstart:restartBackendAll', async () => {
+  if (backendRestartTimer) {
+    clearTimeout(backendRestartTimer)
+    backendRestartTimer = undefined
+  }
+  backendRestartAttempt = 0
+
+  try {
+    await shutdownBackendGracefully(1200)
+  } catch {}
+
+  try {
+    startBackend(backendExtraEnv)
+  } catch {}
+
+  return null
+})
+
 ipcMain.handle('hyperGlass:captureWallpaperThumbnail', async (_event, input: CaptureOptions = {}) => {
   if (platform !== 'win32') throw new Error('unsupported_platform')
   const maxSide = typeof input.maxSide === 'number' ? Math.max(32, Math.floor(input.maxSide)) : 320
@@ -3259,6 +3311,12 @@ function startBackend(extraEnv?: Record<string, string>): void {
     }
 
     if (!isAppQuitting && !isAppRestarting) {
+      toolbarNoticeKind = 'backendUnavailable'
+      toolbarNoticeDesiredVisible = true
+      try {
+        showToolbarNoticeWindow()
+      } catch {}
+
       if (backendRestartTimer) clearTimeout(backendRestartTimer)
       backendRestartAttempt += 1
       const delay = Math.min(6000, 600 + backendRestartAttempt * 600)

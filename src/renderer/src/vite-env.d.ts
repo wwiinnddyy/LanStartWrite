@@ -20,6 +20,10 @@ declare global {
       deleteUiStateKey: (windowId: string, key: string) => Promise<null>
       apiRequest: (input: { method: string; path: string; body?: unknown }) => Promise<{ status: number; body: unknown }>
       clipboardWriteText: (text: string) => Promise<null>
+      getToolbarNoticeKind?: () => Promise<string>
+      setToolbarNoticeVisible?: (input: { visible: boolean; kind?: string }) => Promise<null>
+      setToolbarNoticeBounds?: (input: { width: number; height: number }) => Promise<null>
+      restartBackendAll?: () => Promise<null>
       setZoomLevel: (level: number) => void
       getZoomLevel: () => number
     }

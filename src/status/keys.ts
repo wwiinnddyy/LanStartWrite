@@ -112,6 +112,7 @@ export type LeaferNibMode = 'off' | 'dynamic' | 'static'
 export type LeaferSettings = {
   multiTouch: boolean
   inkSmoothing: boolean
+  bezierSmoothing?: boolean
   showInkWhenPassthrough: boolean
   freezeScreen: boolean
   rendererEngine?: LeaferRendererEngine
@@ -150,6 +151,7 @@ export function isLeaferSettings(v: unknown): v is LeaferSettings {
   if (s.nibMode !== undefined && s.nibMode !== 'off' && s.nibMode !== 'dynamic' && s.nibMode !== 'static') return false
   if (s.postBakeOptimize !== undefined && typeof s.postBakeOptimize !== 'boolean') return false
   if (s.postBakeOptimizeOnce !== undefined && typeof s.postBakeOptimizeOnce !== 'boolean') return false
+  if (s.bezierSmoothing !== undefined && typeof s.bezierSmoothing !== 'boolean') return false
   return (
     typeof s.multiTouch === 'boolean' &&
     typeof s.inkSmoothing === 'boolean' &&

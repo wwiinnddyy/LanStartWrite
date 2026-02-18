@@ -19,7 +19,7 @@ import {
   useUiStateBus
 } from '../status'
 import { usePersistedState } from './hooks/usePersistedState'
-import { postCommand } from './hooks/useBackend'
+import { getToolbarNoticeKind, postCommand, setToolbarNoticeVisible } from './hooks/useBackend'
 import { useEventsPoll } from './hooks/useEventsPoll'
 import { useToolbarWindowAutoResize } from './hooks/useToolbarWindowAutoResize'
 import { useZoomOnWheel } from './hooks/useZoomOnWheel'
@@ -27,6 +27,22 @@ import { useAppearanceSettings } from '../settings'
 import { getAppButtonVisibility } from './utils/constants'
 import { WatcherIcon } from './components/ToolbarIcons'
 import './styles/toolbar.css'
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = window.setTimeout(() => reject(new Error('timeout')), ms)
+    promise.then(
+      (v) => {
+        window.clearTimeout(timer)
+        resolve(v)
+      },
+      (e) => {
+        window.clearTimeout(timer)
+        reject(e)
+      }
+    )
+  })
+}
 
 function ToolbarToolIcon(props: { kind: 'mouse' | 'pen' | 'eraser' | 'whiteboard' | 'video-show' | 'pdf' }) {
   const d =
@@ -339,6 +355,7 @@ function FloatingToolbarInner() {
   const { state, setState } = useToolbar()
   const rootRef = useRef<HTMLDivElement | null>(null)
   const contentRef = useRef<HTMLDivElement | null>(null)
+  const lastBackendOkRef = useRef<boolean | null>(null)
   const uiButtonSize = state.uiButtonSize || 'sm'
   const reduceMotion = useReducedMotion()
   const tool: 'mouse' | 'pen' | 'eraser' = state.tool === 'pen' ? 'pen' : state.tool === 'eraser' ? 'eraser' : 'mouse'
@@ -359,6 +376,50 @@ function FloatingToolbarInner() {
 
   useEffect(() => {
     postCommand('app.setTool', { tool: 'mouse' }).catch(() => undefined)
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+
+    const check = async () => {
+      if (cancelled) return
+      let ok = false
+      try {
+        if (!window.lanstart) throw new Error('lanstart_unavailable')
+        const res = await withTimeout(window.lanstart.apiRequest({ method: 'GET', path: '/health' }), 2200)
+        ok = Boolean((res as any)?.body?.ok)
+      } catch {
+        ok = false
+      }
+      if (cancelled) return
+
+      if (lastBackendOkRef.current === null) {
+        lastBackendOkRef.current = ok
+        return
+      }
+
+      if (ok === lastBackendOkRef.current) return
+      lastBackendOkRef.current = ok
+
+      if (!ok) {
+        setToolbarNoticeVisible({ visible: true, kind: 'backendUnavailable' }).catch(() => undefined)
+        return
+      }
+
+      getToolbarNoticeKind()
+        .then((kind) => {
+          if (kind !== 'backendUnavailable') return
+          setToolbarNoticeVisible({ visible: false }).catch(() => undefined)
+        })
+        .catch(() => undefined)
+    }
+
+    check()
+    const id = window.setInterval(check, 3200)
+    return () => {
+      cancelled = true
+      window.clearInterval(id)
+    }
   }, [])
 
   useEffect(() => {

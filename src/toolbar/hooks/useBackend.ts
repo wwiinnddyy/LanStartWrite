@@ -95,3 +95,31 @@ export async function putUiStateKey(windowId: string, key: string, value: unknow
 export async function deleteUiStateKey(windowId: string, key: string): Promise<void> {
   await requireLanstart().deleteUiStateKey(windowId, key)
 }
+
+export async function getToolbarNoticeKind(): Promise<string> {
+  const api = window.lanstart
+  if (!api?.getToolbarNoticeKind) return ''
+  try {
+    return String((await api.getToolbarNoticeKind()) ?? '')
+  } catch {
+    return ''
+  }
+}
+
+export async function setToolbarNoticeVisible(input: { visible: boolean; kind?: string }): Promise<void> {
+  const api = window.lanstart
+  if (!api?.setToolbarNoticeVisible) return
+  await api.setToolbarNoticeVisible(input)
+}
+
+export async function setToolbarNoticeBounds(input: { width: number; height: number }): Promise<void> {
+  const api = window.lanstart
+  if (!api?.setToolbarNoticeBounds) return
+  await api.setToolbarNoticeBounds(input)
+}
+
+export async function restartBackendAll(): Promise<void> {
+  const api = window.lanstart
+  if (!api?.restartBackendAll) return
+  await api.restartBackendAll()
+}

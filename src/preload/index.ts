@@ -68,6 +68,10 @@ contextBridge.exposeInMainWorld('lanstart', {
   deleteUiStateKey: (windowId: string, key: string) => ipcRenderer.invoke('lanstart:deleteUiStateKey', { windowId, key }),
   apiRequest: (input: { method: string; path: string; body?: unknown }) => ipcRenderer.invoke('lanstart:apiRequest', input),
   clipboardWriteText: (text: string) => ipcRenderer.invoke('lanstart:clipboardWriteText', { text }),
+  getToolbarNoticeKind: () => ipcRenderer.invoke('lanstart:getToolbarNoticeKind'),
+  setToolbarNoticeVisible: (input: { visible: boolean; kind?: string }) => ipcRenderer.invoke('lanstart:setToolbarNoticeVisible', input),
+  setToolbarNoticeBounds: (input: { width: number; height: number }) => ipcRenderer.invoke('lanstart:setToolbarNoticeBounds', input),
+  restartBackendAll: () => ipcRenderer.invoke('lanstart:restartBackendAll'),
   setZoomLevel: (level: number) => webFrame.setZoomLevel(level),
   getZoomLevel: () => webFrame.getZoomLevel()
 })

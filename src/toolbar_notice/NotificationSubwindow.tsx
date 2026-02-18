@@ -2,7 +2,17 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { motion, useReducedMotion } from '../Framer_Motion'
 import { Button } from '../button'
 import { useEventsPoll } from '../toolbar/hooks/useEventsPoll'
-import { deleteUiStateKey, getKv, postCommand, putKv, putUiStateKey } from '../toolbar/hooks/useBackend'
+import {
+  deleteUiStateKey,
+  getKv,
+  getToolbarNoticeKind,
+  postCommand,
+  putKv,
+  putUiStateKey,
+  restartBackendAll,
+  setToolbarNoticeBounds,
+  setToolbarNoticeVisible
+} from '../toolbar/hooks/useBackend'
 import { useZoomOnWheel } from '../toolbar/hooks/useZoomOnWheel'
 import { WatcherIcon } from '../toolbar/components/ToolbarIcons'
 import {
@@ -76,6 +86,17 @@ function ClockIcon() {
   )
 }
 
+function RestartIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 12a9 9 0 0 1-15.55 6.36" />
+      <path d="M3 12a9 9 0 0 1 15.55-6.36" />
+      <path d="M7 17v4H3" />
+      <path d="M17 7V3h4" />
+    </svg>
+  )
+}
+
 function pad2(v: number): string {
   return String(v).padStart(2, '0')
 }
@@ -98,6 +119,8 @@ export function NotificationSubwindow(props: { kind: 'notice' }) {
   const cardRef = useRef<HTMLDivElement | null>(null)
   const measureRef = useRef<HTMLDivElement | null>(null)
   const outerPadding = 12
+  const [mainNoticeKind, setMainNoticeKind] = useState('')
+  const [restartPending, setRestartPending] = useState(false)
 
   const lastProcessedEventIdRef = useRef(0)
   const lastMemoryTotalBytesRef = useRef(0)
@@ -128,8 +151,25 @@ export function NotificationSubwindow(props: { kind: 'notice' }) {
 
   const noticeKindRaw = bus.state[NOTICE_KIND_UI_STATE_KEY]
   const noticeKind = typeof noticeKindRaw === 'string' ? noticeKindRaw : ''
-  const isRestoreNotesNotice = noticeKind === 'notesRestore'
-  const isClockFloatNotice = noticeKind === 'clockFloat'
+  useEffect(() => {
+    let cancelled = false
+    const run = async () => {
+      const next = await getToolbarNoticeKind()
+      if (cancelled) return
+      setMainNoticeKind(next)
+    }
+    run()
+    const id = window.setInterval(run, 800)
+    return () => {
+      cancelled = true
+      window.clearInterval(id)
+    }
+  }, [])
+
+  const effectiveNoticeKind = noticeKind || mainNoticeKind
+  const isRestoreNotesNotice = effectiveNoticeKind === 'notesRestore'
+  const isClockFloatNotice = effectiveNoticeKind === 'clockFloat'
+  const isBackendUnavailableNotice = effectiveNoticeKind === 'backendUnavailable'
 
   const timerRunning = Boolean(bus.state[CLOCK_TIMER_RUNNING_UI_STATE_KEY])
   const timerStartMs = Number(bus.state[CLOCK_TIMER_START_MS_UI_STATE_KEY])
@@ -170,7 +210,11 @@ export function NotificationSubwindow(props: { kind: 'notice' }) {
       if (width === lastWidth && height === lastHeight) return
       lastWidth = width
       lastHeight = height
-      postCommand('set-subwindow-bounds', { kind: props.kind, width, height }).catch(() => undefined)
+      if (window.lanstart?.setToolbarNoticeBounds && props.kind === 'notice') {
+        setToolbarNoticeBounds({ width, height }).catch(() => undefined)
+      } else {
+        postCommand('set-subwindow-bounds', { kind: props.kind, width, height }).catch(() => undefined)
+      }
     }
 
     const schedule = () => {
@@ -192,7 +236,9 @@ export function NotificationSubwindow(props: { kind: 'notice' }) {
 
   const close = () => {
     deleteUiStateKey(UI_STATE_APP_WINDOW_ID, NOTICE_KIND_UI_STATE_KEY).catch(() => undefined)
-    void postCommand('win.setNoticeVisible', { visible: false })
+    setToolbarNoticeVisible({ visible: false }).catch(() => {
+      void postCommand('win.setNoticeVisible', { visible: false })
+    })
   }
 
   const openWatcher = () => {
@@ -265,7 +311,9 @@ export function NotificationSubwindow(props: { kind: 'notice' }) {
 
   const text = isClockFloatNotice
     ? clockText
-    : `内存占用 ${formatBytes(memoryTotalBytes || lastMemoryTotalBytesRef.current)}`
+    : isBackendUnavailableNotice
+      ? '后端服务不可用'
+      : `内存占用 ${formatBytes(memoryTotalBytes || lastMemoryTotalBytesRef.current)}`
 
   const restoreNotes = async () => {
     const appModeRaw = bus.state[APP_MODE_UI_STATE_KEY]
@@ -292,6 +340,15 @@ export function NotificationSubwindow(props: { kind: 'notice' }) {
     close()
   }
 
+  const restartBackend = async () => {
+    if (restartPending) return
+    setRestartPending(true)
+    try {
+      await restartBackendAll()
+    } catch {}
+    setRestartPending(false)
+  }
+
   return (
     <motion.div
       ref={rootRef}
@@ -309,21 +366,21 @@ export function NotificationSubwindow(props: { kind: 'notice' }) {
           alignItems: 'center',
           padding: outerPadding,
           gap: 12,
-          cursor: isRestoreNotesNotice ? 'default' : 'pointer',
+          cursor: isRestoreNotesNotice || isBackendUnavailableNotice ? 'default' : 'pointer',
           position: 'relative',
           overflow: isClockFloatNotice ? 'hidden' : undefined
         }}
-        role={isRestoreNotesNotice ? undefined : 'button'}
-        tabIndex={isRestoreNotesNotice ? undefined : 0}
+        role={isRestoreNotesNotice || isBackendUnavailableNotice ? undefined : 'button'}
+        tabIndex={isRestoreNotesNotice || isBackendUnavailableNotice ? undefined : 0}
         onClick={(e) => {
-          if (isRestoreNotesNotice) return
+          if (isRestoreNotesNotice || isBackendUnavailableNotice) return
           const target = e.target as HTMLElement | null
           if (target?.closest?.('button')) return
           if (isClockFloatNotice) openClock()
           else openWatcher()
         }}
         onKeyDown={(e) => {
-          if (isRestoreNotesNotice) return
+          if (isRestoreNotesNotice || isBackendUnavailableNotice) return
           if (e.key !== 'Enter' && e.key !== ' ') return
           e.preventDefault()
           if (isClockFloatNotice) openClock()
@@ -512,7 +569,18 @@ export function NotificationSubwindow(props: { kind: 'notice' }) {
                     <path d="M6 6l12 12" />
                   </svg>
                 </Button>
-                {isRestoreNotesNotice ? (
+                {isBackendUnavailableNotice ? (
+                  <Button
+                    variant="default"
+                    size="sm"
+                    ariaLabel="重试启动后端服务"
+                    title="重试"
+                    disabled={restartPending}
+                    onClick={restartBackend}
+                  >
+                    <RestartIcon />
+                  </Button>
+                ) : isRestoreNotesNotice ? (
                   <Button variant="default" size="sm" ariaLabel="确定还原笔记" title="确定" onClick={restoreNotes}>
                     <CheckIcon />
                   </Button>

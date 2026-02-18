@@ -79,81 +79,15 @@ function ChildWindow() {
   )
 }
 
-function withTimeout<T>(promise: Promise<T>, ms: number, timeoutError: Error): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const timer = window.setTimeout(() => reject(timeoutError), ms)
-    promise.then(
-      (v) => {
-        window.clearTimeout(timer)
-        resolve(v)
-      },
-      (e) => {
-        window.clearTimeout(timer)
-        reject(e)
-      }
-    )
-  })
-}
-
 function WithAppearance(props: { children: React.ReactNode }) {
   const { legacyWindowImplementation, windowBackgroundMode } = useAppearanceSettings()
   useHyperGlassRealtimeBlur({
     root: !legacyWindowImplementation && windowBackgroundMode === 'blur' ? document.documentElement : null
   })
 
-  const [lanstartHint, setLanstartHint] = useState<{ kind: 'missing' | 'offline'; message: string } | null>(null)
-  useEffect(() => {
-    let cancelled = false
-
-    const run = async () => {
-      if (!window.lanstart) {
-        if (!cancelled) setLanstartHint({ kind: 'missing', message: '预加载未注入（window.lanstart 不存在），窗口通信将不可用' })
-        return
-      }
-      try {
-        const res = await withTimeout(
-          window.lanstart.apiRequest({ method: 'GET', path: '/health' }),
-          2500,
-          new Error('health_timeout')
-        )
-        const ok = Boolean((res as any)?.body?.ok)
-        if (!ok) throw new Error('health_bad')
-        if (!cancelled) setLanstartHint(null)
-      } catch {
-        if (!cancelled) setLanstartHint({ kind: 'offline', message: '后端未响应（/health 离线），部分功能将不可用' })
-      }
-    }
-
-    run()
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
   return (
     <>
       {props.children}
-      {lanstartHint ? (
-        <div style={{ position: 'fixed', left: 8, right: 8, bottom: 8, zIndex: 999999, pointerEvents: 'none' }}>
-          <div
-            style={{
-              margin: '0 auto',
-              maxWidth: 720,
-              background: 'rgba(0,0,0,0.66)',
-              color: 'rgba(255,255,255,0.92)',
-              border: '1px solid rgba(255,255,255,0.12)',
-              borderRadius: 12,
-              padding: '10px 12px',
-              fontSize: 12,
-              lineHeight: 1.3,
-              backdropFilter: 'blur(8px)',
-              WebkitBackdropFilter: 'blur(8px)'
-            }}
-          >
-            {lanstartHint.message}
-          </div>
-        </div>
-      ) : null}
     </>
   )
 }
