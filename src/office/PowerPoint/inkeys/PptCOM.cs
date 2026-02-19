@@ -118,7 +118,7 @@ namespace PptCOM
             if (moniker != null) Marshal.ReleaseComObject(moniker);
             if (bindCtx != null) Marshal.ReleaseComObject(bindCtx);
         }
-        private void SafeRelease(object comObj)
+        private void ReleaseObject(object comObj)
         {
             if (comObj == null) return;
 
@@ -127,19 +127,6 @@ namespace PptCOM
                 try
                 {
                     Marshal.ReleaseComObject(comObj);
-                }
-                catch { }
-            }
-        }
-        private void SafeFinalRelease(object comObj)
-        {
-            if (comObj == null) return;
-
-            if (Marshal.IsComObject(comObj))
-            {
-                try
-                {
-                    Marshal.FinalReleaseComObject(comObj);
                 }
                 catch { }
             }
@@ -182,18 +169,9 @@ namespace PptCOM
 
             Console.WriteLine("try CLEAN");
 
-            if (final)
-            {
-                SafeFinalRelease(pptSlideShowWindow);
-                SafeFinalRelease(pptActivePresentation);
-                SafeFinalRelease(pptApplication);
-            }
-            else
-            {
-                SafeRelease(pptSlideShowWindow);
-                SafeRelease(pptActivePresentation);
-                SafeRelease(pptApplication);
-            }
+            ReleaseObject(pptSlideShowWindow);
+            ReleaseObject(pptActivePresentation);
+            ReleaseObject(pptApplication);
 
             pptSlideShowWindow = null;
             pptActivePresentation = null;
@@ -364,6 +342,10 @@ namespace PptCOM
             updateTime = DateTime.Now;
 
             // 【修改】直接赋值给 dynamic 类型的全局变量
+            if (pptSlideShowWindow != null && (WnObj == null || !AreComObjectsEqual((object)pptSlideShowWindow, WnObj)))
+            {
+                ReleaseObject(pptSlideShowWindow);
+            }
             pptSlideShowWindow = WnObj;
 
             try
@@ -613,7 +595,7 @@ namespace PptCOM
                                 {
                                     highestPriority = currentPriority;
 
-                                    SafeRelease(bestApp);
+                                    ReleaseObject(bestApp);
 
                                     // 这里不需要转换，直接赋值 object
                                     bestApp = candidateApp;
@@ -632,15 +614,15 @@ namespace PptCOM
                     }
                     finally
                     {
-                        SafeRelease(ssWindow);
-                        SafeRelease(activePres);
+                        ReleaseObject(ssWindow);
+                        ReleaseObject(activePres);
 
                         // 如果是为了去重而暂存在列表中的新对象，不要在这里释放
                         // 如果是重复对象(keepAlive=false)，或者出现异常没加入列表，则正常释放
                         // 如果 candidateApp 已经转移给 bestApp，它已经是 null，SafeRelease 安全
                         if (!keepAlive)
                         {
-                            SafeRelease(candidateApp);
+                            ReleaseObject(candidateApp);
                         }
 
                         CleanUpLoopObjects(bindCtx, moniker[0], comObject);
@@ -664,7 +646,7 @@ namespace PptCOM
                         if (bestApp != null && ReferenceEquals(cachedApp, bestApp))
                             continue;
 
-                        SafeRelease(cachedApp);
+                        ReleaseObject(cachedApp);
                     }
                     foundAppObjects.Clear();
                 }
@@ -812,7 +794,7 @@ namespace PptCOM
                         {
                             if (bestApp != null && (pptApplication == null || !AreComObjectsEqual((object)pptApplication, bestApp)))
                             {
-                                SafeRelease(bestApp);
+                                ReleaseObject(bestApp);
                                 bestApp = null;
                             }
                         }
@@ -847,7 +829,7 @@ namespace PptCOM
                         }
                         finally
                         {
-                            SafeRelease(activePersentation);
+                            ReleaseObject(activePersentation);
                             activePersentation = null;
                         }
 
@@ -868,7 +850,7 @@ namespace PptCOM
                                 {
                                     if (!AreComObjectsEqual((object)pptSlideShowWindow, (object)slideShowWindow))
                                     {
-                                        SafeRelease(pptSlideShowWindow);
+                                        ReleaseObject(pptSlideShowWindow);
 
                                         pptSlideShowWindow = slideShowWindow;
 
@@ -894,12 +876,12 @@ namespace PptCOM
                         }
                         finally
                         {
-                            SafeRelease(activePersentation);
+                            ReleaseObject(activePersentation);
                             activePersentation = null;
 
                             if (!AreComObjectsEqual((object)pptSlideShowWindow, (object)slideShowWindow))
                             {
-                                SafeRelease(slideShowWindow);
+                                ReleaseObject(slideShowWindow);
                                 slideShowWindow = null;
 
                                 Console.WriteLine($"slideShowWindow 被清理");
@@ -928,7 +910,7 @@ namespace PptCOM
                                 }
                                 finally
                                 {
-                                    SafeRelease(slideShowWindow);
+                                    ReleaseObject(slideShowWindow);
                                     slideShowWindow = null;
                                 }
 
@@ -1184,8 +1166,8 @@ namespace PptCOM
             }
             finally
             {
-                SafeRelease(slide);
-                SafeRelease(view);
+                ReleaseObject(slide);
+                ReleaseObject(view);
 
                 slide = null;
                 view = null;
@@ -1201,7 +1183,7 @@ namespace PptCOM
             }
             finally
             {
-                SafeRelease(slides);
+                ReleaseObject(slides);
                 slides = null;
             }
         }
@@ -1216,7 +1198,7 @@ namespace PptCOM
             }
             finally
             {
-                SafeRelease(slideShowWindows);
+                ReleaseObject(slideShowWindows);
                 slideShowWindows = null;
             }
         }
@@ -1456,13 +1438,15 @@ namespace PptCOM
             }
             else
             {
-                SafeRelease(bestApp);
+                ReleaseObject(bestApp);
                 bestApp = null;
             }
 
             try
             {
                 if (pptApplication == null) return false;
+                ReleaseObject(pptActivePresentation);
+                pptActivePresentation = null;
                 pptActivePresentation = pptApplication.ActivePresentation;
             }
             catch
@@ -1477,6 +1461,8 @@ namespace PptCOM
 
             try
             {
+                ReleaseObject(pptSlideShowWindow);
+                pptSlideShowWindow = null;
                 pptSlideShowWindow = pptActivePresentation.SlideShowWindow;
             }
             catch

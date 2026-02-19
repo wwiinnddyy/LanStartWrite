@@ -11,17 +11,6 @@
           "lib/netstandard2.0/Microsoft.Office.Interop.PowerPoint.dll": {}
         }
       }
-    },
-    "net8.0-windows7.0/win-x64": {
-      "Microsoft.Office.Interop.PowerPoint/15.0.4420.1018": {
-        "type": "package",
-        "compile": {
-          "lib/netstandard2.0/Microsoft.Office.Interop.PowerPoint.dll": {}
-        },
-        "runtime": {
-          "lib/netstandard2.0/Microsoft.Office.Interop.PowerPoint.dll": {}
-        }
-      }
     }
   },
   "libraries": {
@@ -102,20 +91,6 @@
         ],
         "assetTargetFallback": true,
         "warn": true,
-        "downloadDependencies": [
-          {
-            "name": "Microsoft.AspNetCore.App.Runtime.win-x64",
-            "version": "[8.0.24, 8.0.24]"
-          },
-          {
-            "name": "Microsoft.NETCore.App.Runtime.win-x64",
-            "version": "[8.0.24, 8.0.24]"
-          },
-          {
-            "name": "Microsoft.WindowsDesktop.App.Runtime.win-x64",
-            "version": "[8.0.24, 8.0.24]"
-          }
-        ],
         "frameworkReferences": {
           "Microsoft.AspNetCore.App": {
             "privateAssets": "none"
@@ -128,11 +103,6 @@
           }
         },
         "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\8.0.418/PortableRuntimeIdentifierGraph.json"
-      }
-    },
-    "runtimes": {
-      "win-x64": {
-        "#import": []
       }
     }
   }

@@ -5,3 +5,4 @@ out
 *.log
 
 /dist-winget
+/src/office/PowerPoint/inkeys/PptHttpWrapper/bin
