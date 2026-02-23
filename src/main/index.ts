@@ -1,5 +1,5 @@
 import { BrowserWindow, Menu, Tray, app, dialog, ipcMain, nativeImage, nativeTheme, screen, session, type OpenDialogOptions } from 'electron'
-import { execFile, spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
+import { execFile, spawn, spawnSync, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { createServer } from 'node:net'
 import { join } from 'node:path'
@@ -3234,7 +3234,8 @@ async function ensurePptWrapperStarted(): Promise<{ port: number; baseUrl: strin
 function startBackend(extraEnv?: Record<string, string>): void {
   backendExtraEnv = extraEnv
   const dbPath = join(app.getPath('userData'), 'leveldb')
-  const transport = process.env.LANSTART_BACKEND_TRANSPORT === 'http' ? 'http' : 'stdio'
+  const transportRaw = String(process.env.LANSTART_BACKEND_TRANSPORT ?? 'http')
+  const transport = transportRaw === 'stdio' ? 'stdio' : 'http'
   const host = process.env.LANSTART_BACKEND_HOST ?? '127.0.0.1'
   const env = {
     ...process.env,
@@ -3250,6 +3251,22 @@ function startBackend(extraEnv?: Record<string, string>): void {
 
   if (isDev) {
     const backendEntry = join(projectRoot, 'src/elysia/index.ts')
+    const hasBun = (() => {
+      try {
+        const r = spawnSync('bun', ['--version'], { stdio: 'ignore' })
+        return r.status === 0
+      } catch {
+        return false
+      }
+    })()
+
+    if (hasBun) {
+      backendProcess = spawn('bun', ['run', backendEntry], {
+        cwd: projectRoot,
+        env,
+        stdio: ['pipe', 'pipe', 'pipe']
+      })
+    } else {
     const tsxCliMjs = join(projectRoot, 'node_modules', 'tsx', 'dist', 'cli.mjs')
     if (existsSync(tsxCliMjs)) {
       backendProcess = spawn(process.execPath, [tsxCliMjs, backendEntry], {
@@ -3279,6 +3296,7 @@ function startBackend(extraEnv?: Record<string, string>): void {
           stdio: ['pipe', 'pipe', 'pipe']
         })
       }
+    }
     }
   } else {
     const appPath = app.getAppPath()

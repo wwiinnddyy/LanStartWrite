@@ -63,18 +63,12 @@ import {
 import { sendSimulatedKeys } from '../system_different_code'
 import { identifyActiveApp } from '../task_windows_watcher/identify'
 import type { ForegroundWindowSample, ProcessSample, TaskWatcherStatus } from '../task_windows_watcher/types'
-
-type EventItem = {
-  id: number
-  type: string
-  payload?: unknown
-  ts: number
-}
+import type { BackendEventItem, BackendRpcWsMessage } from '../rpc/schema'
 
 const port = Number(process.env.LANSTART_BACKEND_PORT ?? 3131)
 const host = String(process.env.LANSTART_BACKEND_HOST ?? '127.0.0.1')
 const dbPath = process.env.LANSTART_DB_PATH ?? './leveldb'
-const transport = String(process.env.LANSTART_BACKEND_TRANSPORT ?? 'stdio')
+const transport = String(process.env.LANSTART_BACKEND_TRANSPORT ?? 'http')
 const csBaseUrl = String(process.env.LANSTART_CS_BASE_URL ?? '')
 const pptWrapperPort = Number(process.env.LANSTART_PPT_WRAPPER_PORT ?? 3133)
 const pptWrapperBaseUrl = String(process.env.LANSTART_PPT_WRAPPER_BASE_URL ?? `http://127.0.0.1:${pptWrapperPort}`)
@@ -133,14 +127,34 @@ function getLocalIpv4Addrs(): string[] {
 }
 
 let nextEventId = 1
-const events: EventItem[] = []
+const events: BackendEventItem[] = []
 const MAX_EVENTS = 200
 
-function emitEvent(type: string, payload?: unknown): EventItem {
-  const item: EventItem = { id: nextEventId++, type, payload, ts: Date.now() }
+const isBun = typeof (globalThis as any).Bun !== 'undefined'
+const rpcWsClients = new Set<any>()
+
+function broadcastRpcWsMessage(message: BackendRpcWsMessage): void {
+  if (!isBun) return
+  if (!rpcWsClients.size) return
+  let data = ''
+  try {
+    data = JSON.stringify(message)
+  } catch {
+    return
+  }
+  for (const ws of rpcWsClients) {
+    try {
+      ws.send(data)
+    } catch {}
+  }
+}
+
+function emitEvent(type: string, payload?: unknown): BackendEventItem {
+  const item: BackendEventItem = { id: nextEventId++, type, payload, ts: Date.now() }
   events.push(item)
   if (events.length > MAX_EVENTS) events.splice(0, events.length - MAX_EVENTS)
   requestMain({ type: 'BACKEND_EVENT', event: item })
+  broadcastRpcWsMessage({ type: 'EVENT', event: item })
   return item
 }
 
@@ -1392,6 +1406,230 @@ async function handleCommand(command: string, payload: unknown): Promise<Command
   return { ok: false, error: 'UNKNOWN_COMMAND' }
 }
 
+async function handleBackendRpc(method: string, params: any): Promise<unknown> {
+  if (method === 'apiRequest') {
+    const requestMethod = coerceString(params?.method).toUpperCase() || 'GET'
+    const path = coerceString(params?.path)
+    if (!path.startsWith('/')) throw new Error('BAD_PATH')
+
+    const headers: Record<string, string> = Object.create(null) as Record<string, string>
+    let body: string | undefined
+    if (params?.body !== undefined && requestMethod !== 'GET' && requestMethod !== 'HEAD') {
+      headers['Content-Type'] = 'application/json'
+      body = JSON.stringify(params.body)
+    }
+
+    const res = await api.handle(
+      new Request(`http://local${path}`, {
+        method: requestMethod,
+        headers,
+        body
+      })
+    )
+
+    const contentType = res.headers.get('content-type') ?? ''
+    let outBody: unknown
+    if (contentType.includes('application/json') || contentType.includes('+json')) {
+      try {
+        outBody = await res.json()
+      } catch {
+        outBody = await res.text()
+      }
+    } else {
+      outBody = await res.text()
+    }
+
+    return { status: res.status, body: outBody }
+  }
+
+  if (method === 'postCommand') {
+    const command = coerceString(params?.command)
+    const payload = params?.payload as unknown
+    if (!command) throw new Error('BAD_COMMAND')
+    const res = await handleCommand(command, payload)
+    if (!res.ok) throw new Error(res.error)
+    return null
+  }
+
+  if (method === 'getEvents') {
+    const since = Number(params?.since ?? 0)
+    const items = events.filter((e) => e.id > since)
+    return { items, latest: events.at(-1)?.id ?? since }
+  }
+
+  if (method === 'getKv') {
+    const key = coerceString(params?.key)
+    if (!key) throw new Error('BAD_KEY')
+    try {
+      const value = await getValue(db, key)
+      emitEvent('KV_GET', { key })
+      return value
+    } catch (e) {
+      const err = e as any
+      if (err?.notFound === true || String(err?.code ?? '') === 'LEVEL_NOT_FOUND') throw new Error('kv_not_found')
+      throw e
+    }
+  }
+
+  if (method === 'putKv') {
+    const key = coerceString(params?.key)
+    if (!key) throw new Error('BAD_KEY')
+    await putValue(db, key, params?.value)
+    emitEvent('KV_PUT', { key })
+    if (key === SYSTEM_UIA_TOPMOST_KV_KEY) {
+      const raw = (params as any)?.value
+      const enabled =
+        raw === true || raw === 'true' || raw === 1 || raw === '1'
+          ? true
+          : raw === false || raw === 'false' || raw === 0 || raw === '0'
+            ? false
+            : Boolean(raw)
+      requestMain({ type: 'SET_SYSTEM_UIA_TOPMOST', enabled })
+    }
+    if (key === SYSTEM_MERGE_RENDERER_PIPELINE_KV_KEY) {
+      const raw = (params as any)?.value
+      const enabled =
+        raw === true || raw === 'true' || raw === 1 || raw === '1'
+          ? true
+          : raw === false || raw === 'false' || raw === 0 || raw === '0'
+            ? false
+            : Boolean(raw)
+      requestMain({ type: 'SET_MERGE_RENDERER_PIPELINE', enabled })
+    }
+    if (key === SYSTEM_WINDOW_PRELOAD_KV_KEY) {
+      const raw = (params as any)?.value
+      const enabled =
+        raw === true || raw === 'true' || raw === 1 || raw === '1'
+          ? true
+          : raw === false || raw === 'false' || raw === 0 || raw === '0'
+            ? false
+            : Boolean(raw)
+      requestMain({ type: 'SET_WINDOW_PRELOAD', enabled })
+    }
+    if (key === 'native-mica-enabled') {
+      const raw = (params as any)?.value
+      const enabled =
+        raw === true || raw === 'true' || raw === 1 || raw === '1'
+          ? true
+          : raw === false || raw === 'false' || raw === 0 || raw === '0'
+            ? false
+            : Boolean(raw)
+      requestMain({ type: 'SET_NATIVE_MICA', enabled })
+    }
+    if (key === 'legacy-window-implementation') {
+      const raw = (params as any)?.value
+      const enabled =
+        raw === true || raw === 'true' || raw === 1 || raw === '1'
+          ? true
+          : raw === false || raw === 'false' || raw === 0 || raw === '0'
+            ? false
+            : Boolean(raw)
+      requestMain({ type: 'SET_LEGACY_WINDOW_IMPLEMENTATION', enabled })
+    }
+    return null
+  }
+
+  if (method === 'getUiState') {
+    const windowId = coerceString(params?.windowId)
+    if (!windowId) throw new Error('BAD_WINDOW_ID')
+    const state = getOrInitUiState(windowId)
+    emitEvent('UI_STATE_GET', { windowId })
+    return state
+  }
+
+  if (method === 'putUiStateKey') {
+    const windowId = coerceString(params?.windowId)
+    const key = coerceString(params?.key)
+    if (!windowId || !key) throw new Error('BAD_UI_STATE_KEY')
+    const state = getOrInitUiState(windowId)
+    state[key] = params?.value
+    emitEvent('UI_STATE_PUT', { windowId, key, value: params?.value })
+    if (
+      windowId === UI_STATE_APP_WINDOW_ID &&
+      (key === WHITEBOARD_BG_COLOR_UI_STATE_KEY ||
+        key === WHITEBOARD_BG_IMAGE_URL_UI_STATE_KEY ||
+        key === WHITEBOARD_BG_IMAGE_OPACITY_UI_STATE_KEY)
+    ) {
+      const modeRaw = state[APP_MODE_UI_STATE_KEY]
+      const mode = isAppMode(modeRaw) ? modeRaw : 'toolbar'
+      if (mode === 'whiteboard') {
+        const { index, total } = coercePageIndexTotal(state)
+        const defaultBg = await getDefaultWhiteboardBackground()
+        const book = await ensureWhiteboardCanvasBookPersisted({ total, defaultBg })
+        const rawPage = (book.pages as any)?.[index] as Partial<WhiteboardCanvasPageV1> | undefined
+        const page = {
+          bgColor: typeof rawPage?.bgColor === 'string' ? rawPage.bgColor : defaultBg.bgColor,
+          bgImageUrl: isFileOrDataUrl(rawPage?.bgImageUrl) ? String(rawPage?.bgImageUrl ?? '') : defaultBg.bgImageUrl,
+          bgImageOpacity:
+            typeof rawPage?.bgImageOpacity === 'number' && Number.isFinite(rawPage.bgImageOpacity)
+              ? Math.max(0, Math.min(1, rawPage.bgImageOpacity))
+              : defaultBg.bgImageOpacity
+        }
+
+        const nextColor = key === WHITEBOARD_BG_COLOR_UI_STATE_KEY && isHexColor(params?.value) ? String(params?.value) : page.bgColor
+
+        const nextImageUrl =
+          key === WHITEBOARD_BG_IMAGE_URL_UI_STATE_KEY && isFileOrDataUrl(params?.value) ? String(params?.value) : page.bgImageUrl
+
+        const nextOpacity = (() => {
+          if (key !== WHITEBOARD_BG_IMAGE_OPACITY_UI_STATE_KEY) return page.bgImageOpacity
+          const raw = params?.value
+          const n = typeof raw === 'number' ? raw : typeof raw === 'string' ? Number(raw) : NaN
+          if (!Number.isFinite(n)) return page.bgImageOpacity
+          return Math.max(0, Math.min(1, n))
+        })()
+
+        if (nextColor !== page.bgColor || nextImageUrl !== page.bgImageUrl || nextOpacity !== page.bgImageOpacity) {
+          book.pages[index] = { bgColor: nextColor, bgImageUrl: nextImageUrl, bgImageOpacity: nextOpacity }
+          await putValue(db, WHITEBOARD_CANVAS_PAGES_KV_KEY, book)
+          emitEvent('KV_PUT', { key: WHITEBOARD_CANVAS_PAGES_KV_KEY })
+        }
+
+        if (key === WHITEBOARD_BG_COLOR_UI_STATE_KEY && isHexColor(params?.value)) {
+          await putValue(db, WHITEBOARD_BG_COLOR_KV_KEY, String(params?.value))
+          emitEvent('KV_PUT', { key: WHITEBOARD_BG_COLOR_KV_KEY })
+        }
+        if (key === WHITEBOARD_BG_IMAGE_URL_UI_STATE_KEY && isFileOrDataUrl(params?.value)) {
+          await putValue(db, WHITEBOARD_BG_IMAGE_URL_KV_KEY, String(params?.value))
+          emitEvent('KV_PUT', { key: WHITEBOARD_BG_IMAGE_URL_KV_KEY })
+        }
+        if (key === WHITEBOARD_BG_IMAGE_OPACITY_UI_STATE_KEY) {
+          const raw = params?.value
+          const n = typeof raw === 'number' ? raw : typeof raw === 'string' ? Number(raw) : NaN
+          if (Number.isFinite(n)) {
+            const v = Math.max(0, Math.min(1, n))
+            await putValue(db, WHITEBOARD_BG_IMAGE_OPACITY_KV_KEY, v)
+            emitEvent('KV_PUT', { key: WHITEBOARD_BG_IMAGE_OPACITY_KV_KEY })
+          }
+        }
+      }
+    }
+    return null
+  }
+
+  if (method === 'deleteUiStateKey') {
+    const windowId = coerceString(params?.windowId)
+    const key = coerceString(params?.key)
+    if (!windowId || !key) throw new Error('BAD_UI_STATE_KEY')
+    const state = getOrInitUiState(windowId)
+    delete state[key]
+    emitEvent('UI_STATE_DEL', { windowId, key })
+    return null
+  }
+
+  if (method === 'shutdown') {
+    try {
+      await db.close()
+    } catch {}
+    setTimeout(() => {
+      process.exit(0)
+    }, 10)
+    return null
+  }
+
+  throw new Error('UNKNOWN_METHOD')
+}
+
 const stdin = createInterface({ input: process.stdin, crlfDelay: Infinity })
 stdin.on('line', (line) => {
   const trimmed = line.trim()
@@ -1424,237 +1662,8 @@ stdin.on('line', (line) => {
 
       void (async () => {
         try {
-          if (method === 'apiRequest') {
-            const requestMethod = coerceString(params?.method).toUpperCase() || 'GET'
-            const path = coerceString(params?.path)
-            if (!path.startsWith('/')) throw new Error('BAD_PATH')
-
-            const headers: Record<string, string> = Object.create(null) as Record<string, string>
-            let body: string | undefined
-            if (params?.body !== undefined && requestMethod !== 'GET' && requestMethod !== 'HEAD') {
-              headers['Content-Type'] = 'application/json'
-              body = JSON.stringify(params.body)
-            }
-
-            const res = await api.handle(
-              new Request(`http://local${path}`, {
-                method: requestMethod,
-                headers,
-                body
-              })
-            )
-
-            const contentType = res.headers.get('content-type') ?? ''
-            let outBody: unknown
-            if (contentType.includes('application/json') || contentType.includes('+json')) {
-              try {
-                outBody = await res.json()
-              } catch {
-                outBody = await res.text()
-              }
-            } else {
-              outBody = await res.text()
-            }
-
-            requestMain({ type: 'RPC_RESPONSE', id, ok: true, result: { status: res.status, body: outBody } })
-            return
-          }
-
-          if (method === 'postCommand') {
-            const command = coerceString(params?.command)
-            const payload = params?.payload as unknown
-            if (!command) throw new Error('BAD_COMMAND')
-            const res = await handleCommand(command, payload)
-            if (!res.ok) throw new Error(res.error)
-            requestMain({ type: 'RPC_RESPONSE', id, ok: true, result: null })
-            return
-          }
-
-          if (method === 'getEvents') {
-            const since = Number(params?.since ?? 0)
-            const items = events.filter((e) => e.id > since)
-            requestMain({ type: 'RPC_RESPONSE', id, ok: true, result: { items, latest: events.at(-1)?.id ?? since } })
-            return
-          }
-
-          if (method === 'getKv') {
-            const key = coerceString(params?.key)
-            if (!key) throw new Error('BAD_KEY')
-            try {
-              const value = await getValue(db, key)
-              emitEvent('KV_GET', { key })
-              requestMain({ type: 'RPC_RESPONSE', id, ok: true, result: value })
-              return
-            } catch (e) {
-              const err = e as any
-              if (err?.notFound === true || String(err?.code ?? '') === 'LEVEL_NOT_FOUND') throw new Error('kv_not_found')
-              throw e
-            }
-          }
-
-          if (method === 'putKv') {
-            const key = coerceString(params?.key)
-            if (!key) throw new Error('BAD_KEY')
-            await putValue(db, key, params?.value)
-            emitEvent('KV_PUT', { key })
-            if (key === SYSTEM_UIA_TOPMOST_KV_KEY) {
-              const raw = (params as any)?.value
-              const enabled =
-                raw === true || raw === 'true' || raw === 1 || raw === '1'
-                  ? true
-                  : raw === false || raw === 'false' || raw === 0 || raw === '0'
-                    ? false
-                    : Boolean(raw)
-              requestMain({ type: 'SET_SYSTEM_UIA_TOPMOST', enabled })
-            }
-            if (key === SYSTEM_MERGE_RENDERER_PIPELINE_KV_KEY) {
-              const raw = (params as any)?.value
-              const enabled =
-                raw === true || raw === 'true' || raw === 1 || raw === '1'
-                  ? true
-                  : raw === false || raw === 'false' || raw === 0 || raw === '0'
-                    ? false
-                    : Boolean(raw)
-              requestMain({ type: 'SET_MERGE_RENDERER_PIPELINE', enabled })
-            }
-            if (key === SYSTEM_WINDOW_PRELOAD_KV_KEY) {
-              const raw = (params as any)?.value
-              const enabled =
-                raw === true || raw === 'true' || raw === 1 || raw === '1'
-                  ? true
-                  : raw === false || raw === 'false' || raw === 0 || raw === '0'
-                    ? false
-                    : Boolean(raw)
-              requestMain({ type: 'SET_WINDOW_PRELOAD', enabled })
-            }
-            if (key === 'native-mica-enabled') {
-              const raw = (params as any)?.value
-              const enabled =
-                raw === true || raw === 'true' || raw === 1 || raw === '1'
-                  ? true
-                  : raw === false || raw === 'false' || raw === 0 || raw === '0'
-                    ? false
-                    : Boolean(raw)
-              requestMain({ type: 'SET_NATIVE_MICA', enabled })
-            }
-            if (key === 'legacy-window-implementation') {
-              const raw = (params as any)?.value
-              const enabled =
-                raw === true || raw === 'true' || raw === 1 || raw === '1'
-                  ? true
-                  : raw === false || raw === 'false' || raw === 0 || raw === '0'
-                    ? false
-                    : Boolean(raw)
-              requestMain({ type: 'SET_LEGACY_WINDOW_IMPLEMENTATION', enabled })
-            }
-            requestMain({ type: 'RPC_RESPONSE', id, ok: true, result: null })
-            return
-          }
-
-          if (method === 'getUiState') {
-            const windowId = coerceString(params?.windowId)
-            if (!windowId) throw new Error('BAD_WINDOW_ID')
-            const state = getOrInitUiState(windowId)
-            emitEvent('UI_STATE_GET', { windowId })
-            requestMain({ type: 'RPC_RESPONSE', id, ok: true, result: state })
-            return
-          }
-
-          if (method === 'putUiStateKey') {
-            const windowId = coerceString(params?.windowId)
-            const key = coerceString(params?.key)
-            if (!windowId || !key) throw new Error('BAD_UI_STATE_KEY')
-            const state = getOrInitUiState(windowId)
-            state[key] = params?.value
-            emitEvent('UI_STATE_PUT', { windowId, key, value: params?.value })
-            if (
-              windowId === UI_STATE_APP_WINDOW_ID &&
-              (key === WHITEBOARD_BG_COLOR_UI_STATE_KEY ||
-                key === WHITEBOARD_BG_IMAGE_URL_UI_STATE_KEY ||
-                key === WHITEBOARD_BG_IMAGE_OPACITY_UI_STATE_KEY)
-            ) {
-              const modeRaw = state[APP_MODE_UI_STATE_KEY]
-              const mode = isAppMode(modeRaw) ? modeRaw : 'toolbar'
-              if (mode === 'whiteboard') {
-                const { index, total } = coercePageIndexTotal(state)
-                const defaultBg = await getDefaultWhiteboardBackground()
-                const book = await ensureWhiteboardCanvasBookPersisted({ total, defaultBg })
-                const rawPage = (book.pages as any)?.[index] as Partial<WhiteboardCanvasPageV1> | undefined
-                const page = {
-                  bgColor: typeof rawPage?.bgColor === 'string' ? rawPage.bgColor : defaultBg.bgColor,
-                  bgImageUrl: isFileOrDataUrl(rawPage?.bgImageUrl) ? String(rawPage?.bgImageUrl ?? '') : defaultBg.bgImageUrl,
-                  bgImageOpacity:
-                    typeof rawPage?.bgImageOpacity === 'number' && Number.isFinite(rawPage.bgImageOpacity)
-                      ? Math.max(0, Math.min(1, rawPage.bgImageOpacity))
-                      : defaultBg.bgImageOpacity
-                }
-
-                const nextColor =
-                  key === WHITEBOARD_BG_COLOR_UI_STATE_KEY && isHexColor(params?.value) ? String(params?.value) : page.bgColor
-
-                const nextImageUrl =
-                  key === WHITEBOARD_BG_IMAGE_URL_UI_STATE_KEY && isFileOrDataUrl(params?.value) ? String(params?.value) : page.bgImageUrl
-
-                const nextOpacity = (() => {
-                  if (key !== WHITEBOARD_BG_IMAGE_OPACITY_UI_STATE_KEY) return page.bgImageOpacity
-                  const raw = params?.value
-                  const n = typeof raw === 'number' ? raw : typeof raw === 'string' ? Number(raw) : NaN
-                  if (!Number.isFinite(n)) return page.bgImageOpacity
-                  return Math.max(0, Math.min(1, n))
-                })()
-
-                if (nextColor !== page.bgColor || nextImageUrl !== page.bgImageUrl || nextOpacity !== page.bgImageOpacity) {
-                  book.pages[index] = { bgColor: nextColor, bgImageUrl: nextImageUrl, bgImageOpacity: nextOpacity }
-                  await putValue(db, WHITEBOARD_CANVAS_PAGES_KV_KEY, book)
-                  emitEvent('KV_PUT', { key: WHITEBOARD_CANVAS_PAGES_KV_KEY })
-                }
-
-                if (key === WHITEBOARD_BG_COLOR_UI_STATE_KEY && isHexColor(params?.value)) {
-                  await putValue(db, WHITEBOARD_BG_COLOR_KV_KEY, String(params?.value))
-                  emitEvent('KV_PUT', { key: WHITEBOARD_BG_COLOR_KV_KEY })
-                }
-                if (key === WHITEBOARD_BG_IMAGE_URL_UI_STATE_KEY && isFileOrDataUrl(params?.value)) {
-                  await putValue(db, WHITEBOARD_BG_IMAGE_URL_KV_KEY, String(params?.value))
-                  emitEvent('KV_PUT', { key: WHITEBOARD_BG_IMAGE_URL_KV_KEY })
-                }
-                if (key === WHITEBOARD_BG_IMAGE_OPACITY_UI_STATE_KEY) {
-                  const raw = params?.value
-                  const n = typeof raw === 'number' ? raw : typeof raw === 'string' ? Number(raw) : NaN
-                  if (Number.isFinite(n)) {
-                    const v = Math.max(0, Math.min(1, n))
-                    await putValue(db, WHITEBOARD_BG_IMAGE_OPACITY_KV_KEY, v)
-                    emitEvent('KV_PUT', { key: WHITEBOARD_BG_IMAGE_OPACITY_KV_KEY })
-                  }
-                }
-              }
-            }
-            requestMain({ type: 'RPC_RESPONSE', id, ok: true, result: null })
-            return
-          }
-
-          if (method === 'deleteUiStateKey') {
-            const windowId = coerceString(params?.windowId)
-            const key = coerceString(params?.key)
-            if (!windowId || !key) throw new Error('BAD_UI_STATE_KEY')
-            const state = getOrInitUiState(windowId)
-            delete state[key]
-            emitEvent('UI_STATE_DEL', { windowId, key })
-            requestMain({ type: 'RPC_RESPONSE', id, ok: true, result: null })
-            return
-          }
-
-          if (method === 'shutdown') {
-            requestMain({ type: 'RPC_RESPONSE', id, ok: true, result: null })
-            try {
-              await db.close()
-            } catch {}
-            setTimeout(() => {
-              process.exit(0)
-            }, 10)
-            return
-          }
-
-          throw new Error('UNKNOWN_METHOD')
+          const result = await handleBackendRpc(method, params)
+          requestMain({ type: 'RPC_RESPONSE', id, ok: true, result })
         } catch (e) {
           requestMain({ type: 'RPC_RESPONSE', id, ok: false, error: String(e) })
         }
@@ -1807,7 +1816,7 @@ stdin.on('line', (line) => {
   }
 })
 
-const api = new Elysia({ adapter: node() })
+const api = new Elysia(isBun ? {} : { adapter: node() })
   .onRequest(({ request, set }) => {
     set.headers['Access-Control-Allow-Origin'] = '*'
     set.headers['Access-Control-Allow-Methods'] = 'GET,POST,PUT,DELETE,OPTIONS'
@@ -2352,6 +2361,39 @@ const api = new Elysia({ adapter: node() })
     { query: t.Object({ since: t.Optional(t.String()) }) }
   )
 
+if (isBun) {
+  ;(api as any).ws('/rpc', {
+    open(ws: any) {
+      rpcWsClients.add(ws)
+    },
+    close(ws: any) {
+      rpcWsClients.delete(ws)
+    },
+    async message(ws: any, message: any) {
+      const raw = typeof message === 'string' ? message : message instanceof ArrayBuffer ? Buffer.from(message).toString('utf8') : String(message ?? '')
+      const trimmed = raw.trim()
+      if (!trimmed) return
+      let msg: any
+      try {
+        msg = JSON.parse(trimmed)
+      } catch {
+        return
+      }
+      if (String(msg?.type ?? '') !== 'RPC_REQUEST') return
+      const id = Number(msg?.id)
+      const method = String(msg?.method ?? '')
+      const params = msg?.params as any
+      if (!Number.isFinite(id) || !method) return
+      try {
+        const result = await handleBackendRpc(method, params)
+        ws.send(JSON.stringify({ type: 'RPC_RESPONSE', id, ok: true, result }))
+      } catch (e) {
+        ws.send(JSON.stringify({ type: 'RPC_RESPONSE', id, ok: false, error: String(e) }))
+      }
+    }
+  })
+}
+
 const senderHtml = `<!doctype html>
 <html lang="zh-CN">
   <head>
@@ -2498,7 +2540,7 @@ const senderHtml = `<!doctype html>
   </body>
 </html>`;
 
-const castApi = new Elysia({ adapter: node() })
+const castApi = new Elysia(isBun ? {} : { adapter: node() })
   .onRequest(({ request, set }) => {
     set.headers['Access-Control-Allow-Origin'] = '*'
     set.headers['Access-Control-Allow-Methods'] = 'GET,POST,PUT,DELETE,OPTIONS'
@@ -2582,12 +2624,10 @@ async function bootstrap(): Promise<void> {
     emitEvent('CAST_HTTP_LISTEN_FAILED', { host: castHost, port: castPort, error: String(e) })
   }
 
-  if (transport === 'http') {
-    try {
-      await api.listen({ hostname: host, port })
-    } catch (e) {
-      emitEvent('BACKEND_HTTP_LISTEN_FAILED', { host, port, error: String(e) })
-    }
+  try {
+    await api.listen({ hostname: host, port })
+  } catch (e) {
+    emitEvent('BACKEND_HTTP_LISTEN_FAILED', { host, port, error: String(e) })
   }
 
   emitEvent('BACKEND_STARTED', { transport, host, port, castHost, castPort, dbPath, csBaseUrl: csBaseUrl || undefined })
