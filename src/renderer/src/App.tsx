@@ -13,19 +13,102 @@ import { useHyperGlassRealtimeBlur } from '../../hyper_glass'
 import { SettingsWindow, useAppearanceSettings } from '../../settings'
 import { AppWindowTitlebar } from '../../app_windows_manerger/renderer'
 import { LanStartBarApp, WINDOW_ID_LANSTART_BAR } from '../../LanStartBar'
+import { parsePathWindowParams } from '../../bun/windows/routes'
+
+function normalizeWindowId(raw: string | null | undefined): string | undefined {
+  const value = typeof raw === 'string' ? raw.trim() : ''
+  if (!value) return undefined
+  if (value === 'floating-toolbar') return WINDOW_ID_FLOATING_TOOLBAR
+  if (value === 'floating-toolbar-handle') return WINDOW_ID_FLOATING_TOOLBAR_HANDLE
+  return value
+}
 
 function useWindowParams(): { windowId: string; kind?: string } {
   return useMemo(() => {
-    const params = new URLSearchParams(window.location.search)
-    const windowId = params.get('window') || WINDOW_ID_FLOATING_TOOLBAR
-    const kind = params.get('kind') || undefined
+    const injectedRoute = (window as Window & {
+      __LANSTART_WINDOW_ROUTE__?: { windowId?: unknown; kind?: unknown }
+    }).__LANSTART_WINDOW_ROUTE__
+    const injectedWindowId =
+      typeof injectedRoute?.windowId === 'string' ? normalizeWindowId(injectedRoute.windowId) : undefined
+    const injectedKind =
+      typeof injectedRoute?.kind === 'string' && injectedRoute.kind.trim() ? injectedRoute.kind.trim() : undefined
+
+    const pathParams = parsePathWindowParams(window.location.pathname)
+    const searchParams = new URLSearchParams(window.location.search)
+    const hashRaw = window.location.hash.startsWith('#') ? window.location.hash.slice(1) : window.location.hash
+    const hashQuery = hashRaw.startsWith('?') ? hashRaw.slice(1) : hashRaw
+    const hashParams = hashQuery && /(^|[&=])window=|(^|[&=])kind=/.test(hashQuery) ? new URLSearchParams(hashQuery) : new URLSearchParams()
+
+    const windowId =
+      injectedWindowId ||
+      normalizeWindowId(pathParams.windowId) ||
+      normalizeWindowId(hashParams.get('window')) ||
+      normalizeWindowId(searchParams.get('window')) ||
+      WINDOW_ID_FLOATING_TOOLBAR
+
+    const kind = injectedKind || pathParams.kind || hashParams.get('kind') || searchParams.get('kind') || undefined
     return { windowId, kind }
   }, [])
 }
 
 function ChildWindow() {
   const events = useEventsPoll()
-  const [health, setHealth] = useState<string>('…')
+  const [health, setHealth] = useState<string>('...')
+  const rootRef = React.useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    const root = rootRef.current
+    if (!root) return
+    if (typeof ResizeObserver === 'undefined') return
+
+    let lastWidth = 0
+    let lastHeight = 0
+    let rafId = 0
+
+    const clampInt = (value: number, min: number, max: number) => {
+      const v = Math.round(value)
+      return Math.max(min, Math.min(max, v))
+    }
+
+    const send = () => {
+      rafId = 0
+      const rect = root.getBoundingClientRect()
+      const width = clampInt(Math.max(rect.width, root.scrollWidth), 320, 960)
+      const height = clampInt(Math.max(rect.height, root.scrollHeight), 180, 680)
+      if (width === lastWidth && height === lastHeight) return
+      lastWidth = width
+      lastHeight = height
+      window.lanstart
+        ?.postCommand('set-app-window-bounds', {
+          windowId: 'child',
+          width,
+          height
+        })
+        .catch(() => undefined)
+    }
+
+    const schedule = () => {
+      if (rafId) return
+      rafId = window.requestAnimationFrame(send)
+    }
+
+    const ro = new ResizeObserver(schedule)
+    ro.observe(root)
+    const mo =
+      typeof MutationObserver === 'undefined'
+        ? undefined
+        : new MutationObserver(() => {
+            schedule()
+          })
+    mo?.observe(root, { subtree: true, childList: true, attributes: true, characterData: true })
+    schedule()
+
+    return () => {
+      ro.disconnect()
+      mo?.disconnect()
+      if (rafId) window.cancelAnimationFrame(rafId)
+    }
+  }, [])
 
   useEffect(() => {
     const run = async () => {
@@ -42,7 +125,7 @@ function ChildWindow() {
   }, [])
 
   return (
-    <div className="childRoot">
+    <div ref={rootRef} className="childRoot">
       <AppWindowTitlebar windowId="child" title="数据库" subtitle={`backend: ${health}`} showMaximize={false} />
       <div className="childContent">
         <div className="childActions">

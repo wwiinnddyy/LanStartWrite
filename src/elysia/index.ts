@@ -1,5 +1,4 @@
 import { Elysia, t } from 'elysia'
-import { node } from '@elysiajs/node'
 import { createInterface } from 'node:readline'
 import { randomUUID } from 'node:crypto'
 import { open, readFile, stat } from 'node:fs/promises'
@@ -60,7 +59,11 @@ import {
   type EffectiveWritingBackend,
   type WritingFramework
 } from '../status/keys'
-import { sendSimulatedKeys } from '../system_different_code'
+import { disposeCapabilityClient } from '../system/capabilities/client'
+import { sendSimulatedKeys } from '../system/features/inputService'
+import { isAdmin as isAdminPrivilege } from '../system/features/privilegeService'
+import { captureWallpaperThumbnail } from '../system/features/wallpaperService'
+import { createTaskWatcherService } from '../system/features/taskWatcherService'
 import { identifyActiveApp } from '../task_windows_watcher/identify'
 import type { ForegroundWindowSample, ProcessSample, TaskWatcherStatus } from '../task_windows_watcher/types'
 import type { BackendEventItem, BackendRpcWsMessage } from '../rpc/schema'
@@ -130,11 +133,9 @@ let nextEventId = 1
 const events: BackendEventItem[] = []
 const MAX_EVENTS = 200
 
-const isBun = typeof (globalThis as any).Bun !== 'undefined'
 const rpcWsClients = new Set<any>()
 
 function broadcastRpcWsMessage(message: BackendRpcWsMessage): void {
-  if (!isBun) return
   if (!rpcWsClients.size) return
   let data = ''
   try {
@@ -158,8 +159,32 @@ function emitEvent(type: string, payload?: unknown): BackendEventItem {
   return item
 }
 
+let mainPipeBroken = false
+
+function markMainPipeBroken(reason: unknown): void {
+  if (mainPipeBroken) return
+  mainPipeBroken = true
+  const detail = reason instanceof Error ? `${reason.name}:${reason.message}` : String(reason)
+  console.error(`[main-channel] stdout unavailable, disable main rpc bridge: ${detail}`)
+}
+
+try {
+  process.stdout.on('error', (error: NodeJS.ErrnoException) => {
+    if (error?.code === 'EPIPE' || error?.code === 'ERR_STREAM_DESTROYED') {
+      markMainPipeBroken(error)
+      return
+    }
+    markMainPipeBroken(error)
+  })
+} catch {}
+
 function requestMain(message: unknown): void {
-  process.stdout.write(`__LANSTART__${JSON.stringify(message)}\n`)
+  if (mainPipeBroken) return
+  try {
+    process.stdout.write(`__LANSTART__${JSON.stringify(message)}\n`)
+  } catch (error) {
+    markMainPipeBroken(error)
+  }
 }
 
 type WhiteboardCanvasPageV1 = { bgColor: string; bgImageUrl: string; bgImageOpacity: number }
@@ -475,6 +500,7 @@ function requestMainRpc<T>(method: string, params?: unknown, timeoutMs = 30_000)
 const uiState = new Map<string, Record<string, unknown>>()
 const runtimeWindows = new Map<string, unknown>()
 const runtimeProcesses = new Map<string, unknown>()
+let taskWatcherService: ReturnType<typeof createTaskWatcherService> | undefined
 
 type PdfFileSession = {
   token: string
@@ -1306,11 +1332,12 @@ async function handleCommand(command: string, payload: unknown): Promise<Command
 
       if (action === 'setInterval' || action === 'start') {
         const intervalMs = Number((payload as any)?.intervalMs)
-        requestMain({ type: 'START_TASK_WATCHER', intervalMs: Number.isFinite(intervalMs) ? intervalMs : undefined })
+        taskWatcherService?.start(Number.isFinite(intervalMs) ? intervalMs : undefined)
         return { ok: true }
       }
 
       if (action === 'stop') {
+        taskWatcherService?.stop()
         return { ok: true }
       }
 
@@ -1617,7 +1644,51 @@ async function handleBackendRpc(method: string, params: any): Promise<unknown> {
     return null
   }
 
+  if (method === 'clipboardWriteText') {
+    const text = coerceString(params?.text)
+    await requestMainRpc('clipboardWriteText', { text })
+    return null
+  }
+
+  if (method === 'getToolbarNoticeKind') {
+    const result = (await requestMainRpc('getToolbarNoticeKind', {})) as { kind?: unknown } | undefined
+    return coerceString(result?.kind)
+  }
+
+  if (method === 'setToolbarNoticeVisible') {
+    const visible = Boolean(params?.visible)
+    const kind = coerceString(params?.kind)
+    await requestMainRpc('setToolbarNoticeVisible', {
+      visible,
+      ...(kind ? { kind } : {})
+    })
+    return null
+  }
+
+  if (method === 'setToolbarNoticeBounds') {
+    const width = Number(params?.width)
+    const height = Number(params?.height)
+    if (!Number.isFinite(width) || !Number.isFinite(height)) throw new Error('BAD_TOOLBAR_NOTICE_BOUNDS')
+    await requestMainRpc('setToolbarNoticeBounds', { width, height })
+    return null
+  }
+
+  if (method === 'restartBackendAll') {
+    await requestMainRpc('restartBackendAll', {})
+    return null
+  }
+
+  if (method === 'captureWallpaperThumbnail') {
+    const maxSideRaw = Number(params?.maxSide)
+    const maxSide = Number.isFinite(maxSideRaw) ? Math.max(32, Math.floor(maxSideRaw)) : undefined
+    return await captureWallpaperThumbnail({
+      ...(typeof maxSide === 'number' ? { maxSide } : {})
+    })
+  }
+
   if (method === 'shutdown') {
+    taskWatcherService?.stop()
+    await disposeCapabilityClient().catch(() => undefined)
     try {
       await db.close()
     } catch {}
@@ -1629,6 +1700,135 @@ async function handleBackendRpc(method: string, params: any): Promise<unknown> {
 
   throw new Error('UNKNOWN_METHOD')
 }
+
+function handleTaskWatcherMessage(msg: unknown): boolean {
+  const type = String((msg as any)?.type ?? '')
+
+  if (type === 'TASK_WATCHER_STATUS') {
+    const status = (msg as any)?.status as TaskWatcherStatus | undefined
+    if (status && typeof status === 'object') {
+      runtimeProcesses.set('task-watcher', status as unknown)
+      emitEvent('watcherStatus', status)
+      return true
+    }
+    return false
+  }
+
+  if (type === 'TASK_WATCHER_PROCESS_SNAPSHOT') {
+    const ts = Number((msg as any)?.ts)
+    const processes = Array.isArray((msg as any)?.processes) ? ((msg as any).processes as ProcessSample[]) : []
+    runtimeProcesses.set('system-processes', { ts: Number.isFinite(ts) ? ts : Date.now(), processes } as unknown)
+    emitEvent('processChanged', { ts: Number.isFinite(ts) ? ts : Date.now(), processes })
+
+    const state = getOrInitUiState(UI_STATE_APP_WINDOW_ID) as any
+    const activeAppRaw = state[ACTIVE_APP_UI_STATE_KEY]
+    const activeApp = isActiveApp(activeAppRaw) ? activeAppRaw : 'unknown'
+    if (activeApp !== 'ppt') {
+      const hasPptProc = processes.some((p) => {
+        const n = String((p as any)?.name ?? '').toLowerCase()
+        if (!n) return false
+        const token = n.replace(/\.exe$/i, '').replace(/[\s._-]+/g, '')
+        return token.includes('powerpnt') || token.includes('pptview') || token.includes('powerpoint') || token === 'wpp' || token.includes('wpp')
+      })
+
+      if (hasPptProc && !pptProbeInFlight) {
+        const now = Date.now()
+        if (now - lastPptProbeAt >= 900) {
+          lastPptProbeAt = now
+          pptProbeInFlight = true
+          void pptGetStatus()
+            .then((status) => {
+              const foreground = runtimeWindows.get('foreground') as any
+              const fgName = String(foreground?.window?.processName ?? '')
+              const canTrustForeground = Boolean(fgName)
+              const hwnd = asFiniteNumber(status?.hwnd)
+              const pptFullscreen = isPptControlDataReady(status)
+              if (pptFullscreen || hwnd !== undefined || !canTrustForeground) {
+                state[ACTIVE_APP_UI_STATE_KEY] = 'ppt'
+                state[PPT_FULLSCREEN_UI_STATE_KEY] = pptFullscreen
+                emitEvent('UI_STATE_PUT', { windowId: UI_STATE_APP_WINDOW_ID, key: ACTIVE_APP_UI_STATE_KEY, value: 'ppt' })
+                emitEvent('UI_STATE_PUT', { windowId: UI_STATE_APP_WINDOW_ID, key: PPT_FULLSCREEN_UI_STATE_KEY, value: pptFullscreen })
+                applyPptStatusToUiState(state, status)
+                const visible = pptFullscreen
+                if (visible !== lastPptMutPageVisible) {
+                  lastPptMutPageVisible = visible
+                  requestMain({ type: 'SET_MUT_PAGE_VISIBLE', source: 'ppt', visible })
+                  if (!visible) requestMain({ type: 'SET_MUT_PAGE_ANCHOR', source: 'ppt', bounds: undefined })
+                }
+              }
+            })
+            .catch(() => undefined)
+            .finally(() => {
+              pptProbeInFlight = false
+            })
+        }
+      }
+    }
+    return true
+  }
+
+  if (type === 'TASK_WATCHER_WINDOW_FOCUS') {
+    const ts = Number((msg as any)?.ts)
+    const window = ((msg as any)?.window ?? undefined) as ForegroundWindowSample | undefined
+    runtimeWindows.set('foreground', { ts: Number.isFinite(ts) ? ts : Date.now(), window } as unknown)
+    emitEvent('windowFocusChanged', { ts: Number.isFinite(ts) ? ts : Date.now(), window })
+
+    void (async () => {
+      const state = getOrInitUiState(UI_STATE_APP_WINDOW_ID) as any
+      const identified = identifyActiveApp(window)
+
+      let activeApp = identified.activeApp
+      let pptFullscreen = identified.pptFullscreen
+
+      let status: PptWrapperStatus | null = null
+      try {
+        status = await pptGetStatus()
+      } catch {
+        status = null
+      }
+
+      if (window) {
+        const pptHwnd = asFiniteNumber(status?.hwnd)
+        const winHwnd = asFiniteNumber(window.handle)
+        if (pptHwnd !== undefined && winHwnd !== undefined && pptHwnd === winHwnd) {
+          activeApp = 'ppt'
+        }
+      }
+
+      const ready = isPptControlDataReady(status)
+      if (ready) activeApp = 'ppt'
+      if (activeApp === 'ppt') pptFullscreen = pptFullscreen || ready
+
+      state[ACTIVE_APP_UI_STATE_KEY] = activeApp
+      state[PPT_FULLSCREEN_UI_STATE_KEY] = pptFullscreen
+      applyPptStatusToUiState(state, status)
+
+      emitEvent('UI_STATE_PUT', { windowId: UI_STATE_APP_WINDOW_ID, key: ACTIVE_APP_UI_STATE_KEY, value: activeApp })
+      emitEvent('UI_STATE_PUT', { windowId: UI_STATE_APP_WINDOW_ID, key: PPT_FULLSCREEN_UI_STATE_KEY, value: pptFullscreen })
+      const showMutPage = activeApp === 'ppt' && pptFullscreen
+      if (showMutPage !== lastPptMutPageVisible) {
+        lastPptMutPageVisible = showMutPage
+        requestMain({ type: 'SET_MUT_PAGE_VISIBLE', source: 'ppt', visible: showMutPage })
+      }
+      requestMain({ type: 'SET_MUT_PAGE_ANCHOR', source: 'ppt', bounds: showMutPage ? window?.bounds : undefined })
+    })()
+    return true
+  }
+
+  if (type === 'TASK_WATCHER_ERROR') {
+    emitEvent('watcherError', (msg as any) ?? {})
+    return true
+  }
+
+  return false
+}
+
+taskWatcherService = createTaskWatcherService({
+  emit(message) {
+    handleTaskWatcherMessage(message)
+  },
+  defaultIntervalMs: 1000
+})
 
 const stdin = createInterface({ input: process.stdin, crlfDelay: Infinity })
 stdin.on('line', (line) => {
@@ -1672,6 +1872,7 @@ stdin.on('line', (line) => {
     }
 
     if (type === 'CLEANUP_RUNTIME') {
+      taskWatcherService?.stop()
       cleanupMonitoringData()
       emitEvent('CLEANUP_RUNTIME')
       return
@@ -1695,120 +1896,7 @@ stdin.on('line', (line) => {
       }
     }
 
-    if (type === 'TASK_WATCHER_STATUS') {
-      const status = (msg as any)?.status as TaskWatcherStatus | undefined
-      if (status && typeof status === 'object') {
-        runtimeProcesses.set('task-watcher', status as unknown)
-        emitEvent('watcherStatus', status)
-        return
-      }
-    }
-
-    if (type === 'TASK_WATCHER_PROCESS_SNAPSHOT') {
-      const ts = Number((msg as any)?.ts)
-      const processes = Array.isArray((msg as any)?.processes) ? ((msg as any).processes as ProcessSample[]) : []
-      runtimeProcesses.set('system-processes', { ts: Number.isFinite(ts) ? ts : Date.now(), processes } as unknown)
-      emitEvent('processChanged', { ts: Number.isFinite(ts) ? ts : Date.now(), processes })
-
-      const state = getOrInitUiState(UI_STATE_APP_WINDOW_ID) as any
-      const activeAppRaw = state[ACTIVE_APP_UI_STATE_KEY]
-      const activeApp = isActiveApp(activeAppRaw) ? activeAppRaw : 'unknown'
-      if (activeApp !== 'ppt') {
-        const hasPptProc = processes.some((p) => {
-          const n = String((p as any)?.name ?? '').toLowerCase()
-          if (!n) return false
-          const token = n.replace(/\.exe$/i, '').replace(/[\s._-]+/g, '')
-          return token.includes('powerpnt') || token.includes('pptview') || token.includes('powerpoint') || token === 'wpp' || token.includes('wpp')
-        })
-
-        if (hasPptProc && !pptProbeInFlight) {
-          const now = Date.now()
-          if (now - lastPptProbeAt >= 900) {
-            lastPptProbeAt = now
-            pptProbeInFlight = true
-            void pptGetStatus()
-              .then((status) => {
-                const foreground = runtimeWindows.get('foreground') as any
-                const fgName = String(foreground?.window?.processName ?? '')
-                const canTrustForeground = Boolean(fgName)
-                const hwnd = asFiniteNumber(status?.hwnd)
-                const pptFullscreen = isPptControlDataReady(status)
-                if (pptFullscreen || hwnd !== undefined || !canTrustForeground) {
-                  state[ACTIVE_APP_UI_STATE_KEY] = 'ppt'
-                  state[PPT_FULLSCREEN_UI_STATE_KEY] = pptFullscreen
-                  emitEvent('UI_STATE_PUT', { windowId: UI_STATE_APP_WINDOW_ID, key: ACTIVE_APP_UI_STATE_KEY, value: 'ppt' })
-                  emitEvent('UI_STATE_PUT', { windowId: UI_STATE_APP_WINDOW_ID, key: PPT_FULLSCREEN_UI_STATE_KEY, value: pptFullscreen })
-                  applyPptStatusToUiState(state, status)
-                  const visible = pptFullscreen
-                  if (visible !== lastPptMutPageVisible) {
-                    lastPptMutPageVisible = visible
-                    requestMain({ type: 'SET_MUT_PAGE_VISIBLE', source: 'ppt', visible })
-                    if (!visible) requestMain({ type: 'SET_MUT_PAGE_ANCHOR', source: 'ppt', bounds: undefined })
-                  }
-                }
-              })
-              .catch(() => undefined)
-              .finally(() => {
-                pptProbeInFlight = false
-              })
-          }
-        }
-      }
-      return
-    }
-
-    if (type === 'TASK_WATCHER_WINDOW_FOCUS') {
-      const ts = Number((msg as any)?.ts)
-      const window = ((msg as any)?.window ?? undefined) as ForegroundWindowSample | undefined
-      runtimeWindows.set('foreground', { ts: Number.isFinite(ts) ? ts : Date.now(), window } as unknown)
-      emitEvent('windowFocusChanged', { ts: Number.isFinite(ts) ? ts : Date.now(), window })
-
-      void (async () => {
-        const state = getOrInitUiState(UI_STATE_APP_WINDOW_ID) as any
-        const identified = identifyActiveApp(window)
-
-        let activeApp = identified.activeApp
-        let pptFullscreen = identified.pptFullscreen
-
-        let status: PptWrapperStatus | null = null
-        try {
-          status = await pptGetStatus()
-        } catch {
-          status = null
-        }
-
-        if (window) {
-          const pptHwnd = asFiniteNumber(status?.hwnd)
-          const winHwnd = asFiniteNumber(window.handle)
-          if (pptHwnd !== undefined && winHwnd !== undefined && pptHwnd === winHwnd) {
-            activeApp = 'ppt'
-          }
-        }
-
-        const ready = isPptControlDataReady(status)
-        if (ready) activeApp = 'ppt'
-        if (activeApp === 'ppt') pptFullscreen = pptFullscreen || ready
-
-        state[ACTIVE_APP_UI_STATE_KEY] = activeApp
-        state[PPT_FULLSCREEN_UI_STATE_KEY] = pptFullscreen
-        applyPptStatusToUiState(state, status)
-
-        emitEvent('UI_STATE_PUT', { windowId: UI_STATE_APP_WINDOW_ID, key: ACTIVE_APP_UI_STATE_KEY, value: activeApp })
-        emitEvent('UI_STATE_PUT', { windowId: UI_STATE_APP_WINDOW_ID, key: PPT_FULLSCREEN_UI_STATE_KEY, value: pptFullscreen })
-        const showMutPage = activeApp === 'ppt' && pptFullscreen
-        if (showMutPage !== lastPptMutPageVisible) {
-          lastPptMutPageVisible = showMutPage
-          requestMain({ type: 'SET_MUT_PAGE_VISIBLE', source: 'ppt', visible: showMutPage })
-        }
-        requestMain({ type: 'SET_MUT_PAGE_ANCHOR', source: 'ppt', bounds: showMutPage ? window?.bounds : undefined })
-      })()
-      return
-    }
-
-    if (type === 'TASK_WATCHER_ERROR') {
-      emitEvent('watcherError', (msg as any) ?? {})
-      return
-    }
+    if (handleTaskWatcherMessage(msg)) return
 
     emitEvent('MAIN_MESSAGE', msg)
   } catch {
@@ -1816,7 +1904,7 @@ stdin.on('line', (line) => {
   }
 })
 
-const api = new Elysia(isBun ? {} : { adapter: node() })
+const api = new Elysia()
   .onRequest(({ request, set }) => {
     set.headers['Access-Control-Allow-Origin'] = '*'
     set.headers['Access-Control-Allow-Methods'] = 'GET,POST,PUT,DELETE,OPTIONS'
@@ -2360,39 +2448,61 @@ const api = new Elysia(isBun ? {} : { adapter: node() })
     },
     { query: t.Object({ since: t.Optional(t.String()) }) }
   )
+  .post(
+    '/rpc-http',
+    async ({ body, set }) => {
+      const method = coerceString((body as any)?.method)
+      if (!method) {
+        set.status = 400
+        return { ok: false, error: 'BAD_METHOD' }
+      }
 
-if (isBun) {
-  ;(api as any).ws('/rpc', {
-    open(ws: any) {
-      rpcWsClients.add(ws)
-    },
-    close(ws: any) {
-      rpcWsClients.delete(ws)
-    },
-    async message(ws: any, message: any) {
-      const raw = typeof message === 'string' ? message : message instanceof ArrayBuffer ? Buffer.from(message).toString('utf8') : String(message ?? '')
-      const trimmed = raw.trim()
-      if (!trimmed) return
-      let msg: any
       try {
-        msg = JSON.parse(trimmed)
-      } catch {
-        return
-      }
-      if (String(msg?.type ?? '') !== 'RPC_REQUEST') return
-      const id = Number(msg?.id)
-      const method = String(msg?.method ?? '')
-      const params = msg?.params as any
-      if (!Number.isFinite(id) || !method) return
-      try {
-        const result = await handleBackendRpc(method, params)
-        ws.send(JSON.stringify({ type: 'RPC_RESPONSE', id, ok: true, result }))
+        const result = await handleBackendRpc(method, (body as any)?.params)
+        return { ok: true, result }
       } catch (e) {
-        ws.send(JSON.stringify({ type: 'RPC_RESPONSE', id, ok: false, error: String(e) }))
+        set.status = 500
+        return { ok: false, error: String(e) }
       }
+    },
+    {
+      body: t.Object({
+        method: t.String(),
+        params: t.Optional(t.Any())
+      })
     }
-  })
-}
+  )
+
+;(api as any).ws('/rpc', {
+  open(ws: any) {
+    rpcWsClients.add(ws)
+  },
+  close(ws: any) {
+    rpcWsClients.delete(ws)
+  },
+  async message(ws: any, message: any) {
+    const raw = typeof message === 'string' ? message : message instanceof ArrayBuffer ? Buffer.from(message).toString('utf8') : String(message ?? '')
+    const trimmed = raw.trim()
+    if (!trimmed) return
+    let msg: any
+    try {
+      msg = JSON.parse(trimmed)
+    } catch {
+      return
+    }
+    if (String(msg?.type ?? '') !== 'RPC_REQUEST') return
+    const id = Number(msg?.id)
+    const method = String(msg?.method ?? '')
+    const params = msg?.params as any
+    if (!Number.isFinite(id) || !method) return
+    try {
+      const result = await handleBackendRpc(method, params)
+      ws.send(JSON.stringify({ type: 'RPC_RESPONSE', id, ok: true, result }))
+    } catch (e) {
+      ws.send(JSON.stringify({ type: 'RPC_RESPONSE', id, ok: false, error: String(e) }))
+    }
+  }
+})
 
 const senderHtml = `<!doctype html>
 <html lang="zh-CN">
@@ -2540,7 +2650,7 @@ const senderHtml = `<!doctype html>
   </body>
 </html>`;
 
-const castApi = new Elysia(isBun ? {} : { adapter: node() })
+const castApi = new Elysia()
   .onRequest(({ request, set }) => {
     set.headers['Access-Control-Allow-Origin'] = '*'
     set.headers['Access-Control-Allow-Methods'] = 'GET,POST,PUT,DELETE,OPTIONS'
@@ -2619,6 +2729,13 @@ async function bootstrap(): Promise<void> {
   } catch {}
 
   try {
+    const admin = await isAdminPrivilege()
+    const state = getOrInitUiState(UI_STATE_APP_WINDOW_ID)
+    state.isAdmin = admin
+    emitEvent('UI_STATE_PUT', { windowId: UI_STATE_APP_WINDOW_ID, key: 'isAdmin', value: admin })
+  } catch {}
+
+  try {
     await castApi.listen({ hostname: castHost, port: castPort })
   } catch (e) {
     emitEvent('CAST_HTTP_LISTEN_FAILED', { host: castHost, port: castPort, error: String(e) })
@@ -2628,6 +2745,12 @@ async function bootstrap(): Promise<void> {
     await api.listen({ hostname: host, port })
   } catch (e) {
     emitEvent('BACKEND_HTTP_LISTEN_FAILED', { host, port, error: String(e) })
+  }
+
+  try {
+    taskWatcherService?.start()
+  } catch (e) {
+    emitEvent('TASK_WATCHER_START_FAILED', { error: String(e) })
   }
 
   emitEvent('BACKEND_STARTED', { transport, host, port, castHost, castPort, dbPath, csBaseUrl: csBaseUrl || undefined })

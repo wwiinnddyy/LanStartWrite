@@ -5,23 +5,25 @@
   "private": true,
   "version": "1.0.0",
   "lanstartCodename": "Doctor",
-  "main": "out/main/index.js",
+  "main": "out/bun/index.js",
   "scripts": {
-    "dev": "bunx electron-vite dev",
-    "dev:node": "electron-vite dev",
+    "dev": "bun run scripts/dev/dev-stable.mjs",
+    "dev:electrobun": "bunx electrobun dev --watch",
+    "dev:hmr": "bun run scripts/dev/dev-hmr.mjs",
+    "dev:clean-runtime": "bun run scripts/dev/clean-runtime.mjs",
+    "dev:webview": "bunx vite --config vite.electrobun.config.ts --port 5173 --strictPort",
     "backend:dev": "bun run src/elysia/index.ts",
     "build:ppt-wrapper": "bun -e \"const fs=require('fs');const path=require('path');const {spawnSync}=require('child_process');const candidates=['dotnet',process.env.DOTNET_ROOT?path.join(process.env.DOTNET_ROOT,'dotnet.exe'):null,'C:/Program Files/dotnet/dotnet.exe','C:/Program Files (x86)/dotnet/dotnet.exe'].filter(Boolean);let dotnet=null;for(const c of candidates){const r=spawnSync(c,['--version'],{stdio:'ignore'});if(r&&r.status===0){dotnet=c;break;}}if(!dotnet){console.error('dotnet not found; cannot build ppt wrapper');process.exit(1);}const outDir=path.resolve('out/ppt-wrapper');try{fs.mkdirSync(outDir,{recursive:true});}catch{}const args=['publish','src/office/PowerPoint/inkeys/PptHttpWrapper/PptHttpWrapper.csproj','-c','Release','-r','win-x64','--self-contained','true','-o',outDir];const p=spawnSync(dotnet,args,{stdio:'inherit'});process.exit(typeof p.status==='number'?p.status:1);\"",
-    "build": "bun -e \"const {spawnSync}=require('child_process');if(process.platform==='win32'){const r=spawnSync('pnpm',['-s','build:ppt-wrapper'],{stdio:'inherit'});process.exit(typeof r.status==='number'?r.status:1);}console.log('skip build:ppt-wrapper on non-win32');\" && bunx electron-vite build && bunx tsc -p tsconfig.backend.json",
-    "preview": "bunx electron-vite preview",
-    "preview:node": "electron-vite preview",
+    "build:webview": "bunx vite build --config vite.electrobun.config.ts && bun run scripts/dev/generate-window-aliases.mjs",
+    "build:backend": "bunx tsc -p tsconfig.backend.json",
+    "build:electrobun": "bun -e \"const {spawnSync}=require('child_process');if(process.platform==='win32'){const r=spawnSync('bun',['run','build:ppt-wrapper'],{stdio:'inherit'});process.exit(typeof r.status==='number'?r.status:1);}console.log('skip build:ppt-wrapper on non-win32');\" && bun run build:webview && bun run build:backend && bunx electrobun build --env=canary",
+    "build": "bun run build:electrobun",
+    "preview": "bunx electrobun dev",
     "typecheck": "bunx tsc -p tsconfig.json --noEmit",
-    "typecheck:node": "tsc -p tsconfig.json --noEmit",
     "test": "bunx vitest run",
-    "test:node": "vitest run",
     "release": "release-it"
   },
   "dependencies": {
-    "@elysiajs/node": "^1.4.3",
     "@mantine/core": "^8.3.14",
     "@mantine/hooks": "^8.3.14",
     "elysia": "^1.4.3",
@@ -42,6 +44,7 @@
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.1.0",
     "@testing-library/user-event": "^14.6.1",
+    "@types/bun": "^1.3.8",
     "@types/node": "^22.13.1",
     "@types/qrcode": "^1.5.5",
     "@types/react": "^18.3.18",
@@ -50,14 +53,11 @@
     "@types/yazl": "^3.3.0",
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.24",
-    "electron": "^35.0.0",
-    "electron-builder": "^26.7.0",
-    "electron-vite": "^3.1.0",
+    "electrobun": "^1.14.4",
     "jsdom": "^25.0.1",
     "postcss": "^8.5.6",
     "release-it": "^19.2.4",
     "tailwindcss": "^3.4.17",
-    "tsx": "^4.19.2",
     "typescript": "^5.7.3",
     "vite": "^6.1.0",
     "vitest": "^2.1.9"
@@ -65,7 +65,6 @@
   "pnpm": {
     "onlyBuiltDependencies": [
       "classic-level",
-      "electron",
       "esbuild"
     ]
   }

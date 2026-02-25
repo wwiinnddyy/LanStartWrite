@@ -354,7 +354,7 @@ function ToolbarProvider({ children }: { children: React.ReactNode }) {
 function FloatingToolbarInner() {
   const { state, setState } = useToolbar()
   const rootRef = useRef<HTMLDivElement | null>(null)
-  const contentRef = useRef<HTMLDivElement | null>(null)
+  const [contentEl, setContentEl] = useState<HTMLDivElement | null>(null)
   const lastBackendOkRef = useRef<boolean | null>(null)
   const uiButtonSize = state.uiButtonSize || 'sm'
   const reduceMotion = useReducedMotion()
@@ -371,8 +371,16 @@ function FloatingToolbarInner() {
 
   const { toolbarButtonHintsEnabled } = useAppearanceSettings()
 
-  useToolbarWindowAutoResize({ root: contentRef.current })
+  useToolbarWindowAutoResize({ root: contentEl })
   useZoomOnWheel()
+
+  const dispatchToolbarTransitionEvent = (
+    name: 'lanstart-toolbar-transition-start' | 'lanstart-toolbar-transition-end'
+  ) => {
+    try {
+      window.dispatchEvent(new CustomEvent(name))
+    } catch {}
+  }
 
   useEffect(() => {
     postCommand('app.setTool', { tool: 'mouse' }).catch(() => undefined)
@@ -481,6 +489,7 @@ function FloatingToolbarInner() {
   }, [])
 
   const toggleExpanded = () => {
+    dispatchToolbarTransitionEvent('lanstart-toolbar-transition-start')
     setState({ ...state, expanded: !isExpanded })
   }
 
@@ -801,13 +810,13 @@ function FloatingToolbarInner() {
   return (
     <motion.div
       ref={rootRef}
-      className="toolbarRoot"
+      className="toolbarRoot toolbarRoot--autoSize"
       data-toolbar-button-hints={toolbarButtonHintsEnabled ? 'true' : undefined}
       initial={reduceMotion ? false : { opacity: 0, y: 6, scale: 0.985 }}
       animate={reduceMotion ? undefined : { opacity: 1, y: 0, scale: 1 }}
       transition={reduceMotion ? undefined : { duration: 0.18, ease: [0.2, 0.8, 0.2, 1] }}
     >
-      <div ref={contentRef} className="toolbarDragArea">
+      <div ref={setContentEl} className="toolbarDragArea">
         <div className="toolbarLayout">
           {/* 主要工具按钮区域 */}
           <div className="toolbarBarRow">
@@ -846,6 +855,12 @@ function FloatingToolbarInner() {
               opacity: isExpanded ? 1 : 0
             }}
             transition={reduceMotion ? undefined : { duration: 0.2, ease: [0.2, 0.8, 0.2, 1] }}
+            onAnimationStart={() => {
+              dispatchToolbarTransitionEvent('lanstart-toolbar-transition-start')
+            }}
+            onAnimationComplete={() => {
+              dispatchToolbarTransitionEvent('lanstart-toolbar-transition-end')
+            }}
           >
             <div className="toolbarBarRow toolbarCollapsibleContent">
               <ButtonGroup>

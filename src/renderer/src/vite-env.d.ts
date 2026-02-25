@@ -7,7 +7,18 @@ declare global {
         dataUrl: string
         width: number
         height: number
-        display: { id: number; scaleFactor: number; bounds: Electron.Rectangle; size: Electron.Size }
+        display: {
+          id: number
+          scaleFactor: number
+          bounds: { x: number; y: number; width: number; height: number }
+          size: { width: number; height: number }
+        }
+      }>
+      captureWallpaperThumbnail?: (options?: { maxSide?: number }) => Promise<{
+        dataUrl: string
+        width: number
+        height: number
+        wallpaper: { path: string; size: { width: number; height: number } }
       }>
     }
     lanstart?: {

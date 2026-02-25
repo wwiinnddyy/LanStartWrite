@@ -1,5 +1,12 @@
-import type { App } from 'electron'
 import { resolve } from 'node:path'
+
+export type ProtocolClientAppLike = {
+  setAsDefaultProtocolClient: (scheme: string, path?: string, args?: string[]) => boolean
+  requestSingleInstanceLock: () => boolean
+  on: (event: string, listener: (...args: any[]) => void) => unknown
+  once: (event: string, listener: (...args: any[]) => void) => unknown
+  quit: () => void
+}
 
 /**
  * LanStartWrite URL 命令（供其他应用通过自定义协议调用本应用功能）
@@ -136,10 +143,10 @@ export function parseLanstartwriteUrl(rawUrl: string): { command: string; payloa
   return { command }
 }
 
-function registerAsDefaultProtocolClient(app: App, scheme: string): void {
+function registerAsDefaultProtocolClient(app: ProtocolClientAppLike, scheme: string): void {
   try {
     if (process.platform === 'win32') {
-      if (process.defaultApp) {
+      if ((process as any).defaultApp) {
         const appPath = process.argv[1] ? resolve(process.argv[1]) : process.execPath
         app.setAsDefaultProtocolClient(scheme, process.execPath, [appPath])
       } else {
@@ -189,7 +196,7 @@ export function createLanstartwriteLinkController(opts: {
     })
   }
 
-  const register = (app: App): boolean => {
+  const register = (app: ProtocolClientAppLike): boolean => {
     registerAsDefaultProtocolClient(app, scheme)
 
     const gotLock = app.requestSingleInstanceLock()

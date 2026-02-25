@@ -1,5 +1,6 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
+import './electrobunBridge'
 import App from './App'
 import { LanStartMantineProvider } from '../../Mantine'
 import '../../Tailwind/tailwind.css'

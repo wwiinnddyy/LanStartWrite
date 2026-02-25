@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { motion, useReducedMotion, AnimatePresence } from '../Framer_Motion'
 import { Button, MotionButton } from '../button'
 import { AppWindowTitlebar } from '../app_windows_manerger/renderer'
+import { postCommand } from '../status'
 import '../toolbar-subwindows/styles/subwindow.css'
 import './styles.css'
 
@@ -338,6 +339,54 @@ export function TaskWindowsWatcherWindow() {
   const [foreground, setForeground] = useState<WindowRow | undefined>(undefined)
   const [history, setHistory] = useState<WindowRow[]>([])
   const [processes, setProcesses] = useState<ProcessRow[]>([])
+
+  useEffect(() => {
+    const card = cardRef.current
+    if (!card) return
+    if (typeof ResizeObserver === 'undefined') return
+
+    let rafId = 0
+    let lastWidth = 0
+    let lastHeight = 0
+
+    const clampInt = (value: number, min: number, max: number) => {
+      const v = Math.round(value)
+      return Math.max(min, Math.min(max, v))
+    }
+
+    const send = () => {
+      rafId = 0
+      const rect = card.getBoundingClientRect()
+      const width = clampInt(Math.max(rect.width, card.scrollWidth), 720, 1800)
+      const height = clampInt(Math.max(rect.height, card.scrollHeight), 480, 1200)
+      if (width === lastWidth && height === lastHeight) return
+      lastWidth = width
+      lastHeight = height
+      postCommand('set-app-window-bounds', { windowId: 'watcher', width, height }).catch(() => undefined)
+    }
+
+    const schedule = () => {
+      if (rafId) return
+      rafId = window.requestAnimationFrame(send)
+    }
+
+    const ro = new ResizeObserver(schedule)
+    ro.observe(card)
+    const mo =
+      typeof MutationObserver === 'undefined'
+        ? undefined
+        : new MutationObserver(() => {
+            schedule()
+          })
+    mo?.observe(card, { subtree: true, childList: true, attributes: true, characterData: true })
+    schedule()
+
+    return () => {
+      ro.disconnect()
+      mo?.disconnect()
+      if (rafId) window.cancelAnimationFrame(rafId)
+    }
+  }, [])
 
   useEffect(() => {
     if (!collecting) return

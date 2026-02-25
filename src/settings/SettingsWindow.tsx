@@ -56,19 +56,22 @@ export function SettingsWindow() {
     const state = resizeStateRef.current
     const card = cardRef.current
     if (!card) return
+    if (typeof ResizeObserver === 'undefined') return
 
     const send = () => {
       state.rafId = 0
-      const sidebar = card.querySelector('.settingsSidebar') as HTMLElement | null
-      const content = card.querySelector('.settingsContent') as HTMLElement | null
-      if (!sidebar || !content) return
-
-      const titlebarHeight = 40
-      const bodyHeight = Math.max(sidebar.scrollHeight, content.scrollHeight)
-      const height = Math.ceil(bodyHeight + titlebarHeight)
-      if (height === state.lastHeight) return
-      state.lastHeight = height
-      postCommand('set-app-window-bounds', { windowId: 'settings-window', height }).catch(() => undefined)
+      const width = Math.ceil(Math.max(card.getBoundingClientRect().width, card.scrollWidth))
+      const height = Math.ceil(Math.max(card.getBoundingClientRect().height, card.scrollHeight))
+      const boundedWidth = Math.max(560, Math.min(1400, width))
+      const boundedHeight = Math.max(420, Math.min(1080, height))
+      if (boundedWidth === state.lastWidth && boundedHeight === state.lastHeight) return
+      state.lastWidth = boundedWidth
+      state.lastHeight = boundedHeight
+      postCommand('set-app-window-bounds', {
+        windowId: 'settings-window',
+        width: boundedWidth,
+        height: boundedHeight
+      }).catch(() => undefined)
     }
 
     const schedule = () => {
@@ -76,17 +79,29 @@ export function SettingsWindow() {
       state.rafId = window.requestAnimationFrame(send)
     }
 
-    const contentInner = card.querySelector('.settingsContentInner')
     const observer = new ResizeObserver(schedule)
-    if (contentInner) observer.observe(contentInner)
+    observer.observe(card)
+    const contentInner = card.querySelector('.settingsContentInner')
+    const sidebar = card.querySelector('.settingsSidebar')
+    if (contentInner instanceof HTMLElement) observer.observe(contentInner)
+    if (sidebar instanceof HTMLElement) observer.observe(sidebar)
+
+    const mutationObserver =
+      typeof MutationObserver === 'undefined'
+        ? undefined
+        : new MutationObserver(() => {
+            schedule()
+          })
+    mutationObserver?.observe(card, { subtree: true, childList: true, attributes: true, characterData: true })
     schedule()
 
     return () => {
       if (state.rafId) window.cancelAnimationFrame(state.rafId)
       state.rafId = 0
       observer.disconnect()
+      mutationObserver?.disconnect()
     }
-  }, [activeTab])
+  }, [activeTab, layoutSize])
 
   return (
     <motion.div

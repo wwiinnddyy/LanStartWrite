@@ -16,6 +16,8 @@ body {
 }
 
 .toolbarHandleRoot {
+  width: 100%;
+  height: 100%;
   box-shadow: none;
   display: flex;
   flex-direction: column;
@@ -58,7 +60,6 @@ body {
   box-sizing: border-box;
   padding: 0;
   margin: 0;
-  overflow: hidden;
   isolation: isolate;
   color: var(--ls-surface-fg);
   font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, 'Apple Color Emoji',
@@ -67,6 +68,14 @@ body {
   border: 1px solid var(--ls-surface-border);
   border-radius: var(--ls-window-outer-radius);
   box-shadow: var(--ls-surface-shadow);
+}
+
+.toolbarRoot--autoSize {
+  width: fit-content;
+  height: fit-content;
+  min-width: max-content;
+  min-height: max-content;
+  overflow: visible;
 }
 
 .toolbarRoot::before {
@@ -101,8 +110,12 @@ body {
   position: relative;
   z-index: 1;
   display: inline-flex;
+  flex: 0 0 auto;
+  width: max-content;
+  max-width: none;
   padding: var(--toolbar-padding);
   box-sizing: border-box;
+  min-height: max-content;
 }
 
 .toolbarLayout {
@@ -110,8 +123,8 @@ body {
   align-items: center;
   gap: var(--toolbar-gap);
   flex-wrap: nowrap;
-  max-width: 100%;
-  min-width: 0;
+  width: max-content;
+  min-width: max-content;
 }
 
 .toolbarBarRow {
@@ -119,13 +132,12 @@ body {
   align-items: center;
   justify-content: flex-start;
   gap: var(--toolbar-gap);
-  max-width: 100%;
   flex: 0 0 auto;
-  min-width: 0;
+  min-width: max-content;
 }
 
 .toolbarBarRow .lsButtonGroup {
-  max-width: 100%;
+  max-width: none;
 }
 
 .toolbarDragHandleButton {
@@ -252,7 +264,7 @@ body {
   align-items: center;
   overflow: hidden;
   white-space: nowrap;
-  flex: 1 1 auto;
+  flex: 0 0 auto;
   min-width: 0;
 }
 
@@ -260,7 +272,7 @@ body {
   display: flex;
   align-items: center;
   gap: var(--toolbar-gap);
-  min-width: 0;
+  min-width: max-content;
 }
 
 .toolbarHeader {

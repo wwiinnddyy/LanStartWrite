@@ -38,6 +38,38 @@ export type BackendRpcMethods = {
     params: { windowId: string; key: string }
     result: null
   }
+  clipboardWriteText: {
+    params: { text: string }
+    result: null
+  }
+  getToolbarNoticeKind: {
+    params: Record<string, never>
+    result: string
+  }
+  setToolbarNoticeVisible: {
+    params: { visible: boolean; kind?: string }
+    result: null
+  }
+  setToolbarNoticeBounds: {
+    params: { width: number; height: number }
+    result: null
+  }
+  restartBackendAll: {
+    params: Record<string, never>
+    result: null
+  }
+  captureWallpaperThumbnail: {
+    params: { maxSide?: number }
+    result: {
+      dataUrl: string
+      width: number
+      height: number
+      wallpaper: {
+        path: string
+        size: { width: number; height: number }
+      }
+    }
+  }
   shutdown: {
     params: Record<string, never>
     result: null
