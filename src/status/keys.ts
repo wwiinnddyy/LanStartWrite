@@ -15,14 +15,7 @@ export type WritingFramework = 'konva' | 'qt' | 'leafer'
 export const WRITING_FRAMEWORK_UI_STATE_KEY = 'writingFramework'
 export const WRITING_FRAMEWORK_KV_KEY = 'writing-framework'
 
-export type ActiveApp = 'unknown' | 'word' | 'ppt'
-export const ACTIVE_APP_UI_STATE_KEY = 'activeApp'
-export const PPT_FULLSCREEN_UI_STATE_KEY = 'pptFullscreen'
-export const PPT_PAGE_INDEX_UI_STATE_KEY = 'pptPageIndex'
-export const PPT_PAGE_TOTAL_UI_STATE_KEY = 'pptPageTotal'
-export const PPT_SLIDE_NAME_UI_STATE_KEY = 'pptSlideName'
-
-export type EffectiveWritingBackend = 'konva' | 'qt' | 'leafer' | 'word' | 'ppt'
+export type EffectiveWritingBackend = 'konva' | 'qt' | 'leafer'
 export const EFFECTIVE_WRITING_BACKEND_UI_STATE_KEY = 'effectiveWritingBackend'
 
 export const TOOL_UI_STATE_KEY = 'tool'
@@ -93,20 +86,6 @@ export const CLOCK_COUNTDOWN_END_MS_UI_STATE_KEY = 'clockCountdownEndMs'
 export const CLOCK_COUNTDOWN_PRESET_MS_UI_STATE_KEY = 'clockCountdownPresetMs'
 export const CLOCK_COUNTDOWN_REMAINING_MS_UI_STATE_KEY = 'clockCountdownRemainingMs'
 
-export type OfficePptMode = 'inkeys' | 'based' | 'vsto'
-export const OFFICE_PPT_MODE_KV_KEY = 'office-ppt-mode'
-export const OFFICE_PPT_MODE_UI_STATE_KEY = 'officePptMode'
-export const OFFICE_PPT_QUICK_FLIP_KV_KEY = 'office-ppt-quick-flip'
-export const OFFICE_PPT_QUICK_FLIP_UI_STATE_KEY = 'officePptQuickFlip'
-
-export const SYSTEM_UIA_TOPMOST_KV_KEY = 'system-uia-topmost'
-export const SYSTEM_UIA_TOPMOST_UI_STATE_KEY = 'systemUiaTopmost'
-
-export const SYSTEM_MERGE_RENDERER_PIPELINE_KV_KEY = 'system-merge-renderer-pipeline'
-export const SYSTEM_WINDOW_PRELOAD_KV_KEY = 'system-window-preload'
-
-export const ADMIN_STATUS_UI_STATE_KEY = 'isAdmin'
-
 export type LeaferRendererEngine = 'canvas2d' | 'svg' | 'webgl' | 'webgpu'
 export type LeaferNibMode = 'off' | 'dynamic' | 'static'
 export type LeaferSettings = {
@@ -136,12 +115,8 @@ export function isWritingFramework(v: unknown): v is WritingFramework {
   return v === 'konva' || v === 'qt' || v === 'leafer'
 }
 
-export function isActiveApp(v: unknown): v is ActiveApp {
-  return v === 'unknown' || v === 'word' || v === 'ppt'
-}
-
 export function isEffectiveWritingBackend(v: unknown): v is EffectiveWritingBackend {
-  return v === 'konva' || v === 'qt' || v === 'leafer' || v === 'word' || v === 'ppt'
+  return v === 'konva' || v === 'qt' || v === 'leafer'
 }
 
 export function isLeaferSettings(v: unknown): v is LeaferSettings {

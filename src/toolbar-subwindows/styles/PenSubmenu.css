@@ -93,7 +93,7 @@
   padding-right: 4px; /* 给移动留出空间 */
 }
 
-/* 笔类型卡片 (Office 风格) */
+/* 笔类型卡片 */
 .penTypeCard {
   display: flex;
   align-items: center;

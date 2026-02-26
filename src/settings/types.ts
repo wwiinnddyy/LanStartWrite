@@ -5,8 +5,6 @@ export type SettingsTab =
   | 'annotation'
   | 'whiteboard'
   | 'video-show'
-  | 'office'
-  | 'system'
   | 'lanstart-bar'
   | 'about'
 

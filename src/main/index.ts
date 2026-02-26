@@ -1,28 +1,21 @@
-import { BrowserWindow, Menu, Tray, app, dialog, ipcMain, nativeImage, nativeTheme, screen, session, type OpenDialogOptions } from 'electron'
-import { execFile, spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
+﻿import { BrowserWindow, Menu, Tray, app, dialog, ipcMain, nativeImage, nativeTheme, screen, session, type OpenDialogOptions } from 'electron'
+import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { createServer } from 'node:net'
 import { join } from 'node:path'
 import { platform } from 'node:process'
 import { pathToFileURL } from 'node:url'
 import { AppWindowsManager, startWindowTopmostPolling } from '../app_windows_manerger'
-import { createTaskWatcherAdapter, forceTopmostWindows } from '../system_different_code'
-import { TaskWindowsWatcher } from '../task_windows_watcher/TaskWindowsWatcher'
 import { createLanstartwriteLinkController } from '../url_http_link'
 
 let backendProcess: ChildProcessWithoutNullStreams | undefined
-let pptWrapperProcess: ChildProcessWithoutNullStreams | undefined
-let pptWrapperRestartTimer: NodeJS.Timeout | undefined
-let pptWrapperPort: number | undefined
 
 const BACKEND_PORT = 3131
 const BACKEND_STDIO_PREFIX = '__LANSTART__'
-const WINDOW_ID_FLOATING_TOOLBAR = '浮动工具栏'
+const WINDOW_ID_FLOATING_TOOLBAR = 'floating-toolbar'
 const WINDOW_ID_FLOATING_TOOLBAR_HANDLE = 'floating-toolbar-handle'
-const WINDOW_TITLE_FLOATING_TOOLBAR = '浮动工具栏'
+const WINDOW_TITLE_FLOATING_TOOLBAR = 'Floating Toolbar'
 const WINDOW_ID_TOOLBAR_SUBWINDOW = 'toolbar-subwindow'
 const WINDOW_ID_TOOLBAR_NOTICE = 'toolbar-notice'
-const WINDOW_ID_WATCHER = 'watcher'
 const WINDOW_ID_SETTINGS_WINDOW = 'settings-window'
 const WINDOW_ID_MUT_PAGE = 'mut-page'
 const WINDOW_ID_MUT_PAGE_HANDLE = 'mut-page-handle'
@@ -31,15 +24,7 @@ const TOOLBAR_HANDLE_GAP = 10
 const TOOLBAR_HANDLE_WIDTH = 30
 const MUT_PAGE_HANDLE_WIDTH = 60
 const APPEARANCE_KV_KEY = 'app-appearance'
-const NATIVE_MICA_KV_KEY = 'native-mica-enabled'
-const LEGACY_WINDOW_IMPL_KV_KEY = 'legacy-window-implementation'
 const VIDEO_SHOW_MERGE_LAYERS_KV_KEY = 'video-show-merge-layers'
-const SYSTEM_UIA_TOPMOST_KV_KEY = 'system-uia-topmost'
-const SYSTEM_MERGE_RENDERER_PIPELINE_KV_KEY = 'system-merge-renderer-pipeline'
-const SYSTEM_WINDOW_PRELOAD_KV_KEY = 'system-window-preload'
-const SYSTEM_UIA_TOPMOST_UI_STATE_KEY = 'systemUiaTopmost'
-const ADMIN_STATUS_UI_STATE_KEY = 'isAdmin'
-const SHARED_RENDERER_AFFINITY = 'lanstartwrite-ui'
 
 type Appearance = 'light' | 'dark'
 
@@ -60,11 +45,6 @@ let didApplyAppearance = false
 let toolbarUiZoom = Math.log(0.8) / Math.log(1.2)
 let nativeMicaEnabled = false
 let legacyWindowImplementation = false
-let mergeRendererPipelineEnabled = false
-let systemUiaTopmostEnabled = true
-let systemWindowPreloadEnabled = false
-let isRunningAsAdmin = false
-let topmostRelativeLevel = 0
 let stopToolbarTopmostPolling: (() => void) | undefined
 
 function resolveAppIconPath(): string | undefined {
@@ -80,29 +60,6 @@ function resolveAppIconPath(): string | undefined {
     } catch {}
   }
   return undefined
-}
-
-function detectWindowsAdmin(): Promise<boolean> {
-  if (process.platform !== 'win32') return Promise.resolve(false)
-  return new Promise((resolve) => {
-    execFile(
-      'powershell.exe',
-      [
-        '-NoProfile',
-        '-NonInteractive',
-        '-ExecutionPolicy',
-        'Bypass',
-        '-Command',
-        '[bool]([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltinRole]::Administrator)'
-      ],
-      { windowsHide: true },
-      (err, stdout) => {
-        if (err) return resolve(false)
-        const s = String(stdout ?? '').trim().toLowerCase()
-        resolve(s === 'true')
-      }
-    )
-  })
 }
 
 const APP_ICON_PATH = resolveAppIconPath()
@@ -355,16 +312,16 @@ function ensureTray(): void {
   } catch {}
 
   const menu = Menu.buildFromTemplate([
-    { label: '打开设置', click: () => openSettingsWindow() },
+    { label: 'Open Settings', click: () => openSettingsWindow() },
     { type: 'separator' },
     {
-      label: '快速重启',
+      label: 'Restart',
       click: () => {
         requestAppRestart()
       }
     },
     {
-      label: '退出',
+      label: 'Quit',
       click: () => {
         requestAppQuit()
       }
@@ -515,47 +472,6 @@ function applyLegacyWindowImplementation(enabled: boolean, opts?: { rebuild?: bo
   rebuildAllUiWindows()
 }
 
-function applyMergeRendererPipeline(enabled: boolean, opts?: { rebuild?: boolean }): void {
-  if (mergeRendererPipelineEnabled === enabled) return
-  mergeRendererPipelineEnabled = enabled
-  if (opts?.rebuild === false) return
-  rebuildAllUiWindows()
-}
-
-let windowPreloadInFlight = false
-function preloadAllUiWindows(): void {
-  if (windowPreloadInFlight) return
-  windowPreloadInFlight = true
-  setTimeout(() => {
-    windowPreloadInFlight = false
-    if (!systemWindowPreloadEnabled) return
-    const toolbar = floatingToolbarWindow
-    if (!toolbar || toolbar.isDestroyed()) return
-
-    try {
-      getOrCreateToolbarNoticeWindow()
-    } catch {}
-
-    for (const kind of ['feature-panel', 'events', 'clock', 'db']) {
-      try {
-        getOrCreateToolbarSubwindow(kind, 'bottom')
-      } catch {}
-    }
-
-    try {
-      const mp = getOrCreateMultiPageControlWindow()
-      getOrCreateMutPageHandleWindow(mp)
-      getOrCreateMutPageThumbnailsMenuWindow(mp)
-    } catch {}
-
-    try {
-      appWindowsManager.getOrCreate('settings')
-      appWindowsManager.getOrCreate('watcher')
-      appWindowsManager.getOrCreate('child')
-    } catch {}
-  }, 0)
-}
-
 function applyToolbarUiZoom(zoom: number): void {
   const targets = [
     floatingToolbarWindow,
@@ -594,16 +510,11 @@ let multiPageControlWindow: BrowserWindow | undefined
 let mutPageHandleWindow: BrowserWindow | undefined
 let mutPageThumbnailsMenuWindow: BrowserWindow | undefined
 let mutPageDesiredFromAppMode = false
-let mutPageDesiredFromPpt = false
-let mutPagePptHideTimer: NodeJS.Timeout | undefined
-let mutPagePptLastShownAt = 0
 let mutPageAnchorBounds: { x: number; y: number; width: number; height: number } | undefined
 let mutPageUiBounds: { width: number; height: number } | undefined
 let whiteboardBackgroundWindow: BrowserWindow | undefined
 let annotationOverlayWindow: BrowserWindow | undefined
-let screenAnnotationOverlayWindow: BrowserWindow | undefined
 let closingWhiteboardWindows = false
-let taskWatcher: TaskWindowsWatcher | undefined
 let syncingToolbarPair = false
 const toolbarSubwindows = new Map<
   string,
@@ -627,21 +538,6 @@ function sendToBackend(message: unknown): void {
   } catch {
     return
   }
-}
-
-function ensureTaskWatcherStarted(intervalMs?: number): void {
-  const nextInterval = Number.isFinite(intervalMs ?? NaN) ? Number(intervalMs) : undefined
-  if (!taskWatcher) {
-    const adapter = createTaskWatcherAdapter()
-    taskWatcher = new TaskWindowsWatcher({
-      adapter,
-      emit: (msg) => {
-        sendToBackend(msg)
-      },
-      defaultIntervalMs: nextInterval ?? 1000
-    })
-  }
-  taskWatcher.start(nextInterval)
 }
 
 function getDevServerUrl(): string | undefined {
@@ -726,14 +622,11 @@ const appWindowsManager = new AppWindowsManager({
   getUiZoomLevel: () => toolbarUiZoom,
   getNativeMicaEnabled: () => nativeMicaEnabled,
   getLegacyWindowImplementation: () => legacyWindowImplementation,
-  getMergeRendererPipelineEnabled: () => mergeRendererPipelineEnabled,
   surfaceBackgroundColor: effectiveSurfaceBackgroundColor,
   applyWindowsBackdrop,
   wireWindowDebug,
-  wireWindowStatus,
   adjustWindowForDPI,
   sendToBackend,
-  ensureTaskWatcherStarted,
 })
 
 appWindowsManager.registerIpcHandlers({ ipcMain, requestBackendRpc, coerceString })
@@ -827,55 +720,6 @@ function wireWindowDebug(win: BrowserWindow, name: string): void {
   })
 }
 
-function wireWindowStatus(win: BrowserWindow, windowId: string): void {
-  const snapshot = (event: string, extra?: Record<string, unknown>) => {
-    const destroyed = win.isDestroyed()
-    let bounds: Electron.Rectangle | undefined
-    if (!destroyed) {
-      try {
-        bounds = win.getBounds()
-      } catch {
-        bounds = undefined
-      }
-    }
-    const rendererPid = !destroyed && !win.webContents.isDestroyed() ? win.webContents.getOSProcessId?.() : undefined
-    const payload = {
-      type: 'WINDOW_STATUS',
-      windowId,
-      event,
-      ts: Date.now(),
-      bounds,
-      visible: !destroyed ? win.isVisible() : false,
-      focused: !destroyed ? win.isFocused() : false,
-      minimized: !destroyed ? win.isMinimized() : false,
-      maximized: !destroyed ? win.isMaximized() : false,
-      fullscreen: !destroyed ? win.isFullScreen() : false,
-      title: !destroyed ? win.getTitle() : '',
-      rendererPid,
-      ...extra
-    }
-    sendToBackend(payload)
-  }
-
-  snapshot('created')
-  win.on('show', () => snapshot('show'))
-  win.on('hide', () => snapshot('hide'))
-  win.on('focus', () => snapshot('focus'))
-  win.on('blur', () => snapshot('blur'))
-  win.on('move', () => snapshot('move'))
-  win.on('resize', () => snapshot('resize'))
-  win.on('minimize', () => snapshot('minimize'))
-  win.on('restore', () => snapshot('restore'))
-  win.on('closed', () => snapshot('closed'))
-  win.webContents.on('did-finish-load', () => snapshot('did-finish-load'))
-  win.webContents.on('did-fail-load', (_e, errorCode, errorDescription, validatedURL) => {
-    snapshot('did-fail-load', { errorCode, errorDescription, validatedURL })
-  })
-  win.webContents.on('render-process-gone', (_e, details) => {
-    snapshot('render-process-gone', { reason: details.reason, exitCode: details.exitCode })
-  })
-}
-
 function applyWindowsBackdrop(win: BrowserWindow): void {
   // Windows 11: DWM backdrop (Mica/Acrylic) needs a non-transparent window surface.
   if (process.platform !== 'win32') return
@@ -907,8 +751,7 @@ function buildUiWebPreferences(): any {
   return {
     preload: join(__dirname, '../preload/index.js'),
     contextIsolation: true,
-    nodeIntegration: false,
-    ...(mergeRendererPipelineEnabled ? { affinity: SHARED_RENDERER_AFFINITY } : {})
+    nodeIntegration: false
   }
 }
 
@@ -950,7 +793,6 @@ function createFloatingToolbarWindow(): BrowserWindow {
   } catch {}
   win.setAlwaysOnTop(true, 'screen-saver')
   wireWindowDebug(win, 'floating-toolbar')
-  wireWindowStatus(win, WINDOW_ID_FLOATING_TOOLBAR)
   try {
     win.webContents.setZoomLevel(toolbarUiZoom)
   } catch {}
@@ -1014,7 +856,7 @@ function createFloatingToolbarHandleWindow(owner: BrowserWindow): BrowserWindow 
     alwaysOnTop: true,
     skipTaskbar: true,
     parent: owner,
-    title: '浮动工具栏拖动把手',
+    title: 'Toolbar Handle',
     backgroundColor: legacyWindowImplementation ? effectiveSurfaceBackgroundColor(currentAppearance) : '#01000000',
     backgroundMaterial: legacyWindowImplementation && nativeMicaEnabled ? 'mica' : 'none',
     roundedCorners: legacyWindowImplementation,
@@ -1034,7 +876,6 @@ function createFloatingToolbarHandleWindow(owner: BrowserWindow): BrowserWindow 
   } catch {}
   win.setAlwaysOnTop(true, 'screen-saver')
   wireWindowDebug(win, 'floating-toolbar-handle')
-  wireWindowStatus(win, WINDOW_ID_FLOATING_TOOLBAR_HANDLE)
   try {
     win.webContents.setZoomLevel(toolbarUiZoom)
   } catch {}
@@ -1089,7 +930,7 @@ function getOrCreateToolbarNoticeWindow(): BrowserWindow {
     alwaysOnTop: true,
     skipTaskbar: true,
     parent: owner,
-    title: '浮动通知',
+    title: 'Toolbar Notice',
     backgroundColor: legacyWindowImplementation ? effectiveSurfaceBackgroundColor(currentAppearance) : '#01000000',
     backgroundMaterial: legacyWindowImplementation && nativeMicaEnabled ? 'mica' : 'none',
     roundedCorners: legacyWindowImplementation,
@@ -1109,7 +950,6 @@ function getOrCreateToolbarNoticeWindow(): BrowserWindow {
   } catch {}
   win.setAlwaysOnTop(true, 'screen-saver')
   wireWindowDebug(win, 'toolbar-notice')
-  wireWindowStatus(win, WINDOW_ID_TOOLBAR_NOTICE)
   try {
     win.webContents.setZoomLevel(toolbarUiZoom)
   } catch {}
@@ -1147,8 +987,7 @@ function repositionMultiPageControlWindow(): void {
   const ownerBounds = owner && !owner.isDestroyed() ? owner.getBounds() : screen.getPrimaryDisplay().bounds
   const anchor = mutPageAnchorBounds
   const display = screen.getDisplayMatching(anchor ?? ownerBounds)
-  const useFullBounds =
-    mutPageDesiredFromPpt || !!anchor || (owner === whiteboardBackgroundWindow && owner && !owner.isDestroyed())
+  const useFullBounds = !!anchor || (owner === whiteboardBackgroundWindow && owner && !owner.isDestroyed())
   const area = useFullBounds ? display.bounds : display.workArea
 
   const base = mutPageUiBounds
@@ -1195,7 +1034,7 @@ function getOrCreateMutPageHandleWindow(owner: BrowserWindow): BrowserWindow {
     alwaysOnTop: true,
     skipTaskbar: true,
     parent: owner,
-    title: '页面控制器把手',
+    title: 'Page Control Handle',
     backgroundColor: legacyWindowImplementation ? effectiveSurfaceBackgroundColor(currentAppearance) : '#01000000',
     backgroundMaterial: legacyWindowImplementation && nativeMicaEnabled ? 'mica' : 'none',
     roundedCorners: legacyWindowImplementation,
@@ -1215,7 +1054,6 @@ function getOrCreateMutPageHandleWindow(owner: BrowserWindow): BrowserWindow {
   } catch {}
   win.setAlwaysOnTop(true, 'screen-saver')
   wireWindowDebug(win, WINDOW_ID_MUT_PAGE_HANDLE)
-  wireWindowStatus(win, WINDOW_ID_MUT_PAGE_HANDLE)
   try {
     win.webContents.setZoomLevel(toolbarUiZoom)
   } catch {}
@@ -1262,7 +1100,7 @@ function getOrCreateMultiPageControlWindow(): BrowserWindow {
     alwaysOnTop: true,
     skipTaskbar: true,
     parent: owner,
-    title: '多页控制',
+    title: 'Multi Page Control',
     backgroundColor: legacyWindowImplementation ? effectiveSurfaceBackgroundColor(currentAppearance) : '#01000000',
     backgroundMaterial: legacyWindowImplementation && nativeMicaEnabled ? 'mica' : 'none',
     roundedCorners: legacyWindowImplementation,
@@ -1282,7 +1120,6 @@ function getOrCreateMultiPageControlWindow(): BrowserWindow {
   } catch {}
   win.setAlwaysOnTop(true, 'screen-saver')
   wireWindowDebug(win, WINDOW_ID_MUT_PAGE)
-  wireWindowStatus(win, WINDOW_ID_MUT_PAGE)
   try {
     win.webContents.setZoomLevel(toolbarUiZoom)
   } catch {}
@@ -1336,7 +1173,7 @@ function getOrCreateMultiPageControlWindow(): BrowserWindow {
 }
 
 function applyMutPageVisibility(): void {
-  const desired = mutPageDesiredFromAppMode || mutPageDesiredFromPpt
+  const desired = mutPageDesiredFromAppMode
   if (desired) {
     try {
       const mp = getOrCreateMultiPageControlWindow()
@@ -1440,7 +1277,7 @@ function getOrCreateMutPageThumbnailsMenuWindow(owner: BrowserWindow): BrowserWi
     alwaysOnTop: true,
     skipTaskbar: true,
     parent: owner,
-    title: '页面缩略图查看菜单',
+    title: 'Page Thumbnails Menu',
     backgroundColor: legacyWindowImplementation ? effectiveSurfaceBackgroundColor(currentAppearance) : '#01000000',
     backgroundMaterial: legacyWindowImplementation && nativeMicaEnabled ? 'mica' : 'none',
     roundedCorners: legacyWindowImplementation,
@@ -1460,7 +1297,6 @@ function getOrCreateMutPageThumbnailsMenuWindow(owner: BrowserWindow): BrowserWi
   } catch {}
   win.setAlwaysOnTop(true, 'screen-saver')
   wireWindowDebug(win, WINDOW_ID_MUT_PAGE_THUMBNAILS_MENU)
-  wireWindowStatus(win, WINDOW_ID_MUT_PAGE_THUMBNAILS_MENU)
   try {
     win.webContents.setZoomLevel(toolbarUiZoom)
   } catch {}
@@ -1515,10 +1351,9 @@ function toggleMutPageThumbnailsMenuWindow(): void {
 }
 
 function applyToolbarOnTopLevel(level: 'normal' | 'floating' | 'torn-off-menu' | 'modal-panel' | 'main-menu' | 'status' | 'pop-up-menu' | 'screen-saver') {
-  const rel = topmostRelativeLevel
   const toolbar = floatingToolbarWindow
   if (toolbar && !toolbar.isDestroyed()) {
-    toolbar.setAlwaysOnTop(true, level, rel)
+    toolbar.setAlwaysOnTop(true, level, 0)
     if (toolbar.isVisible()) {
       toolbar.moveTop()
     }
@@ -1526,7 +1361,7 @@ function applyToolbarOnTopLevel(level: 'normal' | 'floating' | 'torn-off-menu' |
 
   const handle = floatingToolbarHandleWindow
   if (handle && !handle.isDestroyed()) {
-    handle.setAlwaysOnTop(true, level, rel)
+    handle.setAlwaysOnTop(true, level, 0)
     if (handle.isVisible()) {
       handle.moveTop()
     }
@@ -1534,14 +1369,14 @@ function applyToolbarOnTopLevel(level: 'normal' | 'floating' | 'torn-off-menu' |
 
   const mp = multiPageControlWindow
   if (mp && !mp.isDestroyed()) {
-    mp.setAlwaysOnTop(true, level, rel)
+    mp.setAlwaysOnTop(true, level, 0)
     if (mp.isVisible()) {
       mp.moveTop()
     }
   }
   const mph = mutPageHandleWindow
   if (mph && !mph.isDestroyed()) {
-    mph.setAlwaysOnTop(true, level, rel)
+    mph.setAlwaysOnTop(true, level, 0)
     if (mph.isVisible()) {
       mph.moveTop()
     }
@@ -1549,7 +1384,7 @@ function applyToolbarOnTopLevel(level: 'normal' | 'floating' | 'torn-off-menu' |
 
   const notice = toolbarNoticeWindow
   if (notice && !notice.isDestroyed() && notice.isVisible()) {
-    notice.setAlwaysOnTop(true, level, rel)
+    notice.setAlwaysOnTop(true, level, 0)
     notice.moveTop()
   }
 
@@ -1557,7 +1392,7 @@ function applyToolbarOnTopLevel(level: 'normal' | 'floating' | 'torn-off-menu' |
     const win = item.win
     if (win.isDestroyed()) continue
     if (!win.isVisible()) continue
-    win.setAlwaysOnTop(true, level, rel)
+    win.setAlwaysOnTop(true, level, 0)
     win.moveTop()
   }
 }
@@ -1595,20 +1430,6 @@ function refreshToolbarWindowsLayoutAndSurface() {
   const fullBounds = screen.getDisplayMatching(refBounds).bounds
   reapplyVisibleBounds(whiteboardBackgroundWindow, fullBounds)
   reapplyVisibleBounds(annotationOverlayWindow, fullBounds)
-  reapplyVisibleBounds(screenAnnotationOverlayWindow, fullBounds)
-}
-
-function readWin32Hwnd(win: BrowserWindow): bigint | undefined {
-  if (process.platform !== 'win32') return undefined
-  try {
-    const buf = win.getNativeWindowHandle()
-    if (!buf || typeof (buf as any).length !== 'number') return undefined
-    if (buf.length >= 8 && typeof (buf as any).readBigInt64LE === 'function') return (buf as any).readBigInt64LE(0) as bigint
-    if (buf.length >= 4 && typeof (buf as any).readUInt32LE === 'function') return BigInt((buf as any).readUInt32LE(0))
-    return undefined
-  } catch {
-    return undefined
-  }
 }
 
 function hideAllToolbarSubwindows() {
@@ -1682,27 +1503,8 @@ function waitForFloatingToolbarBoundsReported(timeoutMs = 900): Promise<void> {
   })
 }
 
-let startupHardwareConfirmed: boolean | undefined
-
-async function confirmStartupHardwareReady(timeoutMs = 1600): Promise<boolean> {
-  if (startupHardwareConfirmed !== undefined) return startupHardwareConfirmed
-  if (process.platform !== 'win32') {
-    startupHardwareConfirmed = true
-    return true
-  }
-
-  const adapter = createTaskWatcherAdapter('win32')
-  const run = Promise.allSettled([adapter.getProcesses(), adapter.getForegroundWindow()]).then(() => true)
-  const timeout = new Promise<boolean>((resolve) => setTimeout(() => resolve(false), Math.max(0, Math.round(timeoutMs))))
-
-  try {
-    const ok = await Promise.race([run, timeout])
-    startupHardwareConfirmed = ok
-    return ok
-  } catch {
-    startupHardwareConfirmed = false
-    return false
-  }
+async function confirmStartupHardwareReady(_timeoutMs = 1600): Promise<boolean> {
+  return true
 }
 
 function waitForWindowReadyToShow(win: BrowserWindow): Promise<void> {
@@ -2039,7 +1841,7 @@ function createPaintBoardWindow(kind?: 'video-show' | 'pdf'): BrowserWindow {
     maximizable: false,
     fullscreenable: false,
     skipTaskbar: true,
-    title: kind === 'video-show' ? '视频展台' : kind === 'pdf' ? 'PDF' : '白板',
+    title: kind === 'video-show' ? 'Video Show' : kind === 'pdf' ? 'PDF' : 'Whiteboard',
     backgroundColor: kind === 'video-show' ? '#000000ff' : '#ffffffff',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
@@ -2049,7 +1851,6 @@ function createPaintBoardWindow(kind?: 'video-show' | 'pdf'): BrowserWindow {
   })
 
   wireWindowDebug(win, 'paint-board')
-  wireWindowStatus(win, 'paint-board')
 
   const devUrl = getDevServerUrl()
   if (devUrl) {
@@ -2151,7 +1952,7 @@ function createAnnotationOverlayWindow(ownerWindow: BrowserWindow): BrowserWindo
     fullscreenable: false,
     skipTaskbar: true,
     parent: ownerWindow,
-    title: '批注层',
+    title: 'Annotation Overlay',
     backgroundColor: '#00000000',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
@@ -2161,7 +1962,6 @@ function createAnnotationOverlayWindow(ownerWindow: BrowserWindow): BrowserWindo
   })
 
   wireWindowDebug(win, 'annotation-overlay')
-  wireWindowStatus(win, 'annotation-overlay')
 
   const devUrl = getDevServerUrl()
   if (devUrl) {
@@ -2243,65 +2043,6 @@ function createAnnotationOverlayWindow(ownerWindow: BrowserWindow): BrowserWindo
   return win
 }
 
-function createScreenAnnotationOverlayWindow(): BrowserWindow {
-  const owner = floatingToolbarWindow
-  const ownerBounds = owner && !owner.isDestroyed() ? owner.getBounds() : screen.getPrimaryDisplay().bounds
-  const display = screen.getDisplayMatching(ownerBounds)
-  const bounds = display.bounds
-
-  const win = new BrowserWindow({
-    ...(APP_ICON_PATH ? { icon: APP_ICON_PATH } : {}),
-    x: bounds.x,
-    y: bounds.y,
-    width: bounds.width,
-    height: bounds.height,
-    show: false,
-    frame: false,
-    transparent: true,
-    resizable: false,
-    maximizable: false,
-    fullscreenable: false,
-    skipTaskbar: true,
-    focusable: false,
-    title: '屏幕批注层',
-    backgroundColor: '#00000000',
-    webPreferences: {
-      preload: join(__dirname, '../preload/index.js'),
-      contextIsolation: true,
-      nodeIntegration: false
-    }
-  })
-
-  wireWindowDebug(win, 'screen-annotation-overlay')
-  wireWindowStatus(win, 'screen-annotation-overlay')
-
-  const devUrl = getDevServerUrl()
-  if (devUrl) {
-    win.loadURL(`${devUrl}?window=${encodeURIComponent('paint-board')}&kind=${encodeURIComponent('annotation')}`)
-    if (process.env.LANSTART_OPEN_DEVTOOLS === '1') win.webContents.openDevTools({ mode: 'detach' })
-  } else {
-    win.loadFile(join(__dirname, '../renderer/index.html'), { query: { window: 'paint-board', kind: 'annotation' } })
-  }
-
-  win.once('ready-to-show', () => {
-    try {
-      win.setAlwaysOnTop(true, 'screen-saver', topmostRelativeLevel)
-    } catch {}
-    try {
-      win.setBounds(bounds, false)
-    } catch {}
-    try {
-      win.setIgnoreMouseEvents(true, { forward: true })
-    } catch {}
-  })
-
-  win.on('closed', () => {
-    if (screenAnnotationOverlayWindow === win) screenAnnotationOverlayWindow = undefined
-  })
-
-  return win
-}
-
 function getOrCreateToolbarSubwindow(kind: string, placement: 'top' | 'bottom'): BrowserWindow {
   const existing = toolbarSubwindows.get(kind)
   if (existing && !existing.win.isDestroyed()) {
@@ -2326,7 +2067,7 @@ function getOrCreateToolbarSubwindow(kind: string, placement: 'top' | 'bottom'):
     alwaysOnTop: true,
     skipTaskbar: true,
     parent: owner,
-    title: `二级菜单-${kind}`,
+    title: `Subwindow-${kind}`,
     backgroundColor: legacyWindowImplementation ? effectiveSurfaceBackgroundColor(currentAppearance) : '#01000000',
     backgroundMaterial: legacyWindowImplementation && nativeMicaEnabled ? 'mica' : 'none',
     roundedCorners: legacyWindowImplementation,
@@ -2346,7 +2087,6 @@ function getOrCreateToolbarSubwindow(kind: string, placement: 'top' | 'bottom'):
   } catch {}
   win.setAlwaysOnTop(true, 'screen-saver')
   wireWindowDebug(win, `subwindow-${kind}`)
-  wireWindowStatus(win, `${WINDOW_ID_TOOLBAR_SUBWINDOW}:${kind}`)
   try {
     win.webContents.setZoomLevel(toolbarUiZoom)
   } catch {}
@@ -2553,7 +2293,6 @@ function handleBackendControlMessage(message: any): void {
             BrowserWindow.getFocusedWindow() ??
             whiteboardBackgroundWindow ??
             annotationOverlayWindow ??
-            screenAnnotationOverlayWindow ??
             undefined
           const options: OpenDialogOptions = {
             properties: ['openFile'],
@@ -2573,7 +2312,6 @@ function handleBackendControlMessage(message: any): void {
             BrowserWindow.getFocusedWindow() ??
             whiteboardBackgroundWindow ??
             annotationOverlayWindow ??
-            screenAnnotationOverlayWindow ??
             undefined
           const options: OpenDialogOptions = {
             properties: ['openFile'],
@@ -2593,7 +2331,6 @@ function handleBackendControlMessage(message: any): void {
             BrowserWindow.getFocusedWindow() ??
             whiteboardBackgroundWindow ??
             annotationOverlayWindow ??
-            screenAnnotationOverlayWindow ??
             undefined
           const options: OpenDialogOptions = {
             properties: ['openDirectory', 'createDirectory']
@@ -2610,7 +2347,6 @@ function handleBackendControlMessage(message: any): void {
             BrowserWindow.getFocusedWindow() ??
             whiteboardBackgroundWindow ??
             annotationOverlayWindow ??
-            screenAnnotationOverlayWindow ??
             undefined
           const now = new Date().toISOString().replace(/[:.]/g, '-')
           const options = {
@@ -2633,7 +2369,6 @@ function handleBackendControlMessage(message: any): void {
             BrowserWindow.getFocusedWindow() ??
             whiteboardBackgroundWindow ??
             annotationOverlayWindow ??
-            screenAnnotationOverlayWindow ??
             undefined
           const options: OpenDialogOptions = {
             properties: ['openFile'],
@@ -2665,32 +2400,6 @@ function handleBackendControlMessage(message: any): void {
     return
   }
 
-  if (message.type === 'SET_NATIVE_MICA') {
-    applyNativeMica(Boolean((message as any).enabled))
-    return
-  }
-
-  if (message.type === 'SET_LEGACY_WINDOW_IMPLEMENTATION') {
-    applyLegacyWindowImplementation(Boolean((message as any).enabled))
-    return
-  }
-
-  if (message.type === 'SET_MERGE_RENDERER_PIPELINE') {
-    applyMergeRendererPipeline(Boolean((message as any).enabled))
-    return
-  }
-
-  if (message.type === 'SET_SYSTEM_UIA_TOPMOST') {
-    systemUiaTopmostEnabled = Boolean((message as any).enabled)
-    return
-  }
-
-  if (message.type === 'SET_WINDOW_PRELOAD') {
-    systemWindowPreloadEnabled = Boolean((message as any).enabled)
-    if (systemWindowPreloadEnabled) preloadAllUiWindows()
-    return
-  }
-
   if (message.type === 'SET_UI_ZOOM') {
     const zoom = Number(message.zoom)
     if (Number.isFinite(zoom)) {
@@ -2703,76 +2412,10 @@ function handleBackendControlMessage(message: any): void {
   if (appWindowsManager.handleBackendControlMessage(message)) return
 
   if (message.type === 'SET_MUT_PAGE_VISIBLE') {
-    const source = String((message as any).source ?? '')
-    const visible = Boolean((message as any).visible)
-    if (source === 'ppt') {
-      if (visible) {
-        mutPagePptLastShownAt = Date.now()
-        mutPageDesiredFromPpt = true
-        if (!didAlignToolbarWithMutPageInPpt) {
-          didAlignToolbarWithMutPageInPpt = true
-          setTimeout(() => {
-            try {
-              alignFloatingToolbarWithMutPageOnce()
-            } catch {}
-          }, 0)
-        }
-        if (mutPagePptHideTimer) {
-          clearTimeout(mutPagePptHideTimer)
-          mutPagePptHideTimer = undefined
-        }
-        applyMutPageVisibility()
-        return
-      }
-
-      if (mutPageAnchorBounds) return
-
-      if (mutPagePptHideTimer) clearTimeout(mutPagePptHideTimer)
-      mutPagePptHideTimer = setTimeout(() => {
-        mutPagePptHideTimer = undefined
-        if (Date.now() - mutPagePptLastShownAt < 900) return
-        mutPageDesiredFromPpt = false
-        didAlignToolbarWithMutPageInPpt = false
-        applyMutPageVisibility()
-      }, 900)
-    }
     return
   }
 
   if (message.type === 'SET_MUT_PAGE_ANCHOR') {
-    const source = String((message as any).source ?? '')
-    const b = (message as any).bounds
-    if (source === 'ppt') {
-      if (b && Number.isFinite(b.x) && Number.isFinite(b.y) && Number.isFinite(b.width) && Number.isFinite(b.height)) {
-        mutPageAnchorBounds = { x: Number(b.x), y: Number(b.y), width: Number(b.width), height: Number(b.height) }
-        mutPagePptLastShownAt = Date.now()
-        mutPageDesiredFromPpt = true
-        if (!didAlignToolbarWithMutPageInPpt) {
-          didAlignToolbarWithMutPageInPpt = true
-          setTimeout(() => {
-            try {
-              alignFloatingToolbarWithMutPageOnce()
-            } catch {}
-          }, 0)
-        }
-        if (mutPagePptHideTimer) {
-          clearTimeout(mutPagePptHideTimer)
-          mutPagePptHideTimer = undefined
-        }
-        applyMutPageVisibility()
-      } else {
-        mutPageAnchorBounds = undefined
-        if (mutPagePptHideTimer) clearTimeout(mutPagePptHideTimer)
-        mutPagePptHideTimer = setTimeout(() => {
-          mutPagePptHideTimer = undefined
-          if (Date.now() - mutPagePptLastShownAt < 1200) return
-          mutPageDesiredFromPpt = false
-          didAlignToolbarWithMutPageInPpt = false
-          applyMutPageVisibility()
-        }, 1200)
-      }
-      repositionMultiPageControlWindow()
-    }
     return
   }
 
@@ -2792,15 +2435,6 @@ function handleBackendControlMessage(message: any): void {
       modeRaw === 'whiteboard' ? 'whiteboard' : modeRaw === 'video-show' ? 'video-show' : modeRaw === 'pdf' ? 'pdf' : 'toolbar'
     if (mode === 'whiteboard' || mode === 'video-show' || mode === 'pdf') {
       mutPageDesiredFromAppMode = true
-      const screenOverlay = screenAnnotationOverlayWindow
-      if (screenOverlay && !screenOverlay.isDestroyed()) {
-        try {
-          screenOverlay.setIgnoreMouseEvents(true, { forward: true })
-        } catch {}
-        try {
-          if (screenOverlay.isVisible()) screenOverlay.hide()
-        } catch {}
-      }
       hideAllToolbarSubwindows()
       appWindowsManager.hideAll()
       if (!whiteboardBackgroundWindow || whiteboardBackgroundWindow.isDestroyed()) {
@@ -2831,7 +2465,7 @@ function handleBackendControlMessage(message: any): void {
           }
         } catch {}
         try {
-          whiteboardBackgroundWindow.setTitle(mode === 'video-show' ? '视频展台' : mode === 'pdf' ? 'PDF' : '白板')
+          whiteboardBackgroundWindow.setTitle(mode === 'video-show' ? 'Video Show' : mode === 'pdf' ? 'PDF' : 'Whiteboard')
         } catch {}
         whiteboardBackgroundWindow.show()
       }
@@ -2895,20 +2529,13 @@ function handleBackendControlMessage(message: any): void {
         } catch {}
       }
       applyToolbarOnTopLevel('screen-saver')
-      requestBackendRpc<Record<string, unknown>>('getUiState', { windowId: 'app' })
-        .then((state) => {
-          const toolRaw = (state as any)?.tool
-          const tool = toolRaw === 'pen' || toolRaw === 'eraser' ? toolRaw : 'mouse'
-          handleBackendControlMessage({ type: 'SET_SCREEN_ANNOTATION_VISIBLE', visible: tool !== 'mouse' })
-        })
-        .catch(() => undefined)
     }
     return
   }
 
   if (message.type === 'SET_ANNOTATION_INPUT') {
     const enabled = Boolean((message as any).enabled)
-    const targets = [annotationOverlayWindow, screenAnnotationOverlayWindow]
+    const targets = [annotationOverlayWindow]
     for (const win of targets) {
       if (!win || win.isDestroyed()) continue
       try {
@@ -2916,78 +2543,6 @@ function handleBackendControlMessage(message: any): void {
         else win.setIgnoreMouseEvents(true, { forward: true })
       } catch {}
     }
-    return
-  }
-
-  if (message.type === 'SET_SCREEN_ANNOTATION_VISIBLE') {
-    const visible = Boolean((message as any).visible)
-
-    if (
-      (whiteboardBackgroundWindow && !whiteboardBackgroundWindow.isDestroyed() && whiteboardBackgroundWindow.isVisible()) ||
-      (annotationOverlayWindow && !annotationOverlayWindow.isDestroyed() && annotationOverlayWindow.isVisible())
-    ) {
-      const overlay = screenAnnotationOverlayWindow
-      if (overlay && !overlay.isDestroyed()) {
-        try {
-          overlay.setIgnoreMouseEvents(true, { forward: true })
-        } catch {}
-        try {
-          if (overlay.isVisible()) overlay.hide()
-        } catch {}
-      }
-      return
-    }
-
-    if (visible) {
-      if (!screenAnnotationOverlayWindow || screenAnnotationOverlayWindow.isDestroyed()) {
-        screenAnnotationOverlayWindow = createScreenAnnotationOverlayWindow()
-      }
-
-      const overlay = screenAnnotationOverlayWindow
-      if (!overlay || overlay.isDestroyed()) return
-
-      const applyOverlayZOrder = () => {
-        if (overlay.isDestroyed()) return
-        try {
-          overlay.setAlwaysOnTop(true, 'screen-saver', topmostRelativeLevel)
-        } catch {}
-        try {
-          overlay.moveTop()
-        } catch {}
-        try {
-          overlay.setIgnoreMouseEvents(false)
-        } catch {}
-        applyToolbarOnTopLevel('screen-saver')
-        applyMutPageVisibility()
-      }
-
-      const doShow = () => {
-        if (overlay.isDestroyed()) return
-        if (!overlay.isVisible()) {
-          try {
-            overlay.showInactive()
-          } catch {
-            overlay.show()
-          }
-        }
-        applyOverlayZOrder()
-      }
-
-      if (overlay.webContents.isLoading()) overlay.once('ready-to-show', doShow)
-      else doShow()
-    } else {
-      const overlay = screenAnnotationOverlayWindow
-      if (overlay && !overlay.isDestroyed()) {
-        try {
-          overlay.setIgnoreMouseEvents(true, { forward: true })
-        } catch {}
-        try {
-          if (overlay.isVisible()) overlay.hide()
-        } catch {}
-      }
-      applyToolbarOnTopLevel('screen-saver')
-    }
-
     return
   }
 
@@ -3110,127 +2665,6 @@ function wireBackendStdout(stdout: NodeJS.ReadableStream): void {
   })
 }
 
-async function pickFreePort(): Promise<number> {
-  return await new Promise((resolve, reject) => {
-    const srv = createServer()
-    srv.on('error', reject)
-    srv.listen(0, '127.0.0.1', () => {
-      const addr = srv.address()
-      const port = typeof addr === 'object' && addr ? addr.port : 0
-      srv.close(() => resolve(port))
-    })
-  })
-}
-
-function resolvePptWrapperExecutablePath(): string | undefined {
-  const candidates = [
-    join(process.resourcesPath, 'ppt-wrapper', platform === 'win32' ? 'PptHttpWrapper.exe' : 'PptHttpWrapper'),
-    join(process.resourcesPath, 'PptHttpWrapper', platform === 'win32' ? 'PptHttpWrapper.exe' : 'PptHttpWrapper'),
-    join(process.cwd(), 'out', 'ppt-wrapper', platform === 'win32' ? 'PptHttpWrapper.exe' : 'PptHttpWrapper'),
-  ]
-  for (const p of candidates) {
-    try {
-      if (existsSync(p)) return p
-    } catch {}
-  }
-  return undefined
-}
-
-async function waitForHttpOk(url: string, timeoutMs = 3500): Promise<boolean> {
-  const start = Date.now()
-  while (Date.now() - start < timeoutMs) {
-    try {
-      const controller = new AbortController()
-      const t = setTimeout(() => controller.abort(), 450)
-      const res = await fetch(url, { signal: controller.signal })
-      clearTimeout(t)
-      if (res.ok) return true
-    } catch {}
-    await new Promise((r) => setTimeout(r, 120))
-  }
-  return false
-}
-
-async function ensurePptWrapperStarted(): Promise<{ port: number; baseUrl: string } | undefined> {
-  if (pptWrapperPort && pptWrapperProcess && !pptWrapperProcess.killed) {
-    return { port: pptWrapperPort, baseUrl: `http://127.0.0.1:${pptWrapperPort}` }
-  }
-
-  if (!pptWrapperPort) {
-    const picked = await pickFreePort().catch(() => 0)
-    pptWrapperPort = Number.isFinite(picked) && picked > 0 ? picked : 3133
-  }
-
-  const port = pptWrapperPort
-  const baseUrl = `http://127.0.0.1:${port}`
-
-  const isDev = Boolean(getDevServerUrl())
-  const projectRoot = process.cwd()
-  const exePath = resolvePptWrapperExecutablePath()
-
-  try {
-    if (pptWrapperProcess && !pptWrapperProcess.killed) {
-      try {
-        pptWrapperProcess.kill()
-      } catch {}
-    }
-  } catch {}
-
-  if (pptWrapperRestartTimer) {
-    clearTimeout(pptWrapperRestartTimer)
-    pptWrapperRestartTimer = undefined
-  }
-
-  if (exePath) {
-    pptWrapperProcess = spawn(exePath, ['--port', String(port)], {
-      windowsHide: true,
-      stdio: ['pipe', 'pipe', 'pipe'],
-      env: { ...process.env, LANSTART_PPT_WRAPPER_PORT: String(port) }
-    })
-  } else if (isDev && platform === 'win32') {
-    const csproj = join(projectRoot, 'src', 'office', 'PowerPoint', 'inkeys', 'PptHttpWrapper', 'PptHttpWrapper.csproj')
-    pptWrapperProcess = spawn('dotnet', ['run', '--project', csproj, '--', '--port', String(port)], {
-      windowsHide: true,
-      stdio: ['pipe', 'pipe', 'pipe'],
-      cwd: projectRoot,
-      env: { ...process.env, LANSTART_PPT_WRAPPER_PORT: String(port) }
-    })
-  } else {
-    pptWrapperProcess = undefined
-    return undefined
-  }
-
-  const proc = pptWrapperProcess
-  if (!proc) return undefined
-
-  try {
-    proc.stdin.end()
-  } catch {}
-
-  try {
-    sendToBackend({ type: 'PROCESS_STATUS', name: 'ppt-wrapper', status: 'spawned', pid: proc.pid, ts: Date.now() })
-  } catch {}
-
-  proc.stdout.on('data', (c) => {
-    const s = String(c ?? '')
-    if (s.trim()) process.stdout.write(s)
-  })
-  proc.stderr.on('data', (c) => {
-    const s = String(c ?? '')
-    if (s.trim()) process.stderr.write(s)
-  })
-  proc.on('exit', () => {
-    pptWrapperProcess = undefined
-    if (pptWrapperRestartTimer) clearTimeout(pptWrapperRestartTimer)
-    pptWrapperRestartTimer = setTimeout(() => {
-      void ensurePptWrapperStarted().catch(() => undefined)
-    }, 650)
-  })
-
-  await waitForHttpOk(`${baseUrl}/health`).catch(() => false)
-  return { port, baseUrl }
-}
-
 function startBackend(extraEnv?: Record<string, string>): void {
   backendExtraEnv = extraEnv
   const dbPath = join(app.getPath('userData'), 'leveldb')
@@ -3293,7 +2727,6 @@ function startBackend(extraEnv?: Record<string, string>): void {
     })
   }
 
-  sendToBackend({ type: 'PROCESS_STATUS', name: 'backend', status: 'spawned', pid: backendProcess.pid, ts: Date.now() })
 
   const spawnedBackendProc = backendProcess
   setTimeout(() => {
@@ -3341,14 +2774,7 @@ if (hasSingleInstanceLock) {
     .whenReady()
     .then(async () => {
       try {
-        const ppt = await ensurePptWrapperStarted().catch(() => undefined)
-        const extraEnv = ppt
-          ? {
-              LANSTART_PPT_WRAPPER_PORT: String(ppt.port),
-              LANSTART_PPT_WRAPPER_BASE_URL: ppt.baseUrl
-            }
-          : undefined
-        startBackend(extraEnv)
+        startBackend()
       } catch (e) {
         process.stderr.write(String(e))
       }
@@ -3394,12 +2820,6 @@ if (hasSingleInstanceLock) {
       lanstartwriteLink.flush().catch(() => undefined)
 
       let loadedAppearance: Appearance | undefined
-      let loadedNativeMica: boolean | undefined
-      let loadedLegacyWindowImplementation: boolean | undefined
-      let loadedSystemUiaTopmost: boolean | undefined
-      let loadedMergeRendererPipeline: boolean | undefined
-      let loadedSystemWindowPreload: boolean | undefined
-
       for (let attempt = 0; attempt < 3; attempt++) {
         let backendResponded = false
 
@@ -3411,74 +2831,12 @@ if (hasSingleInstanceLock) {
           if (String(e).includes('kv_not_found')) backendResponded = true
         }
 
-        try {
-          const raw = await backendGetKv(NATIVE_MICA_KV_KEY)
-          backendResponded = true
-          if (typeof raw === 'boolean') loadedNativeMica = raw
-          else if (raw === 'true' || raw === 1 || raw === '1') loadedNativeMica = true
-          else if (raw === 'false' || raw === 0 || raw === '0') loadedNativeMica = false
-        } catch (e) {
-          if (String(e).includes('kv_not_found')) backendResponded = true
-        }
-
-        try {
-          const raw = await backendGetKv(LEGACY_WINDOW_IMPL_KV_KEY)
-          backendResponded = true
-          if (typeof raw === 'boolean') loadedLegacyWindowImplementation = raw
-          else if (raw === 'true' || raw === 1 || raw === '1') loadedLegacyWindowImplementation = true
-          else if (raw === 'false' || raw === 0 || raw === '0') loadedLegacyWindowImplementation = false
-        } catch (e) {
-          if (String(e).includes('kv_not_found')) backendResponded = true
-        }
-
-        try {
-          const raw = await backendGetKv(SYSTEM_UIA_TOPMOST_KV_KEY)
-          backendResponded = true
-          if (typeof raw === 'boolean') loadedSystemUiaTopmost = raw
-          else if (raw === 'true' || raw === 1 || raw === '1') loadedSystemUiaTopmost = true
-          else if (raw === 'false' || raw === 0 || raw === '0') loadedSystemUiaTopmost = false
-        } catch (e) {
-          if (String(e).includes('kv_not_found')) backendResponded = true
-        }
-
-        try {
-          const raw = await backendGetKv(SYSTEM_MERGE_RENDERER_PIPELINE_KV_KEY)
-          backendResponded = true
-          if (typeof raw === 'boolean') loadedMergeRendererPipeline = raw
-          else if (raw === 'true' || raw === 1 || raw === '1') loadedMergeRendererPipeline = true
-          else if (raw === 'false' || raw === 0 || raw === '0') loadedMergeRendererPipeline = false
-        } catch (e) {
-          if (String(e).includes('kv_not_found')) backendResponded = true
-        }
-
-        try {
-          const raw = await backendGetKv(SYSTEM_WINDOW_PRELOAD_KV_KEY)
-          backendResponded = true
-          if (typeof raw === 'boolean') loadedSystemWindowPreload = raw
-          else if (raw === 'true' || raw === 1 || raw === '1') loadedSystemWindowPreload = true
-          else if (raw === 'false' || raw === 0 || raw === '0') loadedSystemWindowPreload = false
-        } catch (e) {
-          if (String(e).includes('kv_not_found')) backendResponded = true
-        }
-
         if (backendResponded) break
         await new Promise((r) => setTimeout(r, 220))
       }
 
-      applyMergeRendererPipeline(loadedMergeRendererPipeline ?? false, { rebuild: false })
-      applyLegacyWindowImplementation(loadedLegacyWindowImplementation ?? false, { rebuild: false })
-      applyNativeMica(loadedNativeMica ?? false)
       applyAppearance(loadedAppearance ?? currentAppearance)
-      systemUiaTopmostEnabled = loadedSystemUiaTopmost ?? true
-      systemWindowPreloadEnabled = loadedSystemWindowPreload ?? false
 
-      isRunningAsAdmin = await detectWindowsAdmin().catch(() => false)
-      topmostRelativeLevel = isRunningAsAdmin ? 20 : 0
-      backendPutUiStateKey('app', ADMIN_STATUS_UI_STATE_KEY, isRunningAsAdmin).catch(() => undefined)
-      backendPutUiStateKey('app', SYSTEM_UIA_TOPMOST_UI_STATE_KEY, systemUiaTopmostEnabled).catch(() => undefined)
-
-      sendToBackend({ type: 'PROCESS_STATUS', name: 'main', status: 'ready', pid: process.pid, ts: Date.now() })
-      ensureTaskWatcherStarted()
       const win = createFloatingToolbarWindow()
       floatingToolbarWindow = win
       const handle = createFloatingToolbarHandleWindow(win)
@@ -3495,8 +2853,6 @@ if (hasSingleInstanceLock) {
             if (h && !h.isDestroyed()) out.push(h)
             const notice = toolbarNoticeWindow
             if (notice && !notice.isDestroyed()) out.push(notice)
-            const screenOverlay = screenAnnotationOverlayWindow
-            if (screenOverlay && !screenOverlay.isDestroyed()) out.push(screenOverlay)
             const mp = multiPageControlWindow
             if (mp && !mp.isDestroyed()) out.push(mp)
             const mph = mutPageHandleWindow
@@ -3510,16 +2866,7 @@ if (hasSingleInstanceLock) {
           tick: async (targets) => {
             refreshToolbarWindowsLayoutAndSurface()
             applyToolbarOnTopLevel('screen-saver')
-            if (process.platform !== 'win32') return
-            if (!systemUiaTopmostEnabled) return
-            const hwnds: bigint[] = []
-            for (const w of targets) {
-              if (!w || w.isDestroyed()) continue
-              if (!w.isVisible()) continue
-              const hwnd = readWin32Hwnd(w)
-              if (typeof hwnd === 'bigint') hwnds.push(hwnd)
-            }
-            await forceTopmostWindows(hwnds)
+            void targets
           }
         })
         stopToolbarTopmostPolling = poller.stop
@@ -3531,7 +2878,6 @@ if (hasSingleInstanceLock) {
         scheduleRepositionToolbarSubwindows('other')
         applyToolbarOnTopLevel('screen-saver')
         void maybeShowRestoreNotesNotice()
-        if (systemWindowPreloadEnabled) preloadAllUiWindows()
       })()
 
       app.on('activate', () => {
@@ -3564,20 +2910,16 @@ app.on('before-quit', (event) => {
 
   if (backendRestartTimer) clearTimeout(backendRestartTimer)
 
-  sendToBackend({ type: 'PROCESS_STATUS', name: 'main', status: 'before-quit', pid: process.pid, ts: Date.now() })
   sendToBackend({ type: 'CLEANUP_RUNTIME' })
   try {
     stopToolbarTopmostPolling?.()
   } catch {}
-  taskWatcher?.stop()
 
   if (backendProcess && !backendProcess.killed) {
     event.preventDefault()
     void (async () => {
       await shutdownBackendGracefully().catch(() => undefined)
-      if (pptWrapperRestartTimer) clearTimeout(pptWrapperRestartTimer)
       try {
-        if (pptWrapperProcess && !pptWrapperProcess.killed) pptWrapperProcess.kill()
       } catch {}
       allowQuitToProceed = true
       try {
@@ -3588,6 +2930,5 @@ app.on('before-quit', (event) => {
   }
 
   allowQuitToProceed = true
-  if (pptWrapperRestartTimer) clearTimeout(pptWrapperRestartTimer)
-  if (pptWrapperProcess && !pptWrapperProcess.killed) pptWrapperProcess.kill()
 })
+

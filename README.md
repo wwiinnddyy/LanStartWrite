@@ -71,7 +71,6 @@ src/
   annotation_writing/   批注/书写相关
   paint_board/          画板
   video_show/           视频展台相关
-  task_windows_watcher/ 任务窗口监视
   elysia/               后端服务（Elysia）
   LeavelDB/             本地数据存储（LevelDB）
 ```

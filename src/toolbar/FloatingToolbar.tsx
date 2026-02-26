@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
+﻿import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { Button, ButtonGroup } from '../button'
 import { motion, useReducedMotion } from '../Framer_Motion'
 import {
@@ -25,7 +25,6 @@ import { useToolbarWindowAutoResize } from './hooks/useToolbarWindowAutoResize'
 import { useZoomOnWheel } from './hooks/useZoomOnWheel'
 import { useAppearanceSettings } from '../settings'
 import { getAppButtonVisibility } from './utils/constants'
-import { WatcherIcon } from './components/ToolbarIcons'
 import './styles/toolbar.css'
 
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
@@ -134,9 +133,9 @@ type ToolbarState = {
 }
 
 type PrimaryButtonId = 'mouse' | 'pen' | 'eraser' | 'whiteboard' | 'video-show' | 'pdf'
-type SecondaryButtonId = 'undo' | 'redo' | 'clock' | 'feature-panel' | 'events' | 'watcher'
+type SecondaryButtonId = 'undo' | 'redo' | 'clock' | 'feature-panel' | 'events'
 
-const ALL_SECONDARY_BUTTONS: SecondaryButtonId[] = ['undo', 'redo', 'clock', 'feature-panel', 'events', 'watcher']
+const ALL_SECONDARY_BUTTONS: SecondaryButtonId[] = ['undo', 'redo', 'clock', 'feature-panel', 'events']
 const DEFAULT_ALLOWED_PRIMARY_BUTTONS: PrimaryButtonId[] = ['mouse', 'pen', 'eraser', 'whiteboard', 'video-show', 'pdf']
 const DEFAULT_ALLOWED_SECONDARY_BUTTONS: SecondaryButtonId[] = ['undo', 'redo', 'feature-panel']
 
@@ -161,7 +160,7 @@ function normalizeAllowedSecondaryButtons(input: unknown): SecondaryButtonId[] {
   const allowed = new Set(ALL_SECONDARY_BUTTONS)
   const unique: SecondaryButtonId[] = []
   for (const item of input) {
-    if (item !== 'undo' && item !== 'redo' && item !== 'clock' && item !== 'feature-panel' && item !== 'events' && item !== 'watcher') continue
+    if (item !== 'undo' && item !== 'redo' && item !== 'clock' && item !== 'feature-panel' && item !== 'events') continue
     if (!allowed.has(item)) continue
     if (unique.includes(item)) continue
     unique.push(item)
@@ -174,7 +173,7 @@ function normalizePinnedSecondaryButtonsOrder(input: unknown, allowedButtons: re
   const unique: SecondaryButtonId[] = []
   if (Array.isArray(input)) {
     for (const item of input) {
-      if (item !== 'undo' && item !== 'redo' && item !== 'clock' && item !== 'feature-panel' && item !== 'events' && item !== 'watcher') continue
+      if (item !== 'undo' && item !== 'redo' && item !== 'clock' && item !== 'feature-panel' && item !== 'events') continue
       if (!allowed.has(item)) continue
       if (unique.includes(item)) continue
       unique.push(item)
@@ -210,7 +209,7 @@ function normalizeSecondaryButtonsOrder(
   const unique: SecondaryButtonId[] = []
   if (Array.isArray(input)) {
     for (const item of input) {
-      if (item !== 'undo' && item !== 'redo' && item !== 'clock' && item !== 'feature-panel' && item !== 'events' && item !== 'watcher') continue
+      if (item !== 'undo' && item !== 'redo' && item !== 'clock' && item !== 'feature-panel' && item !== 'events') continue
       if (!allowed.has(item)) continue
       if (pinned.has(item)) continue
       if (unique.includes(item)) continue
@@ -366,8 +365,6 @@ function FloatingToolbarInner() {
   const isExpanded = state.expanded !== false
   const backendEvents = useEventsPoll(800)
   const lastProcessedEventIdRef = useRef(0)
-  const watcherWasShownRef = useRef(false)
-  const lastWatcherClosedAtRef = useRef(0)
 
   const { toolbarButtonHintsEnabled } = useAppearanceSettings()
 
@@ -427,31 +424,6 @@ function FloatingToolbarInner() {
     const next = backendEvents.filter((e) => e.id > lastProcessedEventIdRef.current)
     if (!next.length) return
     lastProcessedEventIdRef.current = next[next.length - 1]!.id
-
-    for (const item of next) {
-      if (item.type === 'WINDOW_STATUS') {
-        const payload = (item.payload ?? {}) as any
-        const windowId = typeof payload.windowId === 'string' ? payload.windowId : ''
-        const event = typeof payload.event === 'string' ? payload.event : ''
-        if (windowId !== 'watcher') continue
-
-        if (event === 'show' || event === 'did-finish-load') {
-          watcherWasShownRef.current = true
-          continue
-        }
-
-        if (event === 'closed') {
-          if (!watcherWasShownRef.current) continue
-          watcherWasShownRef.current = false
-
-          const now = Date.now()
-          if (now - lastWatcherClosedAtRef.current < 800) continue
-          lastWatcherClosedAtRef.current = now
-
-          void postCommand('win.setNoticeVisible', { visible: true })
-        }
-      }
-    }
   }, [backendEvents])
 
   useEffect(() => {
@@ -484,25 +456,25 @@ function FloatingToolbarInner() {
     setState({ ...state, expanded: !isExpanded })
   }
 
-  // 处理笔按钮点击
+  // 澶勭悊绗旀寜閽偣鍑?
   const handlePenClick = () => {
     if (tool === 'pen') {
-      // 如果笔已经是当前工具，打开二级菜单（独立窗口）
+      // 濡傛灉绗斿凡缁忔槸褰撳墠宸ュ叿锛屾墦寮€浜岀骇鑿滃崟锛堢嫭绔嬬獥鍙ｏ級
       void postCommand('toggle-subwindow', { kind: 'pen', placement: 'bottom' })
     } else {
-      // 否则切换到笔工具
+      // 鍚﹀垯鍒囨崲鍒扮瑪宸ュ叿
       setState({ ...state, tool: 'pen' })
       void postCommand('app.setTool', { tool: 'pen' })
     }
   }
 
-  // 处理橡皮按钮点击
+  // 澶勭悊姗＄毊鎸夐挳鐐瑰嚮
   const handleEraserClick = () => {
     if (tool === 'eraser') {
-      // 如果橡皮已经是当前工具，打开二级菜单（独立窗口）
+      // 濡傛灉姗＄毊宸茬粡鏄綋鍓嶅伐鍏凤紝鎵撳紑浜岀骇鑿滃崟锛堢嫭绔嬬獥鍙ｏ級
       void postCommand('toggle-subwindow', { kind: 'eraser', placement: 'bottom' })
     } else {
-      // 否则切换到橡皮工具
+      // 鍚﹀垯鍒囨崲鍒版鐨伐鍏?
       setState({ ...state, tool: 'eraser' })
       void postCommand('app.setTool', { tool: 'eraser' })
     }
@@ -525,7 +497,7 @@ function FloatingToolbarInner() {
   const renderPrimaryButton = (id: PrimaryButtonId) => {
     if (id === 'mouse') {
       const visibility = getAppButtonVisibility('mouse')
-      const ariaLabel = '鼠标'
+      const ariaLabel = '榧犳爣'
       return (
         <Button
           key="mouse"
@@ -566,7 +538,7 @@ function FloatingToolbarInner() {
 
     if (id === 'eraser') {
       const visibility = getAppButtonVisibility('eraser')
-      const ariaLabel = '橡皮'
+      const ariaLabel = '姗＄毊'
       return (
         <Button
           key="eraser"
@@ -585,7 +557,7 @@ function FloatingToolbarInner() {
 
     if (id === 'whiteboard') {
       const visibility = getAppButtonVisibility('whiteboard')
-      const ariaLabel = '白板'
+      const ariaLabel = '鐧芥澘'
       return (
         <Button
           key="whiteboard"
@@ -606,7 +578,7 @@ function FloatingToolbarInner() {
 
     if (id === 'video-show') {
       const visibility = getAppButtonVisibility('video-show')
-      const ariaLabel = '视频展台'
+      const ariaLabel = '瑙嗛灞曞彴'
       return (
         <Button
           key="video-show"
@@ -657,7 +629,7 @@ function FloatingToolbarInner() {
                 await putUiStateKey(UI_STATE_APP_WINDOW_ID, PDF_FILE_URL_UI_STATE_KEY, fileUrl)
               } catch (e) {
                 setAppMode('toolbar')
-                window.alert(`打开 PDF 失败：${e instanceof Error ? e.message : String(e)}`)
+                window.alert(`鎵撳紑 PDF 澶辫触锛?{e instanceof Error ? e.message : String(e)}`)
               }
             })()
           }}
@@ -673,7 +645,7 @@ function FloatingToolbarInner() {
   const renderSecondaryButton = (id: SecondaryButtonId) => {
     if (id === 'undo') {
       const visibility = getAppButtonVisibility('undo')
-      const ariaLabel = '撤销'
+      const ariaLabel = '鎾ら攢'
       return (
         <Button
           key="undo"
@@ -693,7 +665,7 @@ function FloatingToolbarInner() {
 
     if (id === 'redo') {
       const visibility = getAppButtonVisibility('redo')
-      const ariaLabel = '重做'
+      const ariaLabel = '閲嶅仛'
       return (
         <Button
           key="redo"
@@ -713,7 +685,7 @@ function FloatingToolbarInner() {
 
     if (id === 'clock') {
       const visibility = getAppButtonVisibility('clock')
-      const ariaLabel = '时钟'
+      const ariaLabel = '鏃堕挓'
       return (
         <Button
           key="clock"
@@ -733,7 +705,7 @@ function FloatingToolbarInner() {
 
     if (id === 'events') {
       const visibility = getAppButtonVisibility('events')
-      const ariaLabel = '事件'
+      const ariaLabel = '浜嬩欢'
       return (
         <Button
           key="events"
@@ -750,29 +722,8 @@ function FloatingToolbarInner() {
         </Button>
       )
     }
-
-    if (id === 'watcher') {
-      const visibility = getAppButtonVisibility('watcher')
-      const ariaLabel = '监视器'
-      return (
-        <Button
-          key="watcher"
-          size={uiButtonSize}
-          ariaLabel={ariaLabel}
-          title={ariaLabel}
-          showInToolbar={visibility.showInToolbar}
-          showInFeaturePanel={visibility.showInFeaturePanel}
-          onClick={() => {
-            void postCommand('watcher.openWindow')
-          }}
-        >
-          {withButtonHint(<WatcherIcon />, ariaLabel)}
-        </Button>
-      )
-    }
-
     const visibility = getAppButtonVisibility('feature-panel')
-    const ariaLabel = '功能面板'
+    const ariaLabel = '鍔熻兘闈㈡澘'
     return (
       <Button
         key="feature-panel"
@@ -809,7 +760,7 @@ function FloatingToolbarInner() {
     >
       <div ref={contentRef} className="toolbarDragArea">
         <div className="toolbarLayout">
-          {/* 主要工具按钮区域 */}
+          {/* 涓昏宸ュ叿鎸夐挳鍖哄煙 */}
           <div className="toolbarBarRow">
             <ButtonGroup>
               {primaryButtonsOrder.map(renderPrimaryButton)}
@@ -817,7 +768,7 @@ function FloatingToolbarInner() {
             </ButtonGroup>
           </div>
 
-          {/* 折叠/展开切换按钮 */}
+          {/* 鎶樺彔/灞曞紑鍒囨崲鎸夐挳 */}
           <div className="toolbarBarRow">
             {(() => {
               const visibility = getAppButtonVisibility('toggle-expanded')
@@ -831,13 +782,13 @@ function FloatingToolbarInner() {
               showInFeaturePanel={visibility.showInFeaturePanel}
               onClick={toggleExpanded}
             >
-              {withButtonHint(isExpanded ? <ChevronLeftIcon /> : <ChevronRightIcon />, isExpanded ? '折叠' : '展开')}
+              {withButtonHint(isExpanded ? <ChevronLeftIcon /> : <ChevronRightIcon />, isExpanded ? '鎶樺彔' : '灞曞紑')}
             </Button>
               )
             })()}
           </div>
 
-          {/* 可折叠区域 */}
+          {/* 鍙姌鍙犲尯鍩?*/}
           <motion.div
             className="toolbarCollapsibleSection"
             initial={false}
@@ -872,7 +823,7 @@ export function FloatingToolbarHandleApp() {
   const reduceMotion = useReducedMotion()
   const [dragging, setDragging] = useState(false)
 
-  // 应用外观设置（强调色等）
+  // 搴旂敤澶栬璁剧疆锛堝己璋冭壊绛夛級
   useAppearanceSettings()
 
   useEffect(() => {
@@ -927,3 +878,5 @@ export function FloatingToolbarHandleApp() {
     </motion.div>
   )
 }
+
+

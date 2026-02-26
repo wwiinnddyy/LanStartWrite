@@ -1,7 +1,6 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+﻿import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { motion, useReducedMotion } from '../Framer_Motion'
 import { Button } from '../button'
-import { useEventsPoll } from '../toolbar/hooks/useEventsPoll'
 import {
   deleteUiStateKey,
   getKv,
@@ -14,7 +13,6 @@ import {
   setToolbarNoticeVisible
 } from '../toolbar/hooks/useBackend'
 import { useZoomOnWheel } from '../toolbar/hooks/useZoomOnWheel'
-import { WatcherIcon } from '../toolbar/components/ToolbarIcons'
 import {
   APP_MODE_UI_STATE_KEY,
   CLOCK_COUNTDOWN_END_MS_UI_STATE_KEY,
@@ -32,19 +30,6 @@ import {
   type ClockTab
 } from '../status'
 import '../toolbar-subwindows/styles/subwindow.css'
-
-function formatBytes(bytes: number): string {
-  if (!Number.isFinite(bytes) || bytes <= 0) return '0 B'
-  const units = ['B', 'KB', 'MB', 'GB', 'TB'] as const
-  let idx = 0
-  let v = bytes
-  while (v >= 1024 && idx < units.length - 1) {
-    v /= 1024
-    idx += 1
-  }
-  const digits = idx <= 1 ? 0 : idx === 2 ? 1 : 2
-  return `${v.toFixed(digits)} ${units[idx]}`
-}
 
 function HistoryIcon() {
   return (
@@ -113,7 +98,6 @@ function formatDuration(ms: number): string {
 export function NotificationSubwindow(props: { kind: 'notice' }) {
   useZoomOnWheel()
   const reduceMotion = useReducedMotion()
-  const events = useEventsPoll(800)
   const bus = useUiStateBus(UI_STATE_APP_WINDOW_ID)
   const rootRef = useRef<HTMLDivElement | null>(null)
   const cardRef = useRef<HTMLDivElement | null>(null)
@@ -121,33 +105,6 @@ export function NotificationSubwindow(props: { kind: 'notice' }) {
   const outerPadding = 12
   const [mainNoticeKind, setMainNoticeKind] = useState('')
   const [restartPending, setRestartPending] = useState(false)
-
-  const lastProcessedEventIdRef = useRef(0)
-  const lastMemoryTotalBytesRef = useRef(0)
-  const [memoryTotalBytes, setMemoryTotalBytes] = useState(0)
-
-  useEffect(() => {
-    if (!events.length) return
-    const next = events.filter((e) => e.id > lastProcessedEventIdRef.current)
-    if (!next.length) return
-    lastProcessedEventIdRef.current = next[next.length - 1]!.id
-
-    for (const item of next) {
-      if (item.type !== 'processChanged') continue
-      const payload = (item.payload ?? {}) as any
-      const processes = Array.isArray(payload.processes) ? payload.processes : []
-      let total = 0
-      for (const p of processes) {
-        const mem = Number((p as any)?.memoryBytes)
-        if (!Number.isFinite(mem) || mem <= 0) continue
-        total += mem
-      }
-      if (total !== lastMemoryTotalBytesRef.current) {
-        lastMemoryTotalBytesRef.current = total
-        setMemoryTotalBytes(total)
-      }
-    }
-  }, [events])
 
   const noticeKindRaw = bus.state[NOTICE_KIND_UI_STATE_KEY]
   const noticeKind = typeof noticeKindRaw === 'string' ? noticeKindRaw : ''
@@ -201,7 +158,7 @@ export function NotificationSubwindow(props: { kind: 'notice' }) {
       rafId = 0
       const contentWidth = measure?.scrollWidth ?? 0
       const contentHeight = measure?.scrollHeight ?? 0
-      // 增加 2px 以补偿边框占用的空间，确保内边距视觉上四边等宽
+      // 澧炲姞 2px 浠ヨˉ鍋胯竟妗嗗崰鐢ㄧ殑绌洪棿锛岀‘淇濆唴杈硅窛瑙嗚涓婂洓杈圭瓑瀹?
       const width = Math.max(
         isClockFloatNotice ? 0 : 260,
         Math.min(420, Math.ceil(contentWidth) + outerPadding * 2 + 2)
@@ -241,11 +198,6 @@ export function NotificationSubwindow(props: { kind: 'notice' }) {
     })
   }
 
-  const openWatcher = () => {
-    void postCommand('watcher.openWindow')
-    close()
-  }
-
   const clockFloatShownAtRef = useRef<number | null>(null)
   const clockFloatEverActiveRef = useRef(false)
   useEffect(() => {
@@ -277,15 +229,15 @@ export function NotificationSubwindow(props: { kind: 'notice' }) {
   const clockText = useMemo(() => {
     if (!isClockFloatNotice) return ''
     if (countdownActive) {
-      if (Number.isFinite(countdownEndMs)) return `倒计时 ${formatDuration(Math.max(0, countdownEndMs - clockNowMs))}`
+      if (Number.isFinite(countdownEndMs)) return `鍊掕鏃?${formatDuration(Math.max(0, countdownEndMs - clockNowMs))}`
       return '倒计时'
     }
     if (timerActive) {
       const base = Number.isFinite(timerElapsedMs) && timerElapsedMs > 0 ? timerElapsedMs : 0
-      if (Number.isFinite(timerStartMs)) return `计时 ${formatDuration(base + Math.max(0, clockNowMs - timerStartMs))}`
-      return `计时 ${formatDuration(base)}`
+      if (Number.isFinite(timerStartMs)) return `璁℃椂 ${formatDuration(base + Math.max(0, clockNowMs - timerStartMs))}`
+      return `璁℃椂 ${formatDuration(base)}`
     }
-    return '时钟'
+    return '鏃堕挓'
   }, [clockNowMs, countdownActive, countdownEndMs, isClockFloatNotice, timerActive, timerElapsedMs, timerStartMs])
 
   useEffect(() => {
@@ -308,12 +260,7 @@ export function NotificationSubwindow(props: { kind: 'notice' }) {
     void postCommand('toggle-subwindow', { kind: 'clock', placement: 'bottom' })
     close()
   }
-
-  const text = isClockFloatNotice
-    ? clockText
-    : isBackendUnavailableNotice
-      ? '后端服务不可用'
-      : `内存占用 ${formatBytes(memoryTotalBytes || lastMemoryTotalBytesRef.current)}`
+  const text = isClockFloatNotice ? clockText : isBackendUnavailableNotice ? '后端服务不可用' : ''
 
   const restoreNotes = async () => {
     const appModeRaw = bus.state[APP_MODE_UI_STATE_KEY]
@@ -366,25 +313,23 @@ export function NotificationSubwindow(props: { kind: 'notice' }) {
           alignItems: 'center',
           padding: outerPadding,
           gap: 12,
-          cursor: isRestoreNotesNotice || isBackendUnavailableNotice ? 'default' : 'pointer',
+          cursor: isClockFloatNotice ? 'pointer' : 'default',
           position: 'relative',
           overflow: isClockFloatNotice ? 'hidden' : undefined
         }}
-        role={isRestoreNotesNotice || isBackendUnavailableNotice ? undefined : 'button'}
-        tabIndex={isRestoreNotesNotice || isBackendUnavailableNotice ? undefined : 0}
+        role={isClockFloatNotice ? 'button' : undefined}
+        tabIndex={isClockFloatNotice ? 0 : undefined}
         onClick={(e) => {
-          if (isRestoreNotesNotice || isBackendUnavailableNotice) return
+          if (!isClockFloatNotice) return
           const target = e.target as HTMLElement | null
           if (target?.closest?.('button')) return
-          if (isClockFloatNotice) openClock()
-          else openWatcher()
+          openClock()
         }}
         onKeyDown={(e) => {
-          if (isRestoreNotesNotice || isBackendUnavailableNotice) return
+          if (!isClockFloatNotice) return
           if (e.key !== 'Enter' && e.key !== ' ') return
           e.preventDefault()
-          if (isClockFloatNotice) openClock()
-          else openWatcher()
+          openClock()
         }}
       >
         {isClockFloatNotice && !reduceMotion ? (
@@ -528,7 +473,7 @@ export function NotificationSubwindow(props: { kind: 'notice' }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 18, minWidth: 0, maxWidth: '100%' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: isClockFloatNotice ? 8 : 12, minWidth: 0, maxWidth: '100%' }}>
               <div style={{ width: 18, height: 18, opacity: 0.92, flex: '0 0 auto' }} aria-hidden="true">
-                {isRestoreNotesNotice ? <HistoryIcon /> : isClockFloatNotice ? <ClockIcon /> : <WatcherIcon />}
+                {isRestoreNotesNotice ? <HistoryIcon /> : isClockFloatNotice ? <ClockIcon /> : <RestartIcon />}
               </div>
               <div
                 style={{
@@ -553,7 +498,7 @@ export function NotificationSubwindow(props: { kind: 'notice' }) {
                 onClick={(e) => e.stopPropagation()}
                 style={{ display: 'flex', alignItems: 'center', gap: 8, flex: '0 0 auto' }}
               >
-                <Button variant="default" size="sm" ariaLabel="关闭通知" title="关闭" onClick={close}>
+                <Button variant="default" size="sm" ariaLabel="鍏抽棴閫氱煡" title="鍏抽棴" onClick={close}>
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
                     width="18"
@@ -573,15 +518,15 @@ export function NotificationSubwindow(props: { kind: 'notice' }) {
                   <Button
                     variant="default"
                     size="sm"
-                    ariaLabel="重试启动后端服务"
-                    title="重试"
+                    ariaLabel="閲嶈瘯鍚姩鍚庣鏈嶅姟"
+                    title="閲嶈瘯"
                     disabled={restartPending}
                     onClick={restartBackend}
                   >
                     <RestartIcon />
                   </Button>
                 ) : isRestoreNotesNotice ? (
-                  <Button variant="default" size="sm" ariaLabel="确定还原笔记" title="确定" onClick={restoreNotes}>
+                  <Button variant="default" size="sm" ariaLabel="纭畾杩樺師绗旇" title="纭畾" onClick={restoreNotes}>
                     <CheckIcon />
                   </Button>
                 ) : null}
@@ -593,3 +538,5 @@ export function NotificationSubwindow(props: { kind: 'notice' }) {
     </motion.div>
   )
 }
+
+

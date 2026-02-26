@@ -14,7 +14,6 @@ import {
   selectCunoxImportFile
 } from '../status'
 import {
-  WatcherIcon,
   EventsIcon,
   SettingsIcon,
   QuitIcon,
@@ -25,7 +24,7 @@ import notebookIconSvgRaw from '../../iconpack/flent_icon/fluent--notebook-20-re
 
 const notebookIconSvg = notebookIconSvgRaw.replace('width="20"', 'width="18"').replace('height="20"', 'height="18"')
 
-type GridIconKind = 'grid' | 'plus' | 'gear' | 'doc' | 'notebook' | 'db' | 'events' | 'watcher' | 'clock' | 'quit'
+type GridIconKind = 'grid' | 'plus' | 'gear' | 'doc' | 'notebook' | 'db' | 'events' | 'clock' | 'quit'
 
 function GridIcon(props: { kind: GridIconKind }) {
   const stroke = 'currentColor'
@@ -54,10 +53,6 @@ function GridIcon(props: { kind: GridIconKind }) {
 
   if (props.kind === 'events') {
     return <EventsIcon />
-  }
-
-  if (props.kind === 'watcher') {
-    return <WatcherIcon />
   }
 
   if (props.kind === 'clock') {
@@ -255,7 +250,6 @@ export function FeaturePanelMenu(props: { kind: string }) {
     const iconFor = (id: AppButtonId): GridIconKind => {
       if (id === 'db') return 'db'
       if (id === 'events') return 'events'
-      if (id === 'watcher') return 'watcher'
       if (id === 'clock') return 'clock'
       if (id === 'settings') return 'gear'
       if (id === 'notes') return 'notebook'
@@ -272,7 +266,6 @@ export function FeaturePanelMenu(props: { kind: string }) {
       if (id === 'db') return () => void postCommand('create-window')
       if (id === 'events') return () => void postCommand('toggle-subwindow', { kind: 'events', placement: 'bottom' })
       if (id === 'clock') return () => void postCommand('toggle-subwindow', { kind: 'clock', placement: 'bottom' })
-      if (id === 'watcher') return () => void postCommand('watcher.openWindow')
       if (id === 'settings') return () => void postCommand('app.openSettingsWindow')
       if (id === 'notes') return () => void postCommand('toggle-subwindow', { kind: 'notes', placement: 'bottom' })
       if (id === 'quit')

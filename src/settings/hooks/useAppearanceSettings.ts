@@ -12,34 +12,19 @@ const ACCENT_COLOR_LIGHT_KEY = 'accent-color-light'
 const ACCENT_COLOR_DARK_KEY = 'accent-color-dark'
 const TRANSITION_PRESET_KEY = 'transition-preset'
 const BACKGROUND_TRANSITION_KEY = 'background-transition'
-const NATIVE_MICA_KEY = 'native-mica-enabled'
-const LEGACY_WINDOW_IMPL_KEY = 'legacy-window-implementation'
-const WINDOW_BG_MODE_KEY = 'window-background-mode'
 const TOOLBAR_BUTTON_HINTS_KEY = 'toolbar-button-hints'
 
-// 默认强调色
+// 默认强调�?
 const DEFAULT_ACCENT_COLOR = PRESET_ACCENT_COLORS[0] // 蓝色
 
 // 默认过渡设置
 const DEFAULT_TRANSITION_PRESET = TRANSITION_PRESETS[0] // 流畅
 const DEFAULT_BACKGROUND_TRANSITION = BACKGROUND_TRANSITIONS[0] // 标准
-export type WindowBackgroundMode = 'opaque' | 'blur' | 'transparent'
-
-const DEFAULT_WINDOW_BG_MODE: WindowBackgroundMode = 'blur'
 
 export type AppearanceSettings = {
-  // 强调色
+  // 强调�?
   accentColor: AccentColor
   setAccentColor: (color: AccentColor) => void
-
-  nativeMicaEnabled: boolean
-  setNativeMicaEnabled: (enabled: boolean) => void
-
-  legacyWindowImplementation: boolean
-  setLegacyWindowImplementation: (enabled: boolean) => void
-
-  windowBackgroundMode: WindowBackgroundMode
-  setWindowBackgroundMode: (mode: WindowBackgroundMode) => void
 
   toolbarButtonHintsEnabled: boolean
   setToolbarButtonHintsEnabled: (enabled: boolean) => void
@@ -61,19 +46,16 @@ export function useAppearanceSettings(): AppearanceSettings {
   // 根据当前主题获取对应的存储键
   const accentColorKey = appearance === 'dark' ? ACCENT_COLOR_DARK_KEY : ACCENT_COLOR_LIGHT_KEY
   
-  // 强调色状态
+  // 强调色状�?
   const [accentColorValue, setAccentColorValue] = useState<string>(DEFAULT_ACCENT_COLOR.value)
 
-  const [nativeMicaEnabledValue, setNativeMicaEnabledValue] = useState<boolean>(false)
-  const [legacyWindowImplementationValue, setLegacyWindowImplementationValue] = useState<boolean>(false)
-  const [windowBackgroundModeValue, setWindowBackgroundModeValue] = useState<WindowBackgroundMode>(DEFAULT_WINDOW_BG_MODE)
   const [toolbarButtonHintsEnabledValue, setToolbarButtonHintsEnabledValue] = useState<boolean>(false)
   
-  // 过渡设置状态
+  // 过渡设置状�?
   const [transitionPresetValue, setTransitionPresetValue] = useState<string>(DEFAULT_TRANSITION_PRESET.value)
   const [backgroundTransitionValue, setBackgroundTransitionValue] = useState<string>(DEFAULT_BACKGROUND_TRANSITION.value)
   
-  // 加载保存的设置
+  // 加载保存的设�?
   useEffect(() => {
     const loadSettings = async () => {
       const safeGet = async <T,>(key: string): Promise<T | undefined> => {
@@ -89,32 +71,6 @@ export function useAppearanceSettings(): AppearanceSettings {
         setAccentColorValue(savedAccentColor === 'system-monet' ? WALLPAPER_MIX_ACCENT_VALUE : savedAccentColor)
       }
 
-      const savedNativeMica = await safeGet<unknown>(NATIVE_MICA_KEY)
-      if (typeof savedNativeMica === 'boolean') setNativeMicaEnabledValue(savedNativeMica)
-      else if (savedNativeMica === 'true' || savedNativeMica === 1 || savedNativeMica === '1') setNativeMicaEnabledValue(true)
-      else if (savedNativeMica === 'false' || savedNativeMica === 0 || savedNativeMica === '0') setNativeMicaEnabledValue(false)
-
-      const savedLegacyWindowImplementation = await safeGet<unknown>(LEGACY_WINDOW_IMPL_KEY)
-      if (typeof savedLegacyWindowImplementation === 'boolean') setLegacyWindowImplementationValue(savedLegacyWindowImplementation)
-      else if (
-        savedLegacyWindowImplementation === 'true' ||
-        savedLegacyWindowImplementation === 1 ||
-        savedLegacyWindowImplementation === '1'
-      ) {
-        setLegacyWindowImplementationValue(true)
-      } else if (
-        savedLegacyWindowImplementation === 'false' ||
-        savedLegacyWindowImplementation === 0 ||
-        savedLegacyWindowImplementation === '0'
-      ) {
-        setLegacyWindowImplementationValue(false)
-      }
-
-      const savedWindowBgMode = await safeGet<unknown>(WINDOW_BG_MODE_KEY)
-      if (savedWindowBgMode === 'opaque' || savedWindowBgMode === 'blur' || savedWindowBgMode === 'transparent') {
-        setWindowBackgroundModeValue(savedWindowBgMode)
-      }
-      
       const savedTransitionPreset = await safeGet<string>(TRANSITION_PRESET_KEY)
       if (savedTransitionPreset) {
         setTransitionPresetValue(savedTransitionPreset)
@@ -163,10 +119,10 @@ export function useAppearanceSettings(): AppearanceSettings {
   // 获取完整的强调色对象
   const accentColor = allAccentColors.find(c => c.value === accentColorValue) || DEFAULT_ACCENT_COLOR
   
-  // 获取完整的过渡预设对象
+  // 获取完整的过渡预设对�?
   const transitionPreset = TRANSITION_PRESETS.find(p => p.value === transitionPresetValue) || DEFAULT_TRANSITION_PRESET
   
-  // 获取完整的背景过渡对象
+  // 获取完整的背景过渡对�?
   const backgroundTransition = BACKGROUND_TRANSITIONS.find(t => t.value === backgroundTransitionValue) || DEFAULT_BACKGROUND_TRANSITION
   
   // 设置强调色（根据当前主题保存到不同的键）
@@ -179,33 +135,6 @@ export function useAppearanceSettings(): AppearanceSettings {
     }
   }, [accentColorKey])
 
-  const setNativeMicaEnabled = useCallback(async (enabled: boolean) => {
-    setNativeMicaEnabledValue(enabled)
-    try {
-      await putKv(NATIVE_MICA_KEY, enabled)
-    } catch (e) {
-      console.error('[useAppearanceSettings] Failed to save native mica enabled:', e)
-    }
-  }, [])
-
-  const setLegacyWindowImplementation = useCallback(async (enabled: boolean) => {
-    setLegacyWindowImplementationValue(enabled)
-    try {
-      await putKv(LEGACY_WINDOW_IMPL_KEY, enabled)
-    } catch (e) {
-      console.error('[useAppearanceSettings] Failed to save legacy window implementation:', e)
-    }
-  }, [])
-
-  const setWindowBackgroundMode = useCallback(async (mode: WindowBackgroundMode) => {
-    setWindowBackgroundModeValue(mode)
-    try {
-      await putKv(WINDOW_BG_MODE_KEY, mode)
-    } catch (e) {
-      console.error('[useAppearanceSettings] Failed to save window background mode:', e)
-    }
-  }, [])
-
   const setToolbarButtonHintsEnabled = useCallback(async (enabled: boolean) => {
     setToolbarButtonHintsEnabledValue(enabled)
     try {
@@ -214,12 +143,6 @@ export function useAppearanceSettings(): AppearanceSettings {
       console.error('[useAppearanceSettings] Failed to save toolbar button hints enabled:', e)
     }
   }, [])
-
-  useEffect(() => {
-    if (!legacyWindowImplementationValue && nativeMicaEnabledValue) {
-      setNativeMicaEnabled(false)
-    }
-  }, [legacyWindowImplementationValue, nativeMicaEnabledValue, setNativeMicaEnabled])
   
   // 设置过渡预设
   const setTransitionPreset = useCallback(async (preset: TransitionPreset) => {
@@ -254,7 +177,7 @@ export function useAppearanceSettings(): AppearanceSettings {
     root.style.setProperty('--ls-accent-gradient', colors.gradient)
     root.style.setProperty(
       '--ls-window-accent-gradient',
-      !nativeMicaEnabledValue && accentColor.value === WALLPAPER_MIX_ACCENT_VALUE ? colors.gradient : 'none'
+      accentColor.value === WALLPAPER_MIX_ACCENT_VALUE ? colors.gradient : 'none'
     )
     
     // 应用过渡CSS变量
@@ -263,15 +186,6 @@ export function useAppearanceSettings(): AppearanceSettings {
     root.style.setProperty('--ls-bg-transition-duration', `${backgroundTransition.duration}ms`)
     root.style.setProperty('--ls-bg-blur', `${backgroundTransition.blur}px`)
 
-    if (nativeMicaEnabledValue) root.setAttribute('data-native-mica', 'true')
-    else root.removeAttribute('data-native-mica')
-
-    if (legacyWindowImplementationValue) root.setAttribute('data-window-style', 'legacy')
-    else root.setAttribute('data-window-style', 'hyperos3')
-
-    if (legacyWindowImplementationValue) root.removeAttribute('data-window-bg')
-    else root.setAttribute('data-window-bg', windowBackgroundModeValue)
-
     if (toolbarButtonHintsEnabledValue) root.setAttribute('data-toolbar-button-hints', 'true')
     else root.removeAttribute('data-toolbar-button-hints')
   }, [
@@ -279,9 +193,6 @@ export function useAppearanceSettings(): AppearanceSettings {
     accentColor,
     transitionPreset,
     backgroundTransition,
-    nativeMicaEnabledValue,
-    legacyWindowImplementationValue,
-    windowBackgroundModeValue,
     toolbarButtonHintsEnabledValue,
   ])
   
@@ -293,12 +204,6 @@ export function useAppearanceSettings(): AppearanceSettings {
   return {
     accentColor,
     setAccentColor,
-    nativeMicaEnabled: nativeMicaEnabledValue,
-    setNativeMicaEnabled,
-    legacyWindowImplementation: legacyWindowImplementationValue,
-    setLegacyWindowImplementation,
-    windowBackgroundMode: windowBackgroundModeValue,
-    setWindowBackgroundMode,
     toolbarButtonHintsEnabled: toolbarButtonHintsEnabledValue,
     setToolbarButtonHintsEnabled,
     transitionPreset,

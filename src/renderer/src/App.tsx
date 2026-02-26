@@ -4,13 +4,12 @@ import { useEventsPoll } from '../../toolbar/hooks/useEventsPoll'
 import { Button } from '../../button'
 import { ClockMenu, EventsMenu, FeaturePanelMenu, PenSubmenu, EraserSubmenu, SettingsMenu } from '../../toolbar-subwindows'
 import { NotificationSubwindow } from '../../toolbar_notice/NotificationSubwindow'
-import { TaskWindowsWatcherWindow } from '../../task_windows_watcher'
 import { AnnotationOverlayApp, PaintBoardBackgroundApp } from '../../paint_board'
 import { PdfBackgroundApp } from '../../PDF'
 import { VideoShowBackgroundApp } from '../../video_show'
 import { MultiPageControlHandleWindow, MultiPageControlWindow, PageThumbnailsMenuWindow } from '../../mut_page'
 import { useHyperGlassRealtimeBlur } from '../../hyper_glass'
-import { SettingsWindow, useAppearanceSettings } from '../../settings'
+import { SettingsWindow } from '../../settings'
 import { AppWindowTitlebar } from '../../app_windows_manerger/renderer'
 import { LanStartBarApp, WINDOW_ID_LANSTART_BAR } from '../../LanStartBar'
 
@@ -80,9 +79,8 @@ function ChildWindow() {
 }
 
 function WithAppearance(props: { children: React.ReactNode }) {
-  const { legacyWindowImplementation, windowBackgroundMode } = useAppearanceSettings()
   useHyperGlassRealtimeBlur({
-    root: !legacyWindowImplementation && windowBackgroundMode === 'blur' ? document.documentElement : null
+    root: document.documentElement
   })
 
   return (
@@ -104,7 +102,6 @@ export default function App() {
     if (kind === 'pdf') return <PdfBackgroundApp />
     return <PaintBoardBackgroundApp />
   }
-  if (windowId === 'watcher') return <WithAppearance><TaskWindowsWatcherWindow /></WithAppearance>
   if (windowId === 'settings-window') return <WithAppearance><SettingsWindow /></WithAppearance>
   if (windowId === WINDOW_ID_LANSTART_BAR) return <WithAppearance><LanStartBarApp /></WithAppearance>
   if (windowId === 'toolbar-notice') return <WithAppearance><NotificationSubwindow kind="notice" /></WithAppearance>

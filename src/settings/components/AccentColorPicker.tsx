@@ -224,25 +224,6 @@ interface AccentColorPickerProps {
 }
 
 // 系统取色方案（彩虹渐变色）
-export const SYSTEM_ACCENT_COLOR: AccentColor = {
-  name: '系统取色',
-  value: 'system-monet',
-  light: {
-    primary: '#6366f1',
-    primaryHover: '#4f46e5',
-    primaryActive: '#4338ca',
-    primaryLight: 'rgba(99, 102, 241, 0.15)',
-    gradient: 'linear-gradient(135deg, #f472b6 0%, #a78bfa 25%, #60a5fa 50%, #34d399 75%, #fbbf24 100%)',
-  },
-  dark: {
-    primary: '#818cf8',
-    primaryHover: '#6366f1',
-    primaryActive: '#4f46e5',
-    primaryLight: 'rgba(129, 140, 248, 0.2)',
-    gradient: 'linear-gradient(135deg, #f9a8d4 0%, #c4b5fd 25%, #93c5fd 50%, #6ee7b7 75%, #fde047 100%)',
-  },
-}
-
 export function AccentColorPicker({ value, onChange }: AccentColorPickerProps) {
   const { monetColors, isLoading } = useWallpaperMonetColors()
 

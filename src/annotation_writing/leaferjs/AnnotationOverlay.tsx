@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Leafer, Line, Polygon } from 'leafer-ui'
 import { getStroke } from 'perfect-freehand'
 import {
-  ACTIVE_APP_UI_STATE_KEY,
   APP_MODE_UI_STATE_KEY,
   CLEAR_PAGE_REV_UI_STATE_KEY,
   ERASER_THICKNESS_UI_STATE_KEY,
@@ -15,9 +14,6 @@ import {
   PEN_COLOR_UI_STATE_KEY,
   PEN_THICKNESS_UI_STATE_KEY,
   PEN_TYPE_UI_STATE_KEY,
-  PPT_FULLSCREEN_UI_STATE_KEY,
-  PPT_PAGE_INDEX_UI_STATE_KEY,
-  PPT_PAGE_TOTAL_UI_STATE_KEY,
   REDO_REV_UI_STATE_KEY,
   TOOL_UI_STATE_KEY,
   UNDO_REV_UI_STATE_KEY,
@@ -306,9 +302,6 @@ export function AnnotationOverlayApp(props: AnnotationOverlayAppProps) {
   const shouldFreezeScreen = appMode === 'toolbar' && tool !== 'mouse' && leaferSettings.freezeScreen
   const rendererEngine = leaferSettings.rendererEngine ?? 'canvas2d'
 
-  const activeAppRaw = bus.state[ACTIVE_APP_UI_STATE_KEY]
-  const isPptActive = activeAppRaw === 'ppt' && bus.state[PPT_FULLSCREEN_UI_STATE_KEY] === true
-
   useEffect(() => {
     void postCommand('win.setAnnotationInput', { enabled: isWhiteboardLike ? true : tool !== 'mouse' })
   }, [tool, isWhiteboardLike])
@@ -394,17 +387,13 @@ export function AnnotationOverlayApp(props: AnnotationOverlayAppProps) {
   const notesPageTotalRaw = bus.state[NOTES_PAGE_TOTAL_UI_STATE_KEY]
   const notesPageIndex = typeof notesPageIndexRaw === 'number' ? notesPageIndexRaw : typeof notesPageIndexRaw === 'string' ? Number(notesPageIndexRaw) : 0
   const notesPageTotal = typeof notesPageTotalRaw === 'number' ? notesPageTotalRaw : typeof notesPageTotalRaw === 'string' ? Number(notesPageTotalRaw) : 1
-  const pptPageIndexRaw = bus.state[PPT_PAGE_INDEX_UI_STATE_KEY]
-  const pptPageTotalRaw = bus.state[PPT_PAGE_TOTAL_UI_STATE_KEY]
-  const pptPageIndex = typeof pptPageIndexRaw === 'number' ? pptPageIndexRaw : typeof pptPageIndexRaw === 'string' ? Number(pptPageIndexRaw) : 0
-  const pptPageTotal = typeof pptPageTotalRaw === 'number' ? pptPageTotalRaw : typeof pptPageTotalRaw === 'string' ? Number(pptPageTotalRaw) : 1
   const lastNotesPageIndexRef = useRef<number | null>(null)
   const lastNotesPageTotalRef = useRef<number | null>(null)
 
   useEffect(() => {
     if (!apiRef.current) return
-    const rawTotal = isPptActive ? pptPageTotal : notesPageTotal
-    const rawIndex = isPptActive ? pptPageIndex : notesPageIndex
+    const rawTotal = notesPageTotal
+    const rawIndex = notesPageIndex
 
     const total = Number.isFinite(rawTotal) ? Math.max(1, Math.floor(rawTotal)) : 1
     const index = Number.isFinite(rawIndex) ? Math.max(0, Math.floor(rawIndex)) : 0
@@ -418,7 +407,7 @@ export function AnnotationOverlayApp(props: AnnotationOverlayAppProps) {
     lastNotesPageIndexRef.current = index
     lastNotesPageTotalRef.current = total
     apiRef.current.setPage(index, total)
-  }, [notesPageIndex, notesPageTotal, pptPageIndex, pptPageTotal, isPptActive])
+  }, [notesPageIndex, notesPageTotal])
 
   useEffect(() => {
     const view = containerRef.current
@@ -1287,15 +1276,13 @@ struct VSOut {
 
     const disposeParentLayout = ensureParentLayout()
     const notesKvKey =
-      isPptActive
-        ? 'annotation-notes-ppt'
-        : appMode === 'whiteboard'
-          ? 'annotation-notes-whiteboard'
-          : appMode === 'video-show'
-            ? 'annotation-notes-video-show'
-            : appMode === 'pdf'
-              ? 'annotation-notes-pdf'
-              : 'annotation-notes-toolbar'
+      appMode === 'whiteboard'
+        ? 'annotation-notes-whiteboard'
+        : appMode === 'video-show'
+          ? 'annotation-notes-video-show'
+          : appMode === 'pdf'
+            ? 'annotation-notes-pdf'
+            : 'annotation-notes-toolbar'
     let serializePersistedDoc: null | (() => PersistedAnnotationDocV1) = null
     let persistTimer: number | null = null
     let notesBook: PersistedAnnotationBookV2 = { version: 2, currentPage: 0, pages: [createEmptyDocV1()] }
@@ -4703,7 +4690,7 @@ struct VSOut {
       } catch {}
       disposeParentLayout()
     }
-  }, [rendererEngine, appMode, isPptActive])
+  }, [rendererEngine, appMode])
 
   return (
     <div

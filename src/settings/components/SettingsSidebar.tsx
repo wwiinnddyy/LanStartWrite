@@ -1,10 +1,10 @@
-import React from 'react'
+﻿import React from 'react'
 import { motion } from '../../Framer_Motion'
 import type { SettingsTab, SettingsTabItem } from '../types'
 import { MotionButton } from '../../button'
 import './SettingsSidebar.css'
 
-// Fluent 风格图标
+// Fluent 椋庢牸鍥炬爣
 const TabIcons: Record<SettingsTab, React.ReactNode> = {
   appearance: (
     <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -57,22 +57,6 @@ const TabIcons: Record<SettingsTab, React.ReactNode> = {
       <path d="M9 4h6" />
     </svg>
   ),
-  office: (
-    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.5">
-      <path d="M4 4h16v16H4z" />
-      <path d="M4 4l8 8 8-8" />
-      <path d="M12 12v8" />
-    </svg>
-  ),
-  system: (
-    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.5">
-      <rect x="4" y="5" width="16" height="14" rx="2" />
-      <path d="M8 19v2" />
-      <path d="M16 19v2" />
-      <path d="M9 9h6" />
-      <path d="M9 13h6" />
-    </svg>
-  ),
   'lanstart-bar': (
     <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.5">
       <rect x="2" y="6" width="20" height="12" rx="2" />
@@ -92,16 +76,14 @@ const TabIcons: Record<SettingsTab, React.ReactNode> = {
 }
 
 const tabs: SettingsTabItem[] = [
-  { id: 'appearance', label: '外观', icon: TabIcons.appearance },
+  { id: 'appearance', label: '澶栬', icon: TabIcons.appearance },
   { id: 'toolbar', label: '浮动工具栏', icon: TabIcons.toolbar },
-  { id: 'feature-panel', label: '功能面板', icon: TabIcons['feature-panel'] },
-  { id: 'annotation', label: '批注系统', icon: TabIcons.annotation },
-  { id: 'whiteboard', label: '白板', icon: TabIcons.whiteboard },
-  { id: 'video-show', label: '视频展台', icon: TabIcons['video-show'] },
-  { id: 'office', label: 'Office', icon: TabIcons.office },
-  { id: 'system', label: '系统', icon: TabIcons.system },
+  { id: 'feature-panel', label: '鍔熻兘闈㈡澘', icon: TabIcons['feature-panel'] },
+  { id: 'annotation', label: '鎵规敞绯荤粺', icon: TabIcons.annotation },
+  { id: 'whiteboard', label: '鐧芥澘', icon: TabIcons.whiteboard },
+  { id: 'video-show', label: '瑙嗛灞曞彴', icon: TabIcons['video-show'] },
   { id: 'lanstart-bar', label: 'LanStartBar', icon: TabIcons['lanstart-bar'] },
-  { id: 'about', label: '关于', icon: TabIcons.about },
+  { id: 'about', label: '鍏充簬', icon: TabIcons.about },
 ]
 
 interface SettingsSidebarProps {
@@ -112,7 +94,7 @@ interface SettingsSidebarProps {
 export function SettingsSidebar({ activeTab, onTabChange }: SettingsSidebarProps) {
   return (
     <div className="settingsSidebar">
-      {/* 标题区域 - 澎湃OS风格 */}
+      {/* 鏍囬鍖哄煙 - 婢庢箖OS椋庢牸 */}
       <div className="settingsSidebarHeader">
         <motion.div
           className="settingsSidebarLogo"
@@ -125,11 +107,11 @@ export function SettingsSidebar({ activeTab, onTabChange }: SettingsSidebarProps
               <path fill="currentColor" d="M1.911 7.383a8.5 8.5 0 0 1 1.78-3.08a.5.5 0 0 1 .54-.135l1.918.686a1 1 0 0 0 1.32-.762l.366-2.006a.5.5 0 0 1 .388-.4a8.5 8.5 0 0 1 3.554 0a.5.5 0 0 1 .388.4l.366 2.006a1 1 0 0 0 1.32.762l1.919-.686a.5.5 0 0 1 .54.136a8.5 8.5 0 0 1 1.78 3.079a.5.5 0 0 1-.153.535l-1.555 1.32a1 1 0 0 0 0 1.524l1.555 1.32a.5.5 0 0 1 .152.535a8.5 8.5 0 0 1-1.78 3.08a.5.5 0 0 1-.54.135l-1.918-.686a1 1 0 0 0-1.32.762l-.366 2.007a.5.5 0 0 1-.388.399a8.5 8.5 0 0 1-3.554 0a.5.5 0 0 1-.388-.4l-.366-2.006a1 1 0 0 0-1.32-.762l-1.918.686a.5.5 0 0 1-.54-.136a8.5 8.5 0 0 1-1.78-3.079a.5.5 0 0 1 .152-.535l1.555-1.32a1 1 0 0 0 0-1.524l-1.555-1.32a.5.5 0 0 1-.152-.535m1.06-.006l1.294 1.098a2 2 0 0 1 0 3.05l-1.293 1.098c.292.782.713 1.51 1.244 2.152l1.596-.57q.155-.055.315-.085a2 2 0 0 1 2.326 1.609l.304 1.669a7.6 7.6 0 0 0 2.486 0l.304-1.67a1.998 1.998 0 0 1 2.641-1.524l1.596.571a7.5 7.5 0 0 0 1.245-2.152l-1.294-1.098a1.998 1.998 0 0 1 0-3.05l1.294-1.098a7.5 7.5 0 0 0-1.245-2.152l-1.596.57a2 2 0 0 1-2.64-1.524l-.305-1.669a7.6 7.6 0 0 0-2.486 0l-.304 1.669a2 2 0 0 1-2.64 1.525l-1.597-.571a7.5 7.5 0 0 0-1.244 2.152M7.502 10a2.5 2.5 0 1 1 5 0a2.5 2.5 0 0 1-5 0m1 0a1.5 1.5 0 1 0 3 0a1.5 1.5 0 0 0-3 0"/>
             </svg>
           </div>
-          <span className="settingsSidebarTitle">设置</span>
+          <span className="settingsSidebarTitle">璁剧疆</span>
         </motion.div>
       </div>
 
-      {/* 选项卡列表 */}
+      {/* 閫夐」鍗″垪琛?*/}
       <nav className="settingsSidebarNav">
         {tabs.map((tab, index) => (
           <MotionButton
@@ -150,10 +132,11 @@ export function SettingsSidebar({ activeTab, onTabChange }: SettingsSidebarProps
         ))}
       </nav>
 
-      {/* 底部信息 */}
+      {/* 搴曢儴淇℃伅 */}
       <div className="settingsSidebarFooter">
         <span className="settingsSidebarVersion">LanStartWrite v{__APP_VERSION__}</span>
       </div>
     </div>
   )
 }
+

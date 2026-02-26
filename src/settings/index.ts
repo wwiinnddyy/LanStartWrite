@@ -1,7 +1,7 @@
 export { SettingsWindow } from './SettingsWindow'
 export { SettingsSidebar } from './components/SettingsSidebar'
 export { SettingsContent } from './components/SettingsContent'
-export { AccentColorPicker, PRESET_ACCENT_COLORS, SYSTEM_ACCENT_COLOR } from './components/AccentColorPicker'
+export { AccentColorPicker, PRESET_ACCENT_COLORS } from './components/AccentColorPicker'
 export { TransitionSettings, TRANSITION_PRESETS, BACKGROUND_TRANSITIONS } from './components/TransitionSettings'
 export { useAppearanceSettings } from './hooks/useAppearanceSettings'
 export type { SettingsTab } from './types'

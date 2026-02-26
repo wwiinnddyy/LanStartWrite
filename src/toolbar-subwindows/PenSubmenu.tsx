@@ -159,7 +159,7 @@ function ColorButton({
   )
 }
 
-// 笔类型按钮组件（Office 风格：无文字，选中时向左移动）
+// 笔类型按钮组件（无文字，选中时向左移动）
 function PenTypeButton({
   type,
   label,

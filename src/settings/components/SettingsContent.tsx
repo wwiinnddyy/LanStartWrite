@@ -1,4 +1,4 @@
-import React from 'react'
+﻿import React from 'react'
 import { Box, Select, Switch } from '@mantine/core'
 import { motion, useReducedMotion } from '../../Framer_Motion'
 import {
@@ -10,16 +10,6 @@ import {
   UI_STATE_APP_WINDOW_ID,
   VIDEO_SHOW_MERGE_LAYERS_KV_KEY,
   VIDEO_SHOW_MERGE_LAYERS_UI_STATE_KEY,
-  OFFICE_PPT_MODE_KV_KEY,
-  OFFICE_PPT_MODE_UI_STATE_KEY,
-  OFFICE_PPT_QUICK_FLIP_KV_KEY,
-  OFFICE_PPT_QUICK_FLIP_UI_STATE_KEY,
-  type OfficePptMode,
-  SYSTEM_UIA_TOPMOST_KV_KEY,
-  SYSTEM_UIA_TOPMOST_UI_STATE_KEY,
-  SYSTEM_MERGE_RENDERER_PIPELINE_KV_KEY,
-  SYSTEM_WINDOW_PRELOAD_KV_KEY,
-  ADMIN_STATUS_UI_STATE_KEY,
   WHITEBOARD_BG_COLOR_KV_KEY,
   WHITEBOARD_BG_COLOR_UI_STATE_KEY,
   WHITEBOARD_BG_IMAGE_OPACITY_UI_STATE_KEY,
@@ -58,7 +48,7 @@ import { AccentColorPicker } from './AccentColorPicker'
 import { TransitionSettings } from './TransitionSettings'
 import { useAppearanceSettings } from '../hooks/useAppearanceSettings'
 import LanStartLogoSvg from '../../../iconpack/3d1b23de6a48e1d67f4c637d117897cd26c5594cfbb15bc6092a3546d8cc425a(1).svg'
-import { DatabaseIcon, EventsIcon, QuitIcon, SettingsIcon, WatcherIcon } from '../../toolbar/components/ToolbarIcons'
+import { DatabaseIcon, EventsIcon, QuitIcon, SettingsIcon } from '../../toolbar/components/ToolbarIcons'
 import './SettingsContent.css'
 
 const notebookIconSvg = notebookIconSvgRaw.replace('width="20"', 'width="18"').replace('height="20"', 'height="18"')
@@ -67,18 +57,12 @@ interface SettingsContentProps {
   activeTab: SettingsTab
 }
 
-// 外观设置组件
+// 澶栬璁剧疆缁勪欢
 function AppearanceSettings() {
   const { appearance, setAppearance } = useAppAppearance()
   const {
     accentColor,
     setAccentColor,
-    nativeMicaEnabled,
-    setNativeMicaEnabled,
-    legacyWindowImplementation,
-    setLegacyWindowImplementation,
-    windowBackgroundMode,
-    setWindowBackgroundMode,
     toolbarButtonHintsEnabled,
     setToolbarButtonHintsEnabled,
     transitionPreset,
@@ -89,16 +73,16 @@ function AppearanceSettings() {
 
   return (
     <div className="settingsContentSection">
-      <h2 className="settingsContentTitle">外观</h2>
-      <p className="settingsContentDescription">选择您喜欢的主题外观</p>
+      <h2 className="settingsContentTitle">澶栬</h2>
+      <p className="settingsContentDescription">閫夋嫨鎮ㄥ枩娆㈢殑涓婚澶栬</p>
 
-      {/* 主题模式选择 */}
+      {/* 涓婚妯″紡閫夋嫨 */}
       <div className="settingsAppearanceOptions">
         <Button
           kind="custom"
           appRegion="no-drag"
-          ariaLabel="浅色主题"
-          title="浅色主题"
+          ariaLabel="娴呰壊涓婚"
+          title="娴呰壊涓婚"
           className={`settingsAppearanceCard ${appearance === 'light' ? 'settingsAppearanceCard--active' : ''}`}
           onClick={() => setAppearance('light')}
         >
@@ -109,14 +93,14 @@ function AppearanceSettings() {
               <div className="settingsAppearancePreviewMain" />
             </div>
           </div>
-          <span className="settingsAppearanceLabel">浅色</span>
+          <span className="settingsAppearanceLabel">娴呰壊</span>
         </Button>
 
         <Button
           kind="custom"
           appRegion="no-drag"
-          ariaLabel="深色主题"
-          title="深色主题"
+          ariaLabel="娣辫壊涓婚"
+          title="娣辫壊涓婚"
           className={`settingsAppearanceCard ${appearance === 'dark' ? 'settingsAppearanceCard--active' : ''}`}
           onClick={() => setAppearance('dark')}
         >
@@ -127,78 +111,35 @@ function AppearanceSettings() {
               <div className="settingsAppearancePreviewMain" />
             </div>
           </div>
-          <span className="settingsAppearanceLabel">深色</span>
+          <span className="settingsAppearanceLabel">娣辫壊</span>
         </Button>
       </div>
 
       <div className="settingsSubSection">
         <h3 className="settingsSubTitle">浮动工具栏</h3>
-        <p className="settingsSubDescription">开启后，浮动工具栏按钮下方显示文字提示</p>
+        <p className="settingsSubDescription">寮€鍚悗锛屾诞鍔ㄥ伐鍏锋爮鎸夐挳涓嬫柟鏄剧ず鏂囧瓧鎻愮ず</p>
         <Switch
           checked={toolbarButtonHintsEnabled}
           onChange={(e) => setToolbarButtonHintsEnabled(e.currentTarget.checked)}
-          label="显示按钮文字提示"
+          label="鏄剧ず鎸夐挳鏂囧瓧鎻愮ず"
           size="md"
         />
       </div>
 
-      <div className="settingsSubSection">
-        <h3 className="settingsSubTitle">窗口材质</h3>
-        <p className="settingsSubDescription">开启后使用 Windows 原生黑白 Mica 背景，并让窗口背景透明（澎湃 OS 3 模式将强制关闭）</p>
-        <Switch
-          checked={legacyWindowImplementation && nativeMicaEnabled}
-          disabled={!legacyWindowImplementation}
-          onChange={(e) => setNativeMicaEnabled(e.currentTarget.checked)}
-          label="启用原生 Mica 效果"
-          size="md"
-        />
-      </div>
-
-      <div className="settingsSubSection">
-        <h3 className="settingsSubTitle">窗口实现</h3>
-        <p className="settingsSubDescription">切换澎湃 OS 3 新圆角实现与旧实现（会自动重建浮动窗口）</p>
-        <Switch
-          checked={legacyWindowImplementation}
-          onChange={(e) => setLegacyWindowImplementation(e.currentTarget.checked)}
-          label="使用旧版窗口实现"
-          size="md"
-        />
-      </div>
-
-      {!legacyWindowImplementation && (
-        <div className="settingsSubSection">
-          <h3 className="settingsSubTitle">窗口背景</h3>
-          <p className="settingsSubDescription">仅澎湃 OS 3 新窗口实现生效</p>
-          <Select
-            value={windowBackgroundMode}
-            onChange={(v) => {
-              if (v === 'opaque' || v === 'blur' || v === 'transparent') setWindowBackgroundMode(v)
-            }}
-            data={[
-              { value: 'opaque', label: '实现（不透明）' },
-              { value: 'blur', label: '模糊（HyperGlass）' },
-              { value: 'transparent', label: '透明' },
-            ]}
-            allowDeselect={false}
-            size="md"
-          />
-        </div>
-      )}
-
-      {/* 强调色设置 */}
+      {/* 寮鸿皟鑹茶缃?*/}
       <div className="settingsSubSection">
         <h3 className="settingsSubTitle">
           强调色
           <span className="settingsSubTitleHint">（{appearance === 'dark' ? '深色' : '浅色'}模式独立设置）</span>
         </h3>
-        <p className="settingsSubDescription">选择应用的主题强调色</p>
+        <p className="settingsSubDescription">閫夋嫨搴旂敤鐨勪富棰樺己璋冭壊</p>
         <AccentColorPicker value={accentColor.value} onChange={setAccentColor} />
       </div>
 
-      {/* 过渡效果设置 */}
+      {/* 杩囨浮鏁堟灉璁剧疆 */}
       <div className="settingsSubSection">
-        <h3 className="settingsSubTitle">过渡效果</h3>
-        <p className="settingsSubDescription">调整界面动画和背景过渡效果</p>
+        <h3 className="settingsSubTitle">杩囨浮鏁堟灉</h3>
+        <p className="settingsSubDescription">调整界面动效和背景过渡效果</p>
         <TransitionSettings
           transitionPreset={transitionPreset.value}
           onTransitionChange={setTransitionPreset}
@@ -210,7 +151,7 @@ function AppearanceSettings() {
   )
 }
 
-// 各选项卡的内容占位组件
+// 鍚勯€夐」鍗＄殑鍐呭鍗犱綅缁勪欢
 function ToolbarSettings() {
   type PrimaryButtonId = ToolbarPrimaryButtonId
   type SecondaryButtonId = ToolbarSecondaryButtonId
@@ -462,15 +403,6 @@ function ToolbarSettings() {
     )
   }
 
-  function WatcherIcon() {
-    return (
-      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M2 12s3.5-7 10-7s10 7 10 7s-3.5 7-10 7s-10-7-10-7" />
-        <path d="M12 15a3 3 0 1 0 0-6a3 3 0 0 0 0 6" />
-      </svg>
-    )
-  }
-
   function ChevronLeftIcon() {
     return (
       <svg
@@ -558,22 +490,20 @@ function ToolbarSettings() {
     if (id === 'redo') return <RedoIcon />
     if (id === 'clock') return <ClockIcon />
     if (id === 'events') return <EventsIcon />
-    if (id === 'watcher') return <WatcherIcon />
     return <FeaturePanelIcon />
   }
 
   const descriptionForButton = (id: PrimaryButtonId | SecondaryButtonId) => {
     if (id === 'mouse') return '切换到鼠标工具'
-    if (id === 'pen') return '切换到笔工具（再次点击可打开设置）'
-    if (id === 'eraser') return '切换到橡皮工具'
+    if (id === 'pen') return '切换到画笔工具（再次点击可打开设置）'
+    if (id === 'eraser') return '切换到橡皮擦工具'
     if (id === 'whiteboard') return '进入/退出白板模式'
     if (id === 'video-show') return '进入/退出视频展台模式'
     if (id === 'undo') return '撤销上一步操作'
     if (id === 'redo') return '重做上一步操作'
-    if (id === 'clock') return '打开时钟窗口'
-    if (id === 'events') return '打开事件列表窗口'
-    if (id === 'watcher') return '打开进程与窗口监视器'
-    return '打开功能面板'
+    if (id === 'clock') return '鎵撳紑鏃堕挓绐楀彛'
+    if (id === 'events') return '鎵撳紑浜嬩欢鍒楄〃绐楀彛'
+    return '鎵撳紑鍔熻兘闈㈡澘'
   }
 
   const moveItem = <T,>(list: readonly T[], fromIndex: number, toIndex: number): T[] => {
@@ -836,9 +766,9 @@ function ToolbarSettings() {
       <h2 className="settingsContentTitle">浮动工具栏</h2>
       <p className="settingsContentDescription">配置浮动工具栏的外观和行为</p>
 
-      <div className="settingsToolbarPreview">
-        <div className="settingsToolbarPreviewTitle">按钮顺序预览</div>
-        <div className="settingsToolbarPreviewHint">点击按钮查看信息，并用下方按钮调整前后顺序</div>
+        <div className="settingsToolbarPreview">
+          <div className="settingsToolbarPreviewTitle">鎸夐挳椤哄簭棰勮</div>
+          <div className="settingsToolbarPreviewHint">点击按钮查看信息，并用下方按钮调整前后顺序</div>
 
         <div className="settingsToolbarPreviewToolbarShell">
           <Box className="settingsToolbarPreviewToolbarDragArea">
@@ -871,8 +801,8 @@ function ToolbarSettings() {
                   size="sm"
                   variant="light"
                   className="settingsToolbarPreviewToggleButton"
-                  title="折叠/展开（预览）"
-                  ariaLabel="折叠/展开（预览）"
+                  title="鎶樺彔/灞曞紑锛堥瑙堬級"
+                  ariaLabel="鎶樺彔/灞曞紑锛堥瑙堬級"
                   appRegion="no-drag"
                 >
                   <ChevronLeftIcon />
@@ -898,9 +828,9 @@ function ToolbarSettings() {
 
         <div className="settingsToolbarSelectionPanel">
           <div className="settingsToolbarSelectionHeader">
-            <div className="settingsToolbarSelectionTitle">按钮信息</div>
+            <div className="settingsToolbarSelectionTitle">鎸夐挳淇℃伅</div>
             <div className="settingsToolbarSelectionMeta">
-              第 {selectedIndex + 1} / {selectedCount} 个
+              绗?{selectedIndex + 1} / {selectedCount} 涓?
             </div>
           </div>
 
@@ -913,8 +843,8 @@ function ToolbarSettings() {
             <Button
               size="sm"
               variant="light"
-              title="向前调整"
-              ariaLabel="向前调整"
+              title="鍚戝墠璋冩暣"
+              ariaLabel="鍚戝墠璋冩暣"
               appRegion="no-drag"
               disabled={!canMovePrev}
               onClick={() => moveSelected(-1)}
@@ -924,8 +854,8 @@ function ToolbarSettings() {
             <Button
               size="sm"
               variant="light"
-              title="向后调整"
-              ariaLabel="向后调整"
+              title="鍚戝悗璋冩暣"
+              ariaLabel="鍚戝悗璋冩暣"
               appRegion="no-drag"
               disabled={!canMoveNext}
               onClick={() => moveSelected(1)}
@@ -935,8 +865,8 @@ function ToolbarSettings() {
             <Button
               size="sm"
               variant="danger"
-              title="删除"
-              ariaLabel="删除"
+              title="鍒犻櫎"
+              ariaLabel="鍒犻櫎"
               appRegion="no-drag"
               disabled={!canDeleteSelected}
               onClick={deleteSelected}
@@ -948,8 +878,8 @@ function ToolbarSettings() {
 
         <div className="settingsToolbarAddPanel">
           <div className="settingsToolbarAddHeader">
-            <div className="settingsToolbarAddTitle">添加按钮</div>
-            <div className="settingsToolbarAddMeta">点击右侧加号，选择添加到折叠/非折叠区域</div>
+            <div className="settingsToolbarAddTitle">娣诲姞鎸夐挳</div>
+            <div className="settingsToolbarAddMeta">点击右侧加号，选择添加到折叠或非折叠区域</div>
           </div>
 
           <div className="settingsToolbarAddList">
@@ -998,8 +928,8 @@ function ToolbarSettings() {
                           size="sm"
                           variant="light"
                           className="settingsToolbarAddSubmenuItem"
-                          title="添加到非折叠区域"
-                          ariaLabel="添加到非折叠区域"
+                          title="娣诲姞鍒伴潪鎶樺彔鍖哄煙"
+                          ariaLabel="娣诲姞鍒伴潪鎶樺彔鍖哄煙"
                           appRegion="no-drag"
                           onClick={() => {
                             const placement =
@@ -1010,7 +940,7 @@ function ToolbarSettings() {
                             setPendingAdd(null)
                           }}
                         >
-                          非折叠区域
+                          闈炴姌鍙犲尯鍩?
                         </Button>
                         <Button
                           size="sm"
@@ -1025,7 +955,7 @@ function ToolbarSettings() {
                             setPendingAdd(null)
                           }}
                         >
-                          折叠区域
+                          鎶樺彔鍖哄煙
                         </Button>
                       </div>
                     ) : null}
@@ -1041,7 +971,7 @@ function ToolbarSettings() {
 }
 
 function FeaturePanelSettings() {
-  type GridIconKind = 'grid' | 'plus' | 'gear' | 'doc' | 'notebook' | 'db' | 'events' | 'watcher' | 'clock' | 'quit'
+  type GridIconKind = 'grid' | 'plus' | 'gear' | 'doc' | 'notebook' | 'db' | 'events' | 'clock' | 'quit'
   const reduceMotion = useReducedMotion()
   const pagerViewportRef = React.useRef<HTMLDivElement | null>(null)
   const [pageIndex, setPageIndex] = React.useState(0)
@@ -1095,7 +1025,6 @@ function FeaturePanelSettings() {
   const iconFor = React.useCallback((id: AppButtonId): GridIconKind => {
     if (id === 'db') return 'db'
     if (id === 'events') return 'events'
-    if (id === 'watcher') return 'watcher'
     if (id === 'clock') return 'clock'
     if (id === 'settings') return 'gear'
     if (id === 'notes') return 'notebook'
@@ -1138,7 +1067,6 @@ function FeaturePanelSettings() {
 
     if (props.kind === 'db') return <DatabaseIcon />
     if (props.kind === 'events') return <EventsIcon />
-    if (props.kind === 'watcher') return <WatcherIcon />
     if (props.kind === 'gear') return <SettingsIcon />
     if (props.kind === 'quit') return <QuitIcon />
     if (props.kind === 'clock') {
@@ -1218,12 +1146,12 @@ function FeaturePanelSettings() {
 
   return (
     <div className="settingsContentSection">
-      <h2 className="settingsContentTitle">功能面板</h2>
-      <p className="settingsContentDescription">在这里预览功能面板布局（点击无效，可拖动调整按钮位置）</p>
+      <h2 className="settingsContentTitle">鍔熻兘闈㈡澘</h2>
+      <p className="settingsContentDescription">鍦ㄨ繖閲岄瑙堝姛鑳介潰鏉垮竷灞€锛堢偣鍑绘棤鏁堬紝鍙嫋鍔ㄨ皟鏁存寜閽綅缃級</p>
 
       <div className="settingsFeaturePanelPreview">
         <div className="settingsFeaturePanelTitle">
-          <span>功能面板</span>
+          <span>鍔熻兘闈㈡澘</span>
           <span className="settingsFeaturePanelMeta">{items.length}</span>
         </div>
 
@@ -1458,12 +1386,12 @@ function AnnotationSettings() {
 
   return (
     <div className="settingsContentSection">
-      <h2 className="settingsContentTitle">批注系统</h2>
+      <h2 className="settingsContentTitle">鎵规敞绯荤粺</h2>
       <p className="settingsContentDescription">配置批注工具和笔刷设置</p>
 
       <div className="settingsFormCard">
-        <div className="settingsFormTitle">书写系统</div>
-        <div className="settingsFormDescription">切换不同书写系统的启用与设置（占位）</div>
+        <div className="settingsFormTitle">涔﹀啓绯荤粺</div>
+        <div className="settingsFormDescription">鍒囨崲涓嶅悓涔﹀啓绯荤粺鐨勫惎鐢ㄤ笌璁剧疆锛堝崰浣嶏級</div>
         <Select
           value={writingSystem}
           data={[
@@ -1481,17 +1409,17 @@ function AnnotationSettings() {
       {writingSystem === 'leafer' ? (
         <div className="settingsFormCard">
           <div className="settingsFormTitle">Leafer.js</div>
-          <div className="settingsFormDescription">配置 Leafer.js 书写体验</div>
+          <div className="settingsFormDescription">閰嶇疆 Leafer.js 涔﹀啓浣撻獙</div>
           <div className="settingsFormGroup">
-            <div className="settingsFormTitle">笔迹渲染引擎</div>
-            <div className="settingsFormDescription">Canvas2D 默认启用低延迟模式；WebGPU 为实验性</div>
+            <div className="settingsFormTitle">绗旇抗娓叉煋寮曟搸</div>
+            <div className="settingsFormDescription">Canvas2D 默认低延迟；WebGPU 为实验特性</div>
             <Select
               value={leaferSettings.rendererEngine ?? 'canvas2d'}
               data={[
-                { value: 'canvas2d', label: 'Canvas2D（低延迟，默认）' },
-                { value: 'svg', label: 'SVG（矢量）' },
+                { value: 'canvas2d', label: 'Canvas2D锛堜綆寤惰繜锛岄粯璁わ級' },
+                { value: 'svg', label: 'SVG锛堢煝閲忥級' },
                 { value: 'webgl', label: 'WebGL' },
-                { value: 'webgpu', label: 'WebGPU（实验性）' }
+                { value: 'webgpu', label: 'WebGPU锛堝疄楠屾€э級' }
               ]}
               allowDeselect={false}
               onChange={(value) => {
@@ -1501,13 +1429,13 @@ function AnnotationSettings() {
             />
           </div>
           <div className="settingsFormGroup">
-            <div className="settingsFormTitle">笔锋</div>
-            <div className="settingsFormDescription">基于分段烘干模拟笔锋（静态模式暂未加入）</div>
+            <div className="settingsFormTitle">绗旈攱</div>
+            <div className="settingsFormDescription">鍩轰簬鍒嗘鐑樺共妯℃嫙绗旈攱锛堥潤鎬佹ā寮忔殏鏈姞鍏ワ級</div>
             <Select
               value={leaferSettings.nibMode ?? 'off'}
               data={[
-                { value: 'off', label: '关闭' },
-                { value: 'dynamic', label: '动态烘干笔锋' },
+                { value: 'off', label: '鍏抽棴' },
+                { value: 'dynamic', label: '动态笔锋' },
                 { value: 'static', label: '静态笔锋（暂未加入）' }
               ]}
               allowDeselect={false}
@@ -1517,7 +1445,7 @@ function AnnotationSettings() {
               }}
             />
             <div className="settingsNibPreview">
-              <div className="settingsNibPreviewTitle">效果预览</div>
+              <div className="settingsNibPreviewTitle">鏁堟灉棰勮</div>
               <canvas ref={nibPreviewRef} className="settingsNibPreviewCanvas" />
             </div>
           </div>
@@ -1525,13 +1453,13 @@ function AnnotationSettings() {
             <Switch
               checked={leaferSettings.multiTouch}
               onChange={(e) => persistLeaferSettings({ ...leaferSettings, multiTouch: e.currentTarget.checked })}
-              label="多指书写"
+              label="澶氭寚涔﹀啓"
               size="md"
             />
             <Switch
               checked={leaferSettings.inkSmoothing}
               onChange={(e) => persistLeaferSettings({ ...leaferSettings, inkSmoothing: e.currentTarget.checked })}
-              label="墨迹平滑"
+              label="澧ㄨ抗骞虫粦"
               size="md"
             />
             <Switch
@@ -1555,7 +1483,7 @@ function AnnotationSettings() {
                 const checked = e.currentTarget.checked
                 persistLeaferSettings({ ...leaferSettings, postBakeOptimizeOnce: checked, postBakeOptimize: checked ? false : leaferSettings.postBakeOptimize })
               }}
-              label="笔迹单次烘干"
+              label="绗旇抗鍗曟鐑樺共"
               size="md"
             />
             <Switch
@@ -1563,13 +1491,13 @@ function AnnotationSettings() {
               onChange={(e) =>
                 persistLeaferSettings({ ...leaferSettings, showInkWhenPassthrough: e.currentTarget.checked })
               }
-              label="操作穿透时显示笔迹"
+              label="鎿嶄綔绌块€忔椂鏄剧ず绗旇抗"
               size="md"
             />
             <Switch
               checked={leaferSettings.freezeScreen}
               onChange={(e) => persistLeaferSettings({ ...leaferSettings, freezeScreen: e.currentTarget.checked })}
-              label="屏幕内容冻结批注"
+              label="灞忓箷鍐呭鍐荤粨鎵规敞"
               size="md"
             />
           </div>
@@ -1582,7 +1510,7 @@ function AnnotationSettings() {
               <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z" />
             </svg>
           </div>
-          <p className="settingsContentPlaceholderText">{writingSystemLabel} 的启用与设置即将推出</p>
+          <p className="settingsContentPlaceholderText">{writingSystemLabel} 鐨勫惎鐢ㄤ笌璁剧疆鍗冲皢鎺ㄥ嚭</p>
         </div>
       )}
     </div>
@@ -1593,7 +1521,7 @@ function LanStartBarSettings() {
   return (
     <div className="settingsContentSection">
       <h2 className="settingsContentTitle">LanStartBar</h2>
-      <p className="settingsContentDescription">配置 LanStartBar 的显示和行为</p>
+      <p className="settingsContentDescription">閰嶇疆 LanStartBar 鐨勬樉绀哄拰琛屼负</p>
       
       <div className="settingsContentPlaceholder">
         <div className="settingsContentPlaceholderIcon">
@@ -1605,7 +1533,7 @@ function LanStartBarSettings() {
             <line x1="18" y1="10" x2="18" y2="14" />
           </svg>
         </div>
-        <p className="settingsContentPlaceholderText">LanStartBar 设置即将推出</p>
+        <p className="settingsContentPlaceholderText">LanStartBar 璁剧疆鍗冲皢鎺ㄥ嚭</p>
       </div>
     </div>
   )
@@ -1613,12 +1541,12 @@ function LanStartBarSettings() {
 
 function WhiteboardSettings() {
   const presets = [
-    { label: '酸绿', value: '#95C459' },
-    { label: '浅灰', value: '#333333' },
-    { label: '深灰', value: '#2E2F33' },
-    { label: '希绿', value: '#0F261E' },
-    { label: 'icc绿', value: '#172A25' },
-    { label: '鸿白', value: '#FFFFFF' },
+    { label: '閰哥豢', value: '#95C459' },
+    { label: '娴呯伆', value: '#333333' },
+    { label: '娣辩伆', value: '#2E2F33' },
+    { label: '甯岀豢', value: '#0F261E' },
+    { label: '深绿', value: '#172A25' },
+    { label: '楦跨櫧', value: '#FFFFFF' },
   ] as const
 
   const bus = useUiStateBus(UI_STATE_APP_WINDOW_ID)
@@ -1645,14 +1573,14 @@ function WhiteboardSettings() {
       bus.setKey(WHITEBOARD_BG_IMAGE_URL_UI_STATE_KEY, dataUrl).catch(() => undefined)
       postCommand('settings.setWhiteboardBackground', { bgImageUrl: dataUrl }).catch(() => undefined)
     } catch (e) {
-      window.alert(`导入背景图失败：${e instanceof Error ? e.message : String(e)}`)
+      window.alert(`瀵煎叆鑳屾櫙鍥惧け璐ワ細${e instanceof Error ? e.message : String(e)}`)
     }
   }
 
   return (
     <div className="settingsContentSection">
-      <h2 className="settingsContentTitle">白板</h2>
-      <p className="settingsContentDescription">选择白板背景颜色</p>
+      <h2 className="settingsContentTitle">鐧芥澘</h2>
+      <p className="settingsContentDescription">閫夋嫨鐧芥澘鑳屾櫙棰滆壊</p>
 
       <div className="settingsWhiteboardColorGrid">
         {presets.map((preset) => (
@@ -1677,10 +1605,10 @@ function WhiteboardSettings() {
       </div>
 
       <div className="settingsSubSection">
-        <h3 className="settingsSubTitle">背景图</h3>
+        <h3 className="settingsSubTitle">背景图片</h3>
         <p className="settingsSubDescription">选择一张图片作为白板背景</p>
-        <Button kind="text" size="md" appRegion="no-drag" ariaLabel="添加图片背景" onClick={onPickBgImage}>
-          添加图片背景
+        <Button kind="text" size="md" appRegion="no-drag" ariaLabel="娣诲姞鍥剧墖鑳屾櫙" onClick={onPickBgImage}>
+          娣诲姞鍥剧墖鑳屾櫙
         </Button>
         {bgImageUrl ? (
           <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -1732,13 +1660,13 @@ function WhiteboardSettings() {
                 kind="text"
                 size="md"
                 appRegion="no-drag"
-                ariaLabel="删除背景图片"
+                ariaLabel="鍒犻櫎鑳屾櫙鍥剧墖"
                 onClick={() => {
                   bus.setKey(WHITEBOARD_BG_IMAGE_URL_UI_STATE_KEY, '').catch(() => undefined)
                   postCommand('settings.setWhiteboardBackground', { bgImageUrl: '' }).catch(() => undefined)
                 }}
               >
-                删除背景图片
+                鍒犻櫎鑳屾櫙鍥剧墖
               </Button>
             </div>
           </div>
@@ -1751,7 +1679,7 @@ function WhiteboardSettings() {
 function AboutSettings() {
   return (
     <div className="settingsContentSection">
-      <h2 className="settingsContentTitle">关于</h2>
+      <h2 className="settingsContentTitle">鍏充簬</h2>
       <p className="settingsContentDescription">应用信息和版本详情</p>
       
       <div className="settingsAboutCard">
@@ -1760,23 +1688,23 @@ function AboutSettings() {
         </div>
         <h3 className="settingsAboutAppName">LanStartWrite</h3>
         <p className="settingsAboutVersion">
-          版本 {__APP_VERSION__} · 代号 {__APP_CODENAME__}
+          鐗堟湰 {__APP_VERSION__} 路 浠ｅ彿 {__APP_CODENAME__}
         </p>
         <p className="settingsAboutDescription">
-          一款现代化的屏幕批注和演示工具，
+          涓€娆剧幇浠ｅ寲鐨勫睆骞曟壒娉ㄥ拰婕旂ず宸ュ叿锛?
           <br />
-          帮助您更高效地进行屏幕标注和演示。
+          甯姪鎮ㄦ洿楂樻晥鍦拌繘琛屽睆骞曟爣娉ㄥ拰婕旂ず銆?
         </p>
         
         <div className="settingsAboutLinks">
-          <a href="#" className="settingsAboutLink">官方网站</a>
+          <a href="#" className="settingsAboutLink">瀹樻柟缃戠珯</a>
           <a href="#" className="settingsAboutLink">GitHub</a>
-          <a href="#" className="settingsAboutLink">反馈问题</a>
+          <a href="#" className="settingsAboutLink">鍙嶉闂</a>
         </div>
       </div>
       
       <div className="settingsAboutCredits">
-        <h4 className="settingsAboutCreditsTitle">技术栈</h4>
+        <h4 className="settingsAboutCreditsTitle">鎶€鏈爤</h4>
         <div className="settingsAboutCreditsList">
           <span className="settingsAboutCredit">Electron</span>
           <span className="settingsAboutCredit">React</span>
@@ -1816,241 +1744,19 @@ function VideoShowSettings() {
 
   return (
     <div className="settingsContentSection">
-      <h2 className="settingsContentTitle">视频展台</h2>
+      <h2 className="settingsContentTitle">瑙嗛灞曞彴</h2>
       <p className="settingsContentDescription">配置视频展台模式下的画面与批注设置</p>
 
       <div className="settingsFormCard">
-        <div className="settingsFormTitle">图像与批注层</div>
+        <div className="settingsFormTitle">鍥惧儚涓庢壒娉ㄥ眰</div>
         <div className="settingsFormDescription">仅在进入视频展台模式后生效</div>
         <Switch
           checked={mergeLayers}
           onChange={(e) => persistMergeLayers(e.currentTarget.checked)}
-          label="合并图像与批注层"
+          label="鍚堝苟鍥惧儚涓庢壒娉ㄥ眰"
           size="md"
           disabled={disabled}
         />
-      </div>
-    </div>
-  )
-}
-
-function OfficeSettings() {
-  const [pptMode, setPptMode] = usePersistedState<OfficePptMode>(OFFICE_PPT_MODE_KV_KEY, 'inkeys', {
-    validate: (v): v is OfficePptMode => v === 'inkeys' || v === 'based' || v === 'vsto'
-  })
-
-  const [pptQuickFlip, setPptQuickFlip] = usePersistedState<boolean>(OFFICE_PPT_QUICK_FLIP_KV_KEY, false, {
-    validate: (v): v is boolean => typeof v === 'boolean'
-  })
-
-  const [pptBackendStatus, setPptBackendStatus] = React.useState<'loading' | 'ok' | 'error'>('loading')
-
-  const persistPptMode = (next: string | null) => {
-    const v = next as OfficePptMode
-    if (v !== 'inkeys' && v !== 'based' && v !== 'vsto') return
-    setPptMode(v)
-    void (async () => {
-      try {
-        await putKv(OFFICE_PPT_MODE_KV_KEY, v)
-      } catch {
-        return
-      }
-      try {
-        await putUiStateKey(UI_STATE_APP_WINDOW_ID, OFFICE_PPT_MODE_UI_STATE_KEY, v)
-      } catch {
-        return
-      }
-    })()
-  }
-
-  const persistPptQuickFlip = (next: boolean) => {
-    setPptQuickFlip(next)
-    void (async () => {
-      try {
-        await putKv(OFFICE_PPT_QUICK_FLIP_KV_KEY, next)
-      } catch {
-        return
-      }
-      try {
-        await putUiStateKey(UI_STATE_APP_WINDOW_ID, OFFICE_PPT_QUICK_FLIP_UI_STATE_KEY, next)
-      } catch {
-        return
-      }
-    })()
-  }
-
-  React.useEffect(() => {
-    if (pptMode !== 'inkeys') {
-      setPptBackendStatus('loading')
-      return
-    }
-
-    let cancelled = false
-    const check = async () => {
-      try {
-        const res = await window.lanstart?.apiRequest({ method: 'GET', path: '/ppt/health' })
-        const ok = (res as any)?.status === 200 && Boolean((res as any)?.body?.ok)
-        if (!cancelled) setPptBackendStatus(ok ? 'ok' : 'error')
-      } catch {
-        if (!cancelled) setPptBackendStatus('error')
-      }
-    }
-
-    void check()
-    const timer = setInterval(check, 5000)
-    return () => {
-      cancelled = true
-      clearInterval(timer)
-    }
-  }, [pptMode])
-
-  return (
-    <div className="settingsContentSection">
-      <h2 className="settingsContentTitle">Office</h2>
-      <p className="settingsContentDescription">配置 Office 办公软件的相关设置</p>
-
-      <div className="settingsFormCard">
-        <div className="settingsFormTitle">Word</div>
-        <div className="settingsFormDescription">Word 相关设置（暂无）</div>
-      </div>
-
-      <div className="settingsFormCard">
-        <div className="settingsFormTitle">PowerPoint</div>
-        <div className="settingsFormDescription">PowerPoint 演示模式设置</div>
-        <div className="settingsFormGroup">
-          <Select
-            label="演示模式"
-            description="选择 PowerPoint 的控制与批注实现方式"
-            value={pptMode}
-            onChange={persistPptMode}
-            data={[
-              { value: 'inkeys', label: 'InKeys' },
-              { value: 'based', label: 'Based (未实现)' },
-              { value: 'vsto', label: 'VSTO (未实现)' }
-            ]}
-          />
-        </div>
-        <div className="settingsFormGroup">
-          <Switch
-            checked={pptQuickFlip}
-            onChange={(e) => persistPptQuickFlip(e.currentTarget.checked)}
-            label="快速翻页（模拟键盘）"
-            size="md"
-            disabled={pptMode !== 'inkeys'}
-          />
-        </div>
-        {pptMode === 'inkeys' && (
-          <Box mt="md">
-            <div className="settingsBackendStatus">
-              <span className={`settingsBackendStatusDot settingsBackendStatusDot--${pptBackendStatus}`} />
-              <span className="settingsBackendStatusText">
-                {pptBackendStatus === 'loading'
-                  ? '正在检查后端服务...'
-                  : pptBackendStatus === 'ok'
-                    ? 'PPT 联动功能正常，后端服务运行正常'
-                    : '后端服务连接失败，请检查服务状态'}
-              </span>
-            </div>
-          </Box>
-        )}
-      </div>
-    </div>
-  )
-}
-
-function SystemSettings() {
-  const bus = useUiStateBus(UI_STATE_APP_WINDOW_ID)
-  const isAdmin = bus.state[ADMIN_STATUS_UI_STATE_KEY] === true
-
-  const [uiaTopmost, setUiaTopmost] = usePersistedState<boolean>(SYSTEM_UIA_TOPMOST_KV_KEY, true, {
-    validate: (v): v is boolean => typeof v === 'boolean'
-  })
-
-  const [mergeRendererPipeline, setMergeRendererPipeline] = usePersistedState<boolean>(SYSTEM_MERGE_RENDERER_PIPELINE_KV_KEY, false, {
-    validate: (v): v is boolean => typeof v === 'boolean'
-  })
-
-  const [windowPreload, setWindowPreload] = usePersistedState<boolean>(SYSTEM_WINDOW_PRELOAD_KV_KEY, false, {
-    validate: (v): v is boolean => typeof v === 'boolean'
-  })
-
-  const persistUiaTopmost = (next: boolean) => {
-    setUiaTopmost(next)
-    void (async () => {
-      try {
-        await putKv(SYSTEM_UIA_TOPMOST_KV_KEY, next)
-      } catch {
-        return
-      }
-      try {
-        await putUiStateKey(UI_STATE_APP_WINDOW_ID, SYSTEM_UIA_TOPMOST_UI_STATE_KEY, next)
-      } catch {}
-    })()
-  }
-
-  const persistMergeRendererPipeline = (next: boolean) => {
-    setMergeRendererPipeline(next)
-    void (async () => {
-      try {
-        await putKv(SYSTEM_MERGE_RENDERER_PIPELINE_KV_KEY, next)
-      } catch {}
-    })()
-  }
-
-  const persistWindowPreload = (next: boolean) => {
-    setWindowPreload(next)
-    void (async () => {
-      try {
-        await putKv(SYSTEM_WINDOW_PRELOAD_KV_KEY, next)
-      } catch {}
-    })()
-  }
-
-  return (
-    <div className="settingsContentSection">
-      <h2 className="settingsContentTitle">系统</h2>
-      <p className="settingsContentDescription">配置系统相关能力与运行状态</p>
-
-      <div className="settingsFormCard">
-        <div className="settingsFormTitle">权限状态</div>
-        <div className="settingsFormDescription">用于判断是否启用管理员增强置顶策略</div>
-        <div className="settingsFormGroup">
-          <div className="settingsBackendStatus">
-            <span className={`settingsBackendStatusDot settingsBackendStatusDot--${isAdmin ? 'ok' : 'error'}`} />
-            <span className="settingsBackendStatusText">{isAdmin ? '已获得管理员权限' : '未获得管理员权限'}</span>
-          </div>
-        </div>
-      </div>
-
-      <div className="settingsFormCard">
-        <div className="settingsFormTitle">置顶策略</div>
-        <div className="settingsFormDescription">开启后使用 UIA/Win32 强制置顶（更稳，但更激进）</div>
-        <div className="settingsFormGroup">
-          <Switch checked={uiaTopmost} onChange={(e) => persistUiaTopmost(e.currentTarget.checked)} label="启用 UIA 强制置顶" size="md" />
-        </div>
-      </div>
-
-      <div className="settingsFormCard">
-        <div className="settingsFormTitle">渲染进程</div>
-        <div className="settingsFormDescription">
-          开启后多个窗口会尽量共享 renderer 进程以降低内存占用（独立性降低，任一窗口卡死可能影响其它窗口；会自动重建窗口）
-        </div>
-        <div className="settingsFormGroup">
-          <Switch
-            checked={mergeRendererPipeline}
-            onChange={(e) => persistMergeRendererPipeline(e.currentTarget.checked)}
-            label="合并渲染管线（共享 renderer）"
-            size="md"
-          />
-        </div>
-      </div>
-
-      <div className="settingsFormCard">
-        <div className="settingsFormTitle">窗口预加载</div>
-        <div className="settingsFormDescription">开启后会提前创建并加载常用窗口，然后保持收起状态</div>
-        <div className="settingsFormGroup">
-          <Switch checked={windowPreload} onChange={(e) => persistWindowPreload(e.currentTarget.checked)} label="启用窗口预加载" size="md" />
-        </div>
       </div>
     </div>
   )
@@ -2063,8 +1769,6 @@ const contentComponents: Record<SettingsTab, React.FC> = {
   annotation: AnnotationSettings,
   whiteboard: WhiteboardSettings,
   'video-show': VideoShowSettings,
-  office: OfficeSettings,
-  system: SystemSettings,
   'lanstart-bar': LanStartBarSettings,
   about: AboutSettings,
 }
@@ -2087,3 +1791,4 @@ export function SettingsContent({ activeTab }: SettingsContentProps) {
     </div>
   )
 }
+

@@ -1,5 +1,5 @@
-import React from 'react'
-import { FeaturePanelIcon, QuitIcon, SettingsIcon, WatcherIcon } from '../toolbar/components/ToolbarIcons'
+﻿import React from 'react'
+import { FeaturePanelIcon, QuitIcon, SettingsIcon } from '../toolbar/components/ToolbarIcons'
 import { LanStartBarRegistry } from './registry'
 
 let builtinRegistered = false
@@ -10,9 +10,9 @@ export function ensureBuiltinLanStartBarContributions(registry: LanStartBarRegis
 
   registry.register({
     id: 'feature-panel',
-    label: '功能面板',
-    ariaLabel: '功能面板',
-    title: '功能面板',
+    label: '鍔熻兘闈㈡澘',
+    ariaLabel: '鍔熻兘闈㈡澘',
+    title: '鍔熻兘闈㈡澘',
     icon: <FeaturePanelIcon />,
     variant: 'default',
     size: 'sm',
@@ -22,23 +22,10 @@ export function ensureBuiltinLanStartBarContributions(registry: LanStartBarRegis
   })
 
   registry.register({
-    id: 'watcher',
-    label: '监视器',
-    ariaLabel: '监视器',
-    title: '监视器',
-    icon: <WatcherIcon />,
-    variant: 'default',
-    size: 'sm',
-    kind: 'icon',
-    order: 20,
-    action: { type: 'postCommand', command: 'watcher.openWindow' }
-  })
-
-  registry.register({
     id: 'settings',
-    label: '设置',
-    ariaLabel: '设置',
-    title: '设置',
+    label: '璁剧疆',
+    ariaLabel: '璁剧疆',
+    title: '璁剧疆',
     icon: <SettingsIcon />,
     variant: 'default',
     size: 'sm',
@@ -60,4 +47,6 @@ export function ensureBuiltinLanStartBarContributions(registry: LanStartBarRegis
     action: { type: 'postCommand', command: 'quit' }
   })
 }
+
+
 

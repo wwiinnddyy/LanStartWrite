@@ -1,16 +1,13 @@
-import { BrowserWindow, app, clipboard, screen, type IpcMain } from 'electron'
+﻿import { BrowserWindow, app, clipboard, screen, type IpcMain } from 'electron'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
  
-export type AppManagedWindowKind = 'child' | 'watcher' | 'settings'
+export type AppManagedWindowKind = 'child' | 'settings'
 
 const WINDOW_ID_BY_KIND: Record<AppManagedWindowKind, string> = {
   child: 'child',
-  watcher: 'watcher',
   settings: 'settings-window'
 }
-
-const SHARED_RENDERER_AFFINITY = 'lanstartwrite-ui'
 
 function resolveAppIconPath(): string | undefined {
   const candidates = [
@@ -30,7 +27,6 @@ function resolveAppIconPath(): string | undefined {
 
 function kindFromWindowId(windowId: string): AppManagedWindowKind | undefined {
   if (windowId === WINDOW_ID_BY_KIND.child) return 'child'
-  if (windowId === WINDOW_ID_BY_KIND.watcher) return 'watcher'
   if (windowId === WINDOW_ID_BY_KIND.settings) return 'settings'
   return undefined
 }
@@ -43,14 +39,11 @@ export type AppWindowsManagerDeps = {
   getUiZoomLevel: () => number
   getNativeMicaEnabled: () => boolean
   getLegacyWindowImplementation: () => boolean
-  getMergeRendererPipelineEnabled: () => boolean
   surfaceBackgroundColor: (appearance: 'light' | 'dark') => string
   applyWindowsBackdrop: (win: BrowserWindow) => void
   wireWindowDebug: (win: BrowserWindow, name: string) => void
-  wireWindowStatus: (win: BrowserWindow, windowId: string) => void
   adjustWindowForDPI: (win: BrowserWindow, baseWidth: number, baseHeight: number) => void
   sendToBackend: (message: unknown) => void
-  ensureTaskWatcherStarted: (intervalMs?: number) => void
 }
  
 export class AppWindowsManager {
@@ -152,12 +145,6 @@ export class AppWindowsManager {
       return true
     }
  
-    if (type === 'OPEN_WATCHER_WINDOW') {
-      const win = this.getOrCreate('watcher')
-      this.showWindowWhenReady(win, { focus: true })
-      return true
-    }
- 
     if (type === 'OPEN_SETTINGS_WINDOW') {
       const win = this.getOrCreate('settings')
       this.showWindowWhenReady(win, { focus: true })
@@ -234,16 +221,6 @@ export class AppWindowsManager {
       return true
     }
 
-    if (type === 'START_TASK_WATCHER') {
-      const intervalMs = Number((message as any).intervalMs)
-      this.deps.ensureTaskWatcherStarted(Number.isFinite(intervalMs) ? intervalMs : undefined)
-      return true
-    }
- 
-    if (type === 'STOP_TASK_WATCHER') {
-      return true
-    }
- 
     return false
   }
  
@@ -319,7 +296,6 @@ export class AppWindowsManager {
  
   private createWindow(kind: AppManagedWindowKind): BrowserWindow {
     if (kind === 'child') return this.createChildWindow()
-    if (kind === 'watcher') return this.createWatcherWindow()
     return this.createSettingsWindow()
   }
  
@@ -366,14 +342,12 @@ export class AppWindowsManager {
         preload: this.deps.preloadPath,
         sandbox: false,
         contextIsolation: true,
-        nodeIntegration: false,
-        ...(this.deps.getMergeRendererPipelineEnabled() ? { affinity: SHARED_RENDERER_AFFINITY } : {})
+        nodeIntegration: false
       } as any)
     })
 
     this.deps.applyWindowsBackdrop(win)
     this.deps.wireWindowDebug(win, opts.windowId)
-    this.deps.wireWindowStatus(win, opts.windowId)
     try {
       win.webContents.setZoomLevel(this.deps.getUiZoomLevel())
     } catch {}
@@ -417,36 +391,6 @@ export class AppWindowsManager {
       adjustForDpi: { baseWidth: width, baseHeight: height }
     })
   }
- 
-  private createWatcherWindow(): BrowserWindow {
-    const legacy = this.deps.getLegacyWindowImplementation()
-    const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint())
-    const workArea = display.workArea
-    const preferredWidth = Math.round(workArea.width * 0.86)
-    const preferredHeight = Math.round(workArea.height * 0.82)
-    const width = Math.max(720, Math.min(980, Math.min(preferredWidth, workArea.width)))
-    const height = Math.max(520, Math.min(720, Math.min(preferredHeight, workArea.height)))
-    const x = workArea.x + Math.round((workArea.width - width) / 2)
-    const y = workArea.y + Math.round((workArea.height - height) / 2)
-    return this.createAppWindow({
-      kind: 'watcher',
-      title: '系统监视器',
-      windowId: WINDOW_ID_BY_KIND.watcher,
-      width,
-      height,
-      x,
-      y,
-      resizable: legacy,
-      minimizable: true,
-      maximizable: true,
-      fullscreenable: false,
-      show: false,
-      frame: legacy,
-      transparent: !legacy,
-      adjustForDpi: { baseWidth: width, baseHeight: height }
-    })
-  }
- 
   private createSettingsWindow(): BrowserWindow {
     const existing = this.windows.get('settings')
     if (existing && !existing.isDestroyed()) return existing
@@ -460,7 +404,7 @@ export class AppWindowsManager {
     const winHeight = Math.max(420, Math.min(760, Math.min(preferredHeight, workArea.height)))
     return this.createAppWindow({
       kind: 'settings',
-      title: '设置',
+      title: '璁剧疆',
       windowId: WINDOW_ID_BY_KIND.settings,
       width: winWidth,
       height: winHeight,
@@ -507,3 +451,5 @@ export function startWindowTopmostPolling(opts: {
     }
   }
 }
+
+

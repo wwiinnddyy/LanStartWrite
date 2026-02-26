@@ -71,7 +71,6 @@ npm run test
 
 - `src/button/__tests__/Button.test.tsx`
 - `src/hyper_glass/__tests__/thumbnailBlur.test.ts`
-- `src/task_windows_watcher/__tests__/TaskWindowsWatcher.test.ts`
 - `src/toolbar/__tests__/FloatingToolbar.test.tsx`
 
 ## 类型检查
@@ -104,7 +103,6 @@ lanstart-write/
 │   ├── toolbar/           # 浮动工具栏
 │   ├── toolbar-subwindows/# 工具栏子窗口
 │   ├── settings/          # 设置页面
-│   ├── task_windows_watcher/  # 任务窗口监视器
 │   ├── paint_board/       # 画板
 │   ├── button/            # 按钮组件
 │   ├── Mantine/           # Mantine UI 配置

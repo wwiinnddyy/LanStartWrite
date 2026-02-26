@@ -1,4 +1,4 @@
-export { Button, MotionButton, type ButtonProps, type ButtonKind, type MotionButtonProps, type ButtonSize, type ButtonVariant } from './Button'
+﻿export { Button, MotionButton, type ButtonProps, type ButtonKind, type MotionButtonProps, type ButtonSize, type ButtonVariant } from './Button'
 export { ButtonGroup, type ButtonGroupProps } from './components/ButtonGroup'
 
 export type AppButtonId =
@@ -18,7 +18,6 @@ export type AppButtonId =
   | 'feature-panel'
   | 'db'
   | 'events'
-  | 'watcher'
   | 'settings'
   | 'quit'
 
@@ -34,7 +33,7 @@ export enum ButtonDisplayTag {
 export const TOOLBAR_PRIMARY_BUTTON_IDS = ['mouse', 'pen', 'eraser', 'whiteboard', 'video-show', 'pdf'] as const
 export type ToolbarPrimaryButtonId = (typeof TOOLBAR_PRIMARY_BUTTON_IDS)[number]
 
-export const TOOLBAR_SECONDARY_BUTTON_IDS = ['undo', 'redo', 'clock', 'feature-panel', 'events', 'watcher'] as const
+export const TOOLBAR_SECONDARY_BUTTON_IDS = ['undo', 'redo', 'clock', 'feature-panel', 'events'] as const
 export type ToolbarSecondaryButtonId = (typeof TOOLBAR_SECONDARY_BUTTON_IDS)[number]
 
 export const TOOLBAR_DEFAULT_ALLOWED_SECONDARY_BUTTON_IDS = ['undo', 'redo', 'feature-panel'] as const
@@ -54,8 +53,8 @@ export const APP_BUTTON_DEFINITIONS: readonly AppButtonDefinition[] = [
   { id: 'video-show', label: '视频展台', tags: [ButtonDisplayTag.ALLOW_FLOATING_TOOLBAR, ButtonDisplayTag.TOOLBAR_PRIMARY] },
   { id: 'pdf', label: 'PDF', tags: [ButtonDisplayTag.ALLOW_FLOATING_TOOLBAR, ButtonDisplayTag.TOOLBAR_PRIMARY] },
   { id: 'notes', label: '笔记管理', tags: [ButtonDisplayTag.ALLOW_FEATURE_PANEL] },
-  { id: 'cunox-export', label: '导出 CUNOX', tags: [] },
-  { id: 'cunox-import', label: '导入 CUNOX', tags: [] },
+  { id: 'cunox-export', label: '瀵煎嚭 CUNOX', tags: [] },
+  { id: 'cunox-import', label: '瀵煎叆 CUNOX', tags: [] },
   { id: 'toggle-expanded', label: '折叠/展开', tags: [ButtonDisplayTag.ALLOW_FLOATING_TOOLBAR] },
   {
     id: 'undo',
@@ -90,7 +89,6 @@ export const APP_BUTTON_DEFINITIONS: readonly AppButtonDefinition[] = [
   },
   { id: 'db', label: '数据库', tags: [ButtonDisplayTag.ALLOW_FEATURE_PANEL] },
   { id: 'events', label: '事件', tags: [ButtonDisplayTag.ALLOW_FLOATING_TOOLBAR, ButtonDisplayTag.ALLOW_FEATURE_PANEL, ButtonDisplayTag.TOOLBAR_SECONDARY] },
-  { id: 'watcher', label: '监视器', tags: [ButtonDisplayTag.ALLOW_FLOATING_TOOLBAR, ButtonDisplayTag.ALLOW_FEATURE_PANEL, ButtonDisplayTag.TOOLBAR_SECONDARY] },
   { id: 'settings', label: '设置', tags: [ButtonDisplayTag.ALLOW_FLOATING_TOOLBAR, ButtonDisplayTag.ALLOW_FEATURE_PANEL] },
   { id: 'quit', label: '退出', tags: [ButtonDisplayTag.ALLOW_FLOATING_TOOLBAR, ButtonDisplayTag.ALLOW_FEATURE_PANEL] }
 ]
@@ -165,3 +163,4 @@ export function getToolbarDefaultSecondaryOrder(): ToolbarSecondaryButtonId[] {
   }
   return out
 }
+
