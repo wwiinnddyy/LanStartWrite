@@ -102,41 +102,10 @@
   background: var(--ls-btn-danger-bg-hover);
 }
 
-.webFloatAnchor {
+.webThumbnailsAnchor {
   position: absolute;
   pointer-events: auto;
   z-index: 27;
-}
-
-.webFloatAnchor--thumbnails {
-  right: 12px;
-  bottom: 12px;
-}
-
-.webFloatAnchor--settings {
-  top: 56px;
-  right: 16px;
-}
-
-.webAnchorClose {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  z-index: 40;
-  width: 24px;
-  height: 24px;
-  border-radius: 8px;
-  border: 1px solid var(--ls-btn-danger-border);
-  background: var(--ls-btn-danger-bg);
-  color: var(--ls-btn-danger-fg);
-  font-size: 12px;
-  font-weight: 700;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.webAnchorClose:hover {
-  background: var(--ls-btn-danger-bg-hover);
 }
 
 @media (max-width: 860px) {
@@ -154,25 +123,8 @@
     max-width: calc(100vw - 16px);
   }
 
-  .webFloatAnchor--settings {
-    width: 96vw;
-    right: 2vw;
-    top: 12px;
-  }
-
-  .webFloatAnchor--settings .settingsWindowRoot {
-    width: 96vw;
-    max-width: 96vw;
-    height: 78vh;
-  }
-
-  .webFloatAnchor--thumbnails {
-    width: 96vw;
-    right: 2vw;
-  }
-
-  .webFloatAnchor--thumbnails .subwindowRoot {
-    width: 96vw;
-    height: 66vh;
+  .webThumbnailsAnchor {
+    max-width: calc(100vw - 16px);
+    max-height: calc(100vh - 16px);
   }
 }

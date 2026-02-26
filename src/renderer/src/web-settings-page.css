@@ -1,0 +1,58 @@
+.webSettingsPageRoot {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: var(--ls-surface-bg);
+  color: var(--ls-surface-fg);
+}
+
+.webSettingsPageHeader {
+  height: 52px;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--ls-surface-border) 90%, transparent);
+  background: color-mix(in srgb, var(--ls-surface-bg) 96%, transparent);
+}
+
+.webSettingsBackButton {
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--ls-btn-border);
+  border-radius: 10px;
+  padding: 0 10px;
+  background: var(--ls-btn-bg);
+  color: var(--ls-btn-fg);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.webSettingsBackButton:hover {
+  background: var(--ls-btn-bg-hover);
+}
+
+.webSettingsBackButton:active {
+  transform: translateY(1px);
+}
+
+.webSettingsPageLayout {
+  width: 100%;
+  height: calc(100% - 52px);
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  align-items: stretch;
+}
+
+.webSettingsPageLayout .settingsSidebar {
+  height: 100%;
+}
+
+.webSettingsPageLayout .settingsContent {
+  min-width: 0;
+  min-height: 0;
+}

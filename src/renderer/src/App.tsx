@@ -5,8 +5,8 @@ import { ClockMenu, EraserSubmenu, EventsMenu, FeaturePanelMenu, PenSubmenu, Set
 import { AnnotationOverlayApp, PaintBoardBackgroundApp } from '../../paint_board'
 import { MultiPageControlHandleWindow, MultiPageControlWindow, PageThumbnailsMenuWindow } from '../../mut_page'
 import { useHyperGlassRealtimeBlur } from '../../hyper_glass'
-import { SettingsWindow } from '../../settings'
 import { VideoShowBackgroundApp } from '../../video_show'
+import { WebSettingsPage } from './WebSettingsPage'
 import {
   UI_STATE_APP_WINDOW_ID,
   WEB_ACTIVE_SUBWINDOW_UI_STATE_KEY,
@@ -22,6 +22,7 @@ import './web-workspace.css'
 
 type SubwindowKind = 'events' | 'clock' | 'feature-panel' | 'notes' | 'settings' | 'pen' | 'eraser'
 type SubwindowPlacement = 'top' | 'bottom'
+type WebRoute = 'workspace' | 'settings'
 
 type DockPrefs = { x: number; y: number }
 type RectState = { x: number; y: number; width: number; height: number }
@@ -31,6 +32,16 @@ const TOOLBAR_DOCK_KEY = 'web-toolbar-dock'
 const TOOLBAR_PANEL_LEGACY_KEY = 'web-panel:toolbar'
 const SUBWINDOW_GAP = 10
 const SUBWINDOW_SCREEN_MARGIN = 8
+const THUMBNAILS_GAP = 8
+
+function routeFromPath(pathname: string): WebRoute {
+  const normalized = pathname.replace(/\/+$/, '')
+  return normalized === '/settings' ? 'settings' : 'workspace'
+}
+
+function pathFromRoute(route: WebRoute): string {
+  return route === 'settings' ? '/settings' : '/'
+}
 
 function parseDockPrefs(raw: string | null, defaults: DockPrefs): DockPrefs {
   if (!raw) return defaults
@@ -183,13 +194,16 @@ function WebWorkspace() {
   const [toolbarRect, setToolbarRect] = useState<RectState>({ x: 16, y: 16, width: 420, height: 64 })
   const subwindowRef = useRef<HTMLElement | null>(null)
   const [subwindowSize, setSubwindowSize] = useState<SizeState>({ width: 420, height: 320 })
+  const pageDockRef = useRef<HTMLElement | null>(null)
+  const [pageDockRect, setPageDockRect] = useState<RectState>({ x: 16, y: viewport.height - 72, width: 420, height: 56 })
+  const thumbnailsRef = useRef<HTMLElement | null>(null)
+  const [thumbnailsSize, setThumbnailsSize] = useState<SizeState>({ width: 860, height: 680 })
 
   const effectiveMode = appMode === 'video-show' ? 'video-show' : 'whiteboard'
 
   const activeSubwindow = isSubwindowKind(bus.state[WEB_ACTIVE_SUBWINDOW_UI_STATE_KEY]) ? bus.state[WEB_ACTIVE_SUBWINDOW_UI_STATE_KEY] : null
   const subwindowPlacement = coercePlacement(bus.state[WEB_SUBWINDOW_PLACEMENT_UI_STATE_KEY])
   const pageThumbnailsVisible = coerceBool(bus.state[WEB_PAGE_THUMBNAILS_VISIBLE_UI_STATE_KEY])
-  const settingsVisible = coerceBool(bus.state[WEB_SETTINGS_VISIBLE_UI_STATE_KEY])
   const videoMergeLayersRaw = bus.state[VIDEO_SHOW_MERGE_LAYERS_UI_STATE_KEY]
   const videoMergeLayers = typeof videoMergeLayersRaw === 'boolean' ? videoMergeLayersRaw : true
 
@@ -210,6 +224,49 @@ function WebWorkspace() {
     observer.observe(node)
     return () => observer.disconnect()
   }, [activeSubwindow])
+
+  useLayoutEffect(() => {
+    const node = pageDockRef.current
+    if (!node) return
+
+    const update = () => {
+      const rect = node.getBoundingClientRect()
+      setPageDockRect({
+        x: rect.left,
+        y: rect.top,
+        width: Math.max(1, Math.ceil(rect.width)),
+        height: Math.max(1, Math.ceil(rect.height))
+      })
+    }
+
+    update()
+    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(update) : null
+    observer?.observe(node)
+    window.addEventListener('resize', update)
+    return () => {
+      observer?.disconnect()
+      window.removeEventListener('resize', update)
+    }
+  }, [])
+
+  useLayoutEffect(() => {
+    if (!pageThumbnailsVisible) return
+    const node = thumbnailsRef.current
+    if (!node) return
+
+    const update = () => {
+      const rect = node.getBoundingClientRect()
+      setThumbnailsSize({
+        width: Math.max(1, Math.ceil(rect.width)),
+        height: Math.max(1, Math.ceil(rect.height))
+      })
+    }
+
+    update()
+    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(update) : null
+    observer?.observe(node)
+    return () => observer?.disconnect()
+  }, [pageThumbnailsVisible])
 
   const effectiveSubwindowPlacement = useMemo<SubwindowPlacement>(() => {
     if (!activeSubwindow) return subwindowPlacement
@@ -252,6 +309,19 @@ function WebWorkspace() {
     viewport.width
   ])
 
+  const thumbnailsStyle = useMemo<React.CSSProperties | undefined>(() => {
+    if (!pageThumbnailsVisible) return undefined
+    const maxLeft = Math.max(SUBWINDOW_SCREEN_MARGIN, viewport.width - thumbnailsSize.width - SUBWINDOW_SCREEN_MARGIN)
+    const left = clamp(pageDockRect.x, SUBWINDOW_SCREEN_MARGIN, maxLeft)
+    const desiredTop = pageDockRect.y - thumbnailsSize.height - THUMBNAILS_GAP
+    const maxTop = Math.max(SUBWINDOW_SCREEN_MARGIN, viewport.height - thumbnailsSize.height - SUBWINDOW_SCREEN_MARGIN)
+    const top = clamp(desiredTop, SUBWINDOW_SCREEN_MARGIN, maxTop)
+    return {
+      left: `${Math.round(left)}px`,
+      top: `${Math.round(top)}px`
+    }
+  }, [pageDockRect.x, pageDockRect.y, pageThumbnailsVisible, thumbnailsSize.height, thumbnailsSize.width, viewport.height, viewport.width])
+
   return (
     <div className="webWorkspaceRoot">
       <div className="webWorkspaceStage">
@@ -277,7 +347,7 @@ function WebWorkspace() {
       <div className="webWorkspaceOverlay">
         <WebToolbarDock onRectChange={setToolbarRect} />
 
-        <section className="webPageDock">
+        <section ref={pageDockRef} className="webPageDock">
           <MultiPageControlWindow />
           <MultiPageControlHandleWindow />
         </section>
@@ -303,39 +373,68 @@ function WebWorkspace() {
         ) : null}
 
         {pageThumbnailsVisible ? (
-          <section className="webFloatAnchor webFloatAnchor--thumbnails">
-            <button
-              type="button"
-              className="webAnchorClose"
-              title="Close"
-              onClick={() => {
-                postCommand('app.togglePageThumbnailsMenu').catch(() => undefined)
-              }}
-            >
-              x
-            </button>
+          <section ref={thumbnailsRef} className="webThumbnailsAnchor" style={thumbnailsStyle}>
             <PageThumbnailsMenuWindow />
-          </section>
-        ) : null}
-
-        {settingsVisible ? (
-          <section className="webFloatAnchor webFloatAnchor--settings">
-            <button
-              type="button"
-              className="webAnchorClose"
-              title="Close"
-              onClick={() => {
-                postCommand('app.closeSettingsWindow').catch(() => undefined)
-              }}
-            >
-              x
-            </button>
-            <SettingsWindow />
           </section>
         ) : null}
       </div>
     </div>
   )
+}
+
+function WebAppRouter() {
+  const bus = useUiStateBus(UI_STATE_APP_WINDOW_ID)
+  const settingsVisible = coerceBool(bus.state[WEB_SETTINGS_VISIBLE_UI_STATE_KEY])
+  const [route, setRoute] = useState<WebRoute>(() => routeFromPath(window.location.pathname))
+  const skipFirstSettingsCloseRef = useRef(route === 'settings' && !settingsVisible)
+
+  const navigateToRoute = useCallback((nextRoute: WebRoute, mode: 'push' | 'replace' = 'push') => {
+    const nextPath = pathFromRoute(nextRoute)
+    const currentPath = window.location.pathname
+    if (currentPath !== nextPath) {
+      if (mode === 'replace') window.history.replaceState(null, '', nextPath)
+      else window.history.pushState(null, '', nextPath)
+    }
+    setRoute(nextRoute)
+  }, [])
+
+  useEffect(() => {
+    const onPopState = () => {
+      const nextRoute = routeFromPath(window.location.pathname)
+      setRoute(nextRoute)
+      if (nextRoute === 'settings') {
+        postCommand('app.openSettingsWindow').catch(() => undefined)
+      } else {
+        postCommand('app.closeSettingsWindow').catch(() => undefined)
+      }
+    }
+    window.addEventListener('popstate', onPopState)
+    return () => window.removeEventListener('popstate', onPopState)
+  }, [])
+
+  useEffect(() => {
+    if (route === 'settings' && !settingsVisible) {
+      postCommand('app.openSettingsWindow').catch(() => undefined)
+    }
+    // only for initial direct /settings load
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
+    if (settingsVisible) {
+      if (route !== 'settings') navigateToRoute('settings', 'push')
+      return
+    }
+    if (route === 'settings') {
+      if (skipFirstSettingsCloseRef.current) {
+        skipFirstSettingsCloseRef.current = false
+        return
+      }
+      navigateToRoute('workspace', 'replace')
+    }
+  }, [navigateToRoute, route, settingsVisible])
+
+  return route === 'settings' ? <WebSettingsPage /> : <WebWorkspace />
 }
 
 function WithAppearance(props: { children: React.ReactNode }) {
@@ -346,7 +445,7 @@ function WithAppearance(props: { children: React.ReactNode }) {
 export default function App() {
   return (
     <WithAppearance>
-      <WebWorkspace />
+      <WebAppRouter />
     </WithAppearance>
   )
 }
