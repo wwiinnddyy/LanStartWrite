@@ -772,7 +772,9 @@ export function FloatingToolbarApp() {
   )
 }
 
-export function FloatingToolbarHandleApp() {
+export function FloatingToolbarHandleApp(props?: {
+  onDragHandlePointerDown?: (e: React.PointerEvent) => void
+}) {
   const rootRef = useRef<HTMLDivElement | null>(null)
   const reduceMotion = useReducedMotion()
   const [dragging, setDragging] = useState(false)
@@ -806,7 +808,10 @@ export function FloatingToolbarHandleApp() {
           appRegion="drag"
           className={dragging ? 'toolbarDragHandleButton toolbarDragHandleButton--dragging' : 'toolbarDragHandleButton'}
           title="浮动工具栏拖动把手"
-          onPointerDown={() => setDragging(true)}
+          onPointerDown={(e) => {
+            setDragging(true)
+            props?.onDragHandlePointerDown?.(e)
+          }}
           onPointerUp={() => setDragging(false)}
           onPointerCancel={() => setDragging(false)}
           onPointerLeave={() => setDragging(false)}

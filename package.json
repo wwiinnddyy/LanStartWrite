@@ -7,22 +7,24 @@
   "lanstartCodename": "Doctor",
   "main": "out/main/index.js",
   "scripts": {
-    "dev": "electron-vite dev",
-    "build": "electron-vite build && tsc -p tsconfig.backend.json",
-    "preview": "electron-vite preview",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run",
+    "dev": "bun run dev:all",
+    "dev:all": "bunx --package concurrently concurrently -k -n backend,web \"bun run dev:backend\" \"bun run dev:web\"",
+    "dev:web": "bunx vite --config vite.config.ts",
+    "dev:backend": "bun --watch src/elysia/index.ts",
+    "build": "bunx vite build --config vite.config.ts",
+    "build:backend": "bunx tsc -p tsconfig.backend.json",
+    "preview": "bunx vite preview --config vite.config.ts",
+    "typecheck": "bunx tsc -p tsconfig.json --noEmit",
+    "test": "bunx vitest run",
     "release": "release-it"
   },
   "dependencies": {
-    "@elysiajs/node": "^1.4.3",
     "@mantine/core": "^8.3.14",
     "@mantine/hooks": "^8.3.14",
     "elysia": "^1.4.3",
     "fast-xml-parser": "^5.3.6",
     "framer-motion": "^12.29.2",
     "leafer-ui": "^2.0.0",
-    "level": "^10.0.0",
     "perfect-freehand": "^1.2.3",
     "qrcode": "^1.5.4",
     "react": "^18.3.1",
@@ -43,9 +45,9 @@
     "@types/yazl": "^3.3.0",
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.24",
+    "concurrently": "^9.2.1",
     "electron": "^35.0.0",
     "electron-builder": "^26.7.0",
-    "electron-vite": "^3.1.0",
     "jsdom": "^25.0.1",
     "postcss": "^8.5.6",
     "release-it": "^19.2.4",
@@ -57,7 +59,6 @@
   },
   "pnpm": {
     "onlyBuiltDependencies": [
-      "classic-level",
       "electron",
       "esbuild"
     ]

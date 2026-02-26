@@ -1,5 +1,4 @@
-﻿﻿import { Elysia, t } from 'elysia'
-import { node } from '@elysiajs/node'
+﻿﻿﻿import { Elysia, t } from 'elysia'
 import { createInterface } from 'node:readline'
 import { randomUUID } from 'node:crypto'
 import { readFile, stat } from 'node:fs/promises'
@@ -19,6 +18,7 @@ import {
   ERASER_TYPE_UI_STATE_KEY,
   NOTES_PAGE_INDEX_UI_STATE_KEY,
   NOTES_PAGE_TOTAL_UI_STATE_KEY,
+  NOTICE_KIND_UI_STATE_KEY,
   PEN_COLOR_UI_STATE_KEY,
   PEN_THICKNESS_UI_STATE_KEY,
   PEN_TYPE_UI_STATE_KEY,
@@ -53,13 +53,19 @@ type EventItem = {
   ts: number
 }
 
+const WEB_ACTIVE_SUBWINDOW_UI_STATE_KEY = 'webActiveSubwindowKind'
+const WEB_SUBWINDOW_PLACEMENT_UI_STATE_KEY = 'webSubwindowPlacement'
+const WEB_PAGE_THUMBNAILS_VISIBLE_UI_STATE_KEY = 'webPageThumbnailsVisible'
+const WEB_SETTINGS_VISIBLE_UI_STATE_KEY = 'webSettingsVisible'
+
 const port = Number(process.env.LANSTART_BACKEND_PORT ?? 3131)
 const host = String(process.env.LANSTART_BACKEND_HOST ?? '127.0.0.1')
-const dbPath = process.env.LANSTART_DB_PATH ?? './leveldb'
-const transport = String(process.env.LANSTART_BACKEND_TRANSPORT ?? 'stdio')
+const dbPath = process.env.LANSTART_DB_PATH ?? './lanstart.sqlite'
+const transport = String(process.env.LANSTART_BACKEND_TRANSPORT ?? 'http')
 const csBaseUrl = String(process.env.LANSTART_CS_BASE_URL ?? '')
 const castPort = Number(process.env.LANSTART_CAST_PORT ?? 3132)
 const castHost = String(process.env.LANSTART_CAST_HOST ?? '0.0.0.0')
+const useStdioRpc = transport !== 'http'
 
 const db = openLeavelDb(dbPath)
 
@@ -125,6 +131,7 @@ function emitEvent(type: string, payload?: unknown): EventItem {
 }
 
 function requestMain(message: unknown): void {
+  if (!useStdioRpc) return
   process.stdout.write(`__LANSTART__${JSON.stringify(message)}\n`)
 }
 
@@ -425,6 +432,7 @@ const pendingMainRpc = new Map<
 >()
 
 function requestMainRpc<T>(method: string, params?: unknown, timeoutMs = 30_000): Promise<T> {
+  if (!useStdioRpc) return Promise.reject(new Error('main_rpc_unavailable'))
   const id = nextMainRpcId++
   return new Promise<T>((resolve, reject) => {
     const timer = setTimeout(() => {
@@ -493,7 +501,7 @@ async function handleCommand(command: string, payload: unknown): Promise<Command
 
     if (scope === 'win') {
       if (action === 'createWindow') {
-        requestMain({ type: 'CREATE_WINDOW' })
+        if (useStdioRpc) requestMain({ type: 'CREATE_WINDOW' })
         return { ok: true }
       }
 
@@ -503,7 +511,7 @@ async function handleCommand(command: string, payload: unknown): Promise<Command
 
       if (action === 'setAnnotationInput') {
         const enabled = Boolean((payload as any)?.enabled)
-        requestMain({ type: 'SET_ANNOTATION_INPUT', enabled })
+        if (useStdioRpc) requestMain({ type: 'SET_ANNOTATION_INPUT', enabled })
         return { ok: true }
       }
 
@@ -512,7 +520,23 @@ async function handleCommand(command: string, payload: unknown): Promise<Command
         const placementRaw = coerceString((payload as any)?.placement)
         const placement = placementRaw === 'top' ? 'top' : placementRaw === 'bottom' ? 'bottom' : undefined
         if (!kind || !placement) return { ok: false, error: 'BAD_SUBWINDOW' }
-        requestMain({ type: 'TOGGLE_SUBWINDOW', kind, placement })
+        if (useStdioRpc) {
+          requestMain({ type: 'TOGGLE_SUBWINDOW', kind, placement })
+        } else {
+          const state = getOrInitUiState(UI_STATE_APP_WINDOW_ID)
+          const currentKind = coerceString(state[WEB_ACTIVE_SUBWINDOW_UI_STATE_KEY])
+          if (currentKind === kind) {
+            delete state[WEB_ACTIVE_SUBWINDOW_UI_STATE_KEY]
+            delete state[WEB_SUBWINDOW_PLACEMENT_UI_STATE_KEY]
+            emitEvent('UI_STATE_DEL', { windowId: UI_STATE_APP_WINDOW_ID, key: WEB_ACTIVE_SUBWINDOW_UI_STATE_KEY })
+            emitEvent('UI_STATE_DEL', { windowId: UI_STATE_APP_WINDOW_ID, key: WEB_SUBWINDOW_PLACEMENT_UI_STATE_KEY })
+          } else {
+            state[WEB_ACTIVE_SUBWINDOW_UI_STATE_KEY] = kind
+            state[WEB_SUBWINDOW_PLACEMENT_UI_STATE_KEY] = placement
+            emitEvent('UI_STATE_PUT', { windowId: UI_STATE_APP_WINDOW_ID, key: WEB_ACTIVE_SUBWINDOW_UI_STATE_KEY, value: kind })
+            emitEvent('UI_STATE_PUT', { windowId: UI_STATE_APP_WINDOW_ID, key: WEB_SUBWINDOW_PLACEMENT_UI_STATE_KEY, value: placement })
+          }
+        }
         return { ok: true }
       }
 
@@ -520,7 +544,7 @@ async function handleCommand(command: string, payload: unknown): Promise<Command
         const kind = coerceString((payload as any)?.kind)
         const height = Number((payload as any)?.height)
         if (!kind || !Number.isFinite(height)) return { ok: false, error: 'BAD_SUBWINDOW_HEIGHT' }
-        requestMain({ type: 'SET_SUBWINDOW_HEIGHT', kind, height })
+        if (useStdioRpc) requestMain({ type: 'SET_SUBWINDOW_HEIGHT', kind, height })
         return { ok: true }
       }
 
@@ -529,7 +553,7 @@ async function handleCommand(command: string, payload: unknown): Promise<Command
         const width = Number((payload as any)?.width)
         const height = Number((payload as any)?.height)
         if (!kind || !Number.isFinite(width) || !Number.isFinite(height)) return { ok: false, error: 'BAD_SUBWINDOW_BOUNDS' }
-        requestMain({ type: 'SET_SUBWINDOW_BOUNDS', kind, width, height })
+        if (useStdioRpc) requestMain({ type: 'SET_SUBWINDOW_BOUNDS', kind, width, height })
         return { ok: true }
       }
 
@@ -537,7 +561,7 @@ async function handleCommand(command: string, payload: unknown): Promise<Command
         const width = Number((payload as any)?.width)
         const height = Number((payload as any)?.height)
         if (!Number.isFinite(width) || !Number.isFinite(height)) return { ok: false, error: 'BAD_BOUNDS' }
-        requestMain({ type: 'SET_TOOLBAR_BOUNDS', width, height })
+        if (useStdioRpc) requestMain({ type: 'SET_TOOLBAR_BOUNDS', width, height })
         return { ok: true }
       }
 
@@ -550,32 +574,40 @@ async function handleCommand(command: string, payload: unknown): Promise<Command
         const hasWidth = Number.isFinite(width)
         const hasHeight = Number.isFinite(height)
         if (!windowId || (!hasWidth && !hasHeight)) return { ok: false, error: 'BAD_BOUNDS' }
-        requestMain({
-          type: 'SET_APP_WINDOW_BOUNDS',
-          windowId,
-          ...(hasWidth ? { width } : {}),
-          ...(hasHeight ? { height } : {}),
-          ...(Number.isFinite(Number(x)) ? { x: Number(x) } : {}),
-          ...(Number.isFinite(Number(y)) ? { y: Number(y) } : {})
-        })
+        if (useStdioRpc) {
+          requestMain({
+            type: 'SET_APP_WINDOW_BOUNDS',
+            windowId,
+            ...(hasWidth ? { width } : {}),
+            ...(hasHeight ? { height } : {}),
+            ...(Number.isFinite(Number(x)) ? { x: Number(x) } : {}),
+            ...(Number.isFinite(Number(y)) ? { y: Number(y) } : {})
+          })
+        }
         return { ok: true }
       }
 
       if (action === 'setUiZoom') {
         const zoom = Number((payload as any)?.zoom)
         if (!Number.isFinite(zoom)) return { ok: false, error: 'BAD_ZOOM' }
-        requestMain({ type: 'SET_UI_ZOOM', zoom })
+        if (useStdioRpc) requestMain({ type: 'SET_UI_ZOOM', zoom })
         return { ok: true }
       }
 
       if (action === 'setNoticeVisible') {
         const visible = Boolean((payload as any)?.visible)
-        requestMain({ type: 'SET_NOTICE_VISIBLE', visible })
+        if (useStdioRpc) {
+          requestMain({ type: 'SET_NOTICE_VISIBLE', visible })
+        } else {
+          const state = getOrInitUiState(UI_STATE_APP_WINDOW_ID)
+          state[NOTICE_KIND_UI_STATE_KEY] = visible ? (coerceString((payload as any)?.kind) || 'notice') : ''
+          emitEvent('UI_STATE_PUT', { windowId: UI_STATE_APP_WINDOW_ID, key: NOTICE_KIND_UI_STATE_KEY, value: state[NOTICE_KIND_UI_STATE_KEY] })
+        }
         return { ok: true }
       }
 
       if (action === 'quit') {
-        requestMain({ type: 'QUIT_APP' })
+        if (useStdioRpc) requestMain({ type: 'QUIT_APP' })
         return { ok: true }
       }
 
@@ -919,7 +951,14 @@ async function handleCommand(command: string, payload: unknown): Promise<Command
       }
 
       if (action === 'togglePageThumbnailsMenu') {
-        requestMain({ type: 'TOGGLE_MUT_PAGE_THUMBNAILS_MENU' })
+        if (useStdioRpc) {
+          requestMain({ type: 'TOGGLE_MUT_PAGE_THUMBNAILS_MENU' })
+        } else {
+          const state = getOrInitUiState(UI_STATE_APP_WINDOW_ID)
+          const next = !Boolean(state[WEB_PAGE_THUMBNAILS_VISIBLE_UI_STATE_KEY])
+          state[WEB_PAGE_THUMBNAILS_VISIBLE_UI_STATE_KEY] = next
+          emitEvent('UI_STATE_PUT', { windowId: UI_STATE_APP_WINDOW_ID, key: WEB_PAGE_THUMBNAILS_VISIBLE_UI_STATE_KEY, value: next })
+        }
         return { ok: true }
       }
 
@@ -936,17 +975,29 @@ async function handleCommand(command: string, payload: unknown): Promise<Command
       }
 
       if (action === 'openSettingsWindow') {
-        requestMain({ type: 'OPEN_SETTINGS_WINDOW' })
+        if (useStdioRpc) {
+          requestMain({ type: 'OPEN_SETTINGS_WINDOW' })
+        } else {
+          const state = getOrInitUiState(UI_STATE_APP_WINDOW_ID)
+          state[WEB_SETTINGS_VISIBLE_UI_STATE_KEY] = true
+          emitEvent('UI_STATE_PUT', { windowId: UI_STATE_APP_WINDOW_ID, key: WEB_SETTINGS_VISIBLE_UI_STATE_KEY, value: true })
+        }
         return { ok: true }
       }
 
       if (action === 'minimizeSettingsWindow') {
-        requestMain({ type: 'MINIMIZE_SETTINGS_WINDOW' })
+        if (useStdioRpc) requestMain({ type: 'MINIMIZE_SETTINGS_WINDOW' })
         return { ok: true }
       }
 
       if (action === 'closeSettingsWindow') {
-        requestMain({ type: 'CLOSE_SETTINGS_WINDOW' })
+        if (useStdioRpc) {
+          requestMain({ type: 'CLOSE_SETTINGS_WINDOW' })
+        } else {
+          const state = getOrInitUiState(UI_STATE_APP_WINDOW_ID)
+          state[WEB_SETTINGS_VISIBLE_UI_STATE_KEY] = false
+          emitEvent('UI_STATE_PUT', { windowId: UI_STATE_APP_WINDOW_ID, key: WEB_SETTINGS_VISIBLE_UI_STATE_KEY, value: false })
+        }
         return { ok: true }
       }
 
@@ -956,7 +1007,7 @@ async function handleCommand(command: string, payload: unknown): Promise<Command
         const controlAction =
           controlActionRaw === 'minimize' ? 'minimize' : controlActionRaw === 'close' ? 'close' : controlActionRaw === 'toggleMaximize' ? 'toggleMaximize' : undefined
         if (!windowId || !controlAction) return { ok: false, error: 'BAD_WINDOW_CONTROL' }
-        requestMain({ type: 'CONTROL_APP_WINDOW', windowId, action: controlAction })
+        if (useStdioRpc) requestMain({ type: 'CONTROL_APP_WINDOW', windowId, action: controlAction })
         return { ok: true }
       }
 
@@ -977,7 +1028,7 @@ async function handleCommand(command: string, payload: unknown): Promise<Command
   }
 
   if (command === 'create-window') {
-    requestMain({ type: 'CREATE_WINDOW' })
+    if (useStdioRpc) requestMain({ type: 'CREATE_WINDOW' })
     return { ok: true }
   }
 
@@ -986,7 +1037,23 @@ async function handleCommand(command: string, payload: unknown): Promise<Command
     const placementRaw = coerceString((payload as any)?.placement)
     const placement = placementRaw === 'top' ? 'top' : placementRaw === 'bottom' ? 'bottom' : undefined
     if (!kind || !placement) return { ok: false, error: 'BAD_SUBWINDOW' }
-    requestMain({ type: 'TOGGLE_SUBWINDOW', kind, placement })
+    if (useStdioRpc) {
+      requestMain({ type: 'TOGGLE_SUBWINDOW', kind, placement })
+    } else {
+      const state = getOrInitUiState(UI_STATE_APP_WINDOW_ID)
+      const currentKind = coerceString(state[WEB_ACTIVE_SUBWINDOW_UI_STATE_KEY])
+      if (currentKind === kind) {
+        delete state[WEB_ACTIVE_SUBWINDOW_UI_STATE_KEY]
+        delete state[WEB_SUBWINDOW_PLACEMENT_UI_STATE_KEY]
+        emitEvent('UI_STATE_DEL', { windowId: UI_STATE_APP_WINDOW_ID, key: WEB_ACTIVE_SUBWINDOW_UI_STATE_KEY })
+        emitEvent('UI_STATE_DEL', { windowId: UI_STATE_APP_WINDOW_ID, key: WEB_SUBWINDOW_PLACEMENT_UI_STATE_KEY })
+      } else {
+        state[WEB_ACTIVE_SUBWINDOW_UI_STATE_KEY] = kind
+        state[WEB_SUBWINDOW_PLACEMENT_UI_STATE_KEY] = placement
+        emitEvent('UI_STATE_PUT', { windowId: UI_STATE_APP_WINDOW_ID, key: WEB_ACTIVE_SUBWINDOW_UI_STATE_KEY, value: kind })
+        emitEvent('UI_STATE_PUT', { windowId: UI_STATE_APP_WINDOW_ID, key: WEB_SUBWINDOW_PLACEMENT_UI_STATE_KEY, value: placement })
+      }
+    }
     return { ok: true }
   }
 
@@ -994,7 +1061,7 @@ async function handleCommand(command: string, payload: unknown): Promise<Command
     const kind = coerceString((payload as any)?.kind)
     const height = Number((payload as any)?.height)
     if (!kind || !Number.isFinite(height)) return { ok: false, error: 'BAD_SUBWINDOW_HEIGHT' }
-    requestMain({ type: 'SET_SUBWINDOW_HEIGHT', kind, height })
+    if (useStdioRpc) requestMain({ type: 'SET_SUBWINDOW_HEIGHT', kind, height })
     return { ok: true }
   }
 
@@ -1003,7 +1070,7 @@ async function handleCommand(command: string, payload: unknown): Promise<Command
     const width = Number((payload as any)?.width)
     const height = Number((payload as any)?.height)
     if (!kind || !Number.isFinite(width) || !Number.isFinite(height)) return { ok: false, error: 'BAD_SUBWINDOW_BOUNDS' }
-    requestMain({ type: 'SET_SUBWINDOW_BOUNDS', kind, width, height })
+    if (useStdioRpc) requestMain({ type: 'SET_SUBWINDOW_BOUNDS', kind, width, height })
     return { ok: true }
   }
 
@@ -1011,7 +1078,7 @@ async function handleCommand(command: string, payload: unknown): Promise<Command
     const width = Number((payload as any)?.width)
     const height = Number((payload as any)?.height)
     if (!Number.isFinite(width) || !Number.isFinite(height)) return { ok: false, error: 'BAD_BOUNDS' }
-    requestMain({ type: 'SET_TOOLBAR_BOUNDS', width, height })
+    if (useStdioRpc) requestMain({ type: 'SET_TOOLBAR_BOUNDS', width, height })
     return { ok: true }
   }
 
@@ -1019,7 +1086,7 @@ async function handleCommand(command: string, payload: unknown): Promise<Command
     const width = Number((payload as any)?.width)
     const height = Number((payload as any)?.height)
     if (!Number.isFinite(width) || !Number.isFinite(height)) return { ok: false, error: 'BAD_BOUNDS' }
-    requestMain({ type: 'SET_MUT_PAGE_BOUNDS', width, height })
+    if (useStdioRpc) requestMain({ type: 'SET_MUT_PAGE_BOUNDS', width, height })
     return { ok: true }
   }
 
@@ -1032,32 +1099,35 @@ async function handleCommand(command: string, payload: unknown): Promise<Command
     const hasWidth = Number.isFinite(width)
     const hasHeight = Number.isFinite(height)
     if (!windowId || (!hasWidth && !hasHeight)) return { ok: false, error: 'BAD_BOUNDS' }
-    requestMain({
-      type: 'SET_APP_WINDOW_BOUNDS',
-      windowId,
-      ...(hasWidth ? { width } : {}),
-      ...(hasHeight ? { height } : {}),
-      ...(Number.isFinite(Number(x)) ? { x: Number(x) } : {}),
-      ...(Number.isFinite(Number(y)) ? { y: Number(y) } : {})
-    })
+    if (useStdioRpc) {
+      requestMain({
+        type: 'SET_APP_WINDOW_BOUNDS',
+        windowId,
+        ...(hasWidth ? { width } : {}),
+        ...(hasHeight ? { height } : {}),
+        ...(Number.isFinite(Number(x)) ? { x: Number(x) } : {}),
+        ...(Number.isFinite(Number(y)) ? { y: Number(y) } : {})
+      })
+    }
     return { ok: true }
   }
 
   if (command === 'set-appearance') {
     const appearance = coerceAppearance((payload as any)?.appearance)
     if (!appearance) return { ok: false, error: 'BAD_APPEARANCE' }
-    requestMain({ type: 'SET_APPEARANCE', appearance })
+    if (useStdioRpc) requestMain({ type: 'SET_APPEARANCE', appearance })
     return { ok: true }
   }
 
   if (command === 'quit') {
-    requestMain({ type: 'QUIT_APP' })
+    if (useStdioRpc) requestMain({ type: 'QUIT_APP' })
     return { ok: true }
   }
 
   return { ok: false, error: 'UNKNOWN_COMMAND' }
 }
 
+if (useStdioRpc) {
 const stdin = createInterface({ input: process.stdin, crlfDelay: Infinity })
 stdin.on('line', (line) => {
   const trimmed = line.trim()
@@ -1289,8 +1359,9 @@ stdin.on('line', (line) => {
     return
   }
 })
+}
 
-const api = new Elysia({ adapter: node() })
+const api = new Elysia()
   .onRequest(({ request, set }) => {
     set.headers['Access-Control-Allow-Origin'] = '*'
     set.headers['Access-Control-Allow-Methods'] = 'GET,POST,PUT,DELETE,OPTIONS'
@@ -1301,24 +1372,111 @@ const api = new Elysia({ adapter: node() })
     }
   })
   .get('/health', () => ({ ok: true, port }))
+  .get('/events', ({ query }) => {
+    const sinceRaw = Number((query as any)?.since ?? 0)
+    const since = Number.isFinite(sinceRaw) ? Math.max(0, Math.floor(sinceRaw)) : 0
+    const items = events.filter((e) => e.id > since)
+    return { ok: true, items, latest: events.at(-1)?.id ?? since }
+  })
+  .post('/rpc/post-command', async ({ body, set }) => {
+    const command = coerceString((body as any)?.command)
+    if (!command) {
+      set.status = 400
+      return { ok: false, error: 'BAD_COMMAND' }
+    }
+    const result = await handleCommand(command, (body as any)?.payload)
+    if (!result.ok) {
+      set.status = 400
+      return { ok: false, error: result.error }
+    }
+    return { ok: true }
+  })
+  .get('/kv/:key', async ({ params, set }) => {
+    const key = decodeURIComponent(coerceString((params as any)?.key))
+    if (!key) {
+      set.status = 400
+      return { ok: false, error: 'BAD_KEY' }
+    }
+    try {
+      const value = await getValue(db, key)
+      emitEvent('KV_GET', { key })
+      return { ok: true, value }
+    } catch (e) {
+      const err = e as any
+      if (err?.notFound === true || String(err?.code ?? '') === 'LEVEL_NOT_FOUND') {
+        set.status = 404
+        return { ok: false, error: 'kv_not_found' }
+      }
+      set.status = 500
+      return { ok: false, error: String(e) }
+    }
+  })
+  .put('/kv/:key', async ({ params, body, set }) => {
+    const key = decodeURIComponent(coerceString((params as any)?.key))
+    if (!key) {
+      set.status = 400
+      return { ok: false, error: 'BAD_KEY' }
+    }
+    await putValue(db, key, (body as any)?.value)
+    emitEvent('KV_PUT', { key })
+    return { ok: true }
+  })
+  .get('/ui/:windowId', ({ params, set }) => {
+    const windowId = decodeURIComponent(coerceString((params as any)?.windowId))
+    if (!windowId) {
+      set.status = 400
+      return { ok: false, error: 'BAD_WINDOW_ID' }
+    }
+    const state = getOrInitUiState(windowId)
+    emitEvent('UI_STATE_GET', { windowId })
+    return { ok: true, state }
+  })
+  .put('/ui/:windowId/:key', ({ params, body, set }) => {
+    const windowId = decodeURIComponent(coerceString((params as any)?.windowId))
+    const key = decodeURIComponent(coerceString((params as any)?.key))
+    if (!windowId || !key) {
+      set.status = 400
+      return { ok: false, error: 'BAD_UI_STATE_KEY' }
+    }
+    const state = getOrInitUiState(windowId)
+    state[key] = (body as any)?.value
+    emitEvent('UI_STATE_PUT', { windowId, key, value: (body as any)?.value })
+    return { ok: true }
+  })
+  .delete('/ui/:windowId/:key', ({ params, set }) => {
+    const windowId = decodeURIComponent(coerceString((params as any)?.windowId))
+    const key = decodeURIComponent(coerceString((params as any)?.key))
+    if (!windowId || !key) {
+      set.status = 400
+      return { ok: false, error: 'BAD_UI_STATE_KEY' }
+    }
+    const state = getOrInitUiState(windowId)
+    delete state[key]
+    emitEvent('UI_STATE_DEL', { windowId, key })
+    return { ok: true }
+  })
   .post('/dialog/select-image-file', async () => {
+    if (!useStdioRpc) return { ok: false, error: 'UNSUPPORTED_IN_WEB' }
     const result = await requestMainRpc<{ fileUrl?: string }>('selectImageFile')
     const fileUrl = typeof (result as any)?.fileUrl === 'string' ? (result as any).fileUrl : undefined
     return { ok: true, fileUrl }
   })
   .post('/dialog/select-directory', async () => {
+    if (!useStdioRpc) return { ok: false, error: 'UNSUPPORTED_IN_WEB' }
     const result = await requestMainRpc<{ dir?: string; dirUrl?: string }>('selectDirectory')
     const dir = typeof (result as any)?.dir === 'string' ? (result as any).dir : undefined
     const dirUrl = typeof (result as any)?.dirUrl === 'string' ? (result as any).dirUrl : undefined
     return { ok: true, dir, dirUrl }
   })
   .post('/dialog/select-cunox-export-file', async () => {
+    if (!useStdioRpc) return { ok: false, error: 'UNSUPPORTED_IN_WEB' }
     const result = await requestMainRpc<{ file?: string; fileUrl?: string }>('selectCunoxExportFile')
     const file = typeof (result as any)?.file === 'string' ? (result as any).file : undefined
     const fileUrl = typeof (result as any)?.fileUrl === 'string' ? (result as any).fileUrl : undefined
     return { ok: true, file, fileUrl }
   })
   .post('/dialog/select-cunox-import-file', async () => {
+    if (!useStdioRpc) return { ok: false, error: 'UNSUPPORTED_IN_WEB' }
     const result = await requestMainRpc<{ file?: string; fileUrl?: string }>('selectCunoxImportFile')
     const file = typeof (result as any)?.file === 'string' ? (result as any).file : undefined
     const fileUrl = typeof (result as any)?.fileUrl === 'string' ? (result as any).fileUrl : undefined
@@ -1782,7 +1940,7 @@ const senderHtml = `<!doctype html>
   </body>
 </html>`;
 
-const castApi = new Elysia({ adapter: node() })
+const castApi = new Elysia()
   .onRequest(({ request, set }) => {
     set.headers['Access-Control-Allow-Origin'] = '*'
     set.headers['Access-Control-Allow-Methods'] = 'GET,POST,PUT,DELETE,OPTIONS'
@@ -1880,5 +2038,6 @@ async function bootstrap(): Promise<void> {
 bootstrap().catch((e) => {
   process.stderr.write(String(e))
 })
+
 
 

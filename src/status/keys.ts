@@ -83,6 +83,11 @@ export const CLOCK_COUNTDOWN_END_MS_UI_STATE_KEY = 'clockCountdownEndMs'
 export const CLOCK_COUNTDOWN_PRESET_MS_UI_STATE_KEY = 'clockCountdownPresetMs'
 export const CLOCK_COUNTDOWN_REMAINING_MS_UI_STATE_KEY = 'clockCountdownRemainingMs'
 
+export const WEB_ACTIVE_SUBWINDOW_UI_STATE_KEY = 'webActiveSubwindowKind'
+export const WEB_SUBWINDOW_PLACEMENT_UI_STATE_KEY = 'webSubwindowPlacement'
+export const WEB_PAGE_THUMBNAILS_VISIBLE_UI_STATE_KEY = 'webPageThumbnailsVisible'
+export const WEB_SETTINGS_VISIBLE_UI_STATE_KEY = 'webSettingsVisible'
+
 export type LeaferRendererEngine = 'canvas2d' | 'svg' | 'webgl' | 'webgpu'
 export type LeaferNibMode = 'off' | 'dynamic' | 'static'
 export type LeaferSettings = {

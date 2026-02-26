@@ -1,3 +1,5 @@
+import { ensureWebLanstartAdapter } from '../../status/webLanstartAdapter'
+
 export type BackendEventItem = {
   id: number
   type: string
@@ -50,6 +52,7 @@ function getFallbackLanstart() {
 }
 
 function requireLanstart() {
+  ensureWebLanstartAdapter()
   const api = window.lanstart
   return api ?? getFallbackLanstart()
 }
@@ -59,11 +62,10 @@ export function markQuitting(): void {
 }
 
 export async function postCommand(command: string, payload?: unknown): Promise<void> {
-  const realApi = window.lanstart
-  if (!realApi) return
+  const api = requireLanstart()
   console.log('[useBackend] postCommand:', command, payload)
   try {
-    await realApi.postCommand(command, payload)
+    await api.postCommand(command, payload)
     console.log('[useBackend] postCommand success:', command)
   } catch (e) {
     console.error('[useBackend] postCommand failed:', command, e)
@@ -97,7 +99,7 @@ export async function deleteUiStateKey(windowId: string, key: string): Promise<v
 }
 
 export async function getToolbarNoticeKind(): Promise<string> {
-  const api = window.lanstart
+  const api = requireLanstart()
   if (!api?.getToolbarNoticeKind) return ''
   try {
     return String((await api.getToolbarNoticeKind()) ?? '')
@@ -107,19 +109,19 @@ export async function getToolbarNoticeKind(): Promise<string> {
 }
 
 export async function setToolbarNoticeVisible(input: { visible: boolean; kind?: string }): Promise<void> {
-  const api = window.lanstart
+  const api = requireLanstart()
   if (!api?.setToolbarNoticeVisible) return
   await api.setToolbarNoticeVisible(input)
 }
 
 export async function setToolbarNoticeBounds(input: { width: number; height: number }): Promise<void> {
-  const api = window.lanstart
+  const api = requireLanstart()
   if (!api?.setToolbarNoticeBounds) return
   await api.setToolbarNoticeBounds(input)
 }
 
 export async function restartBackendAll(): Promise<void> {
-  const api = window.lanstart
+  const api = requireLanstart()
   if (!api?.restartBackendAll) return
   await api.restartBackendAll()
 }

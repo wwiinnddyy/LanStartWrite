@@ -1,4 +1,5 @@
 ﻿import { useEffect, useRef, useState } from 'react'
+import { ensureWebLanstartAdapter } from './webLanstartAdapter'
 import {
   APP_MODE_KV_KEY,
   APP_MODE_UI_STATE_KEY,
@@ -23,6 +24,10 @@ import {
   CLOCK_COUNTDOWN_END_MS_UI_STATE_KEY,
   CLOCK_COUNTDOWN_PRESET_MS_UI_STATE_KEY,
   CLOCK_COUNTDOWN_REMAINING_MS_UI_STATE_KEY,
+  WEB_ACTIVE_SUBWINDOW_UI_STATE_KEY,
+  WEB_SUBWINDOW_PLACEMENT_UI_STATE_KEY,
+  WEB_PAGE_THUMBNAILS_VISIBLE_UI_STATE_KEY,
+  WEB_SETTINGS_VISIBLE_UI_STATE_KEY,
   PEN_COLOR_UI_STATE_KEY,
   PEN_SETTINGS_KV_KEY,
   PEN_THICKNESS_UI_STATE_KEY,
@@ -103,6 +108,10 @@ export {
   CLOCK_COUNTDOWN_END_MS_UI_STATE_KEY,
   CLOCK_COUNTDOWN_PRESET_MS_UI_STATE_KEY,
   CLOCK_COUNTDOWN_REMAINING_MS_UI_STATE_KEY,
+  WEB_ACTIVE_SUBWINDOW_UI_STATE_KEY,
+  WEB_SUBWINDOW_PLACEMENT_UI_STATE_KEY,
+  WEB_PAGE_THUMBNAILS_VISIBLE_UI_STATE_KEY,
+  WEB_SETTINGS_VISIBLE_UI_STATE_KEY,
   PEN_COLOR_UI_STATE_KEY,
   PEN_SETTINGS_KV_KEY,
   PEN_THICKNESS_UI_STATE_KEY,
@@ -209,6 +218,7 @@ function getFallbackLanstart() {
 }
 
 function requireLanstart() {
+  ensureWebLanstartAdapter()
   const api = window.lanstart
   return api ?? getFallbackLanstart()
 }
@@ -552,4 +562,5 @@ export function useAppMode() {
 
   return { appMode, setAppMode }
 }
+
 
