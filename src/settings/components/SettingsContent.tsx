@@ -57,7 +57,7 @@ interface SettingsContentProps {
   activeTab: SettingsTab
 }
 
-// 澶栬璁剧疆缁勪欢
+// 外观设置
 function AppearanceSettings() {
   const { appearance, setAppearance } = useAppAppearance()
   const {
@@ -73,16 +73,16 @@ function AppearanceSettings() {
 
   return (
     <div className="settingsContentSection">
-      <h2 className="settingsContentTitle">澶栬</h2>
-      <p className="settingsContentDescription">閫夋嫨鎮ㄥ枩娆㈢殑涓婚澶栬</p>
+      <h2 className="settingsContentTitle">外观</h2>
+      <p className="settingsContentDescription">选择您喜欢的主题外观</p>
 
-      {/* 涓婚妯″紡閫夋嫨 */}
+      {/* 主题模式 */}
       <div className="settingsAppearanceOptions">
         <Button
           kind="custom"
           appRegion="no-drag"
-          ariaLabel="娴呰壊涓婚"
-          title="娴呰壊涓婚"
+          ariaLabel="浅色主题"
+          title="浅色主题"
           className={`settingsAppearanceCard ${appearance === 'light' ? 'settingsAppearanceCard--active' : ''}`}
           onClick={() => setAppearance('light')}
         >
@@ -93,14 +93,14 @@ function AppearanceSettings() {
               <div className="settingsAppearancePreviewMain" />
             </div>
           </div>
-          <span className="settingsAppearanceLabel">娴呰壊</span>
+          <span className="settingsAppearanceLabel">浅色</span>
         </Button>
 
         <Button
           kind="custom"
           appRegion="no-drag"
-          ariaLabel="娣辫壊涓婚"
-          title="娣辫壊涓婚"
+          ariaLabel="深色主题"
+          title="深色主题"
           className={`settingsAppearanceCard ${appearance === 'dark' ? 'settingsAppearanceCard--active' : ''}`}
           onClick={() => setAppearance('dark')}
         >
@@ -111,34 +111,34 @@ function AppearanceSettings() {
               <div className="settingsAppearancePreviewMain" />
             </div>
           </div>
-          <span className="settingsAppearanceLabel">娣辫壊</span>
+          <span className="settingsAppearanceLabel">深色</span>
         </Button>
       </div>
 
       <div className="settingsSubSection">
         <h3 className="settingsSubTitle">浮动工具栏</h3>
-        <p className="settingsSubDescription">寮€鍚悗锛屾诞鍔ㄥ伐鍏锋爮鎸夐挳涓嬫柟鏄剧ず鏂囧瓧鎻愮ず</p>
+        <p className="settingsSubDescription">开启后，浮动工具栏按钮下方会显示文字提示</p>
         <Switch
           checked={toolbarButtonHintsEnabled}
           onChange={(e) => setToolbarButtonHintsEnabled(e.currentTarget.checked)}
-          label="鏄剧ず鎸夐挳鏂囧瓧鎻愮ず"
+          label="显示按钮文字提示"
           size="md"
         />
       </div>
 
-      {/* 寮鸿皟鑹茶缃?*/}
+      {/* 强调色设置 */}
       <div className="settingsSubSection">
         <h3 className="settingsSubTitle">
           强调色
           <span className="settingsSubTitleHint">（{appearance === 'dark' ? '深色' : '浅色'}模式独立设置）</span>
         </h3>
-        <p className="settingsSubDescription">閫夋嫨搴旂敤鐨勪富棰樺己璋冭壊</p>
+        <p className="settingsSubDescription">选择应用的主题强调色</p>
         <AccentColorPicker value={accentColor.value} onChange={setAccentColor} />
       </div>
 
-      {/* 杩囨浮鏁堟灉璁剧疆 */}
+      {/* 过渡效果设置 */}
       <div className="settingsSubSection">
-        <h3 className="settingsSubTitle">杩囨浮鏁堟灉</h3>
+        <h3 className="settingsSubTitle">过渡效果</h3>
         <p className="settingsSubDescription">调整界面动效和背景过渡效果</p>
         <TransitionSettings
           transitionPreset={transitionPreset.value}
@@ -151,7 +151,7 @@ function AppearanceSettings() {
   )
 }
 
-// 鍚勯€夐」鍗＄殑鍐呭鍗犱綅缁勪欢
+// 浮动工具栏设置
 function ToolbarSettings() {
   type PrimaryButtonId = ToolbarPrimaryButtonId
   type SecondaryButtonId = ToolbarSecondaryButtonId
@@ -501,9 +501,9 @@ function ToolbarSettings() {
     if (id === 'video-show') return '进入/退出视频展台模式'
     if (id === 'undo') return '撤销上一步操作'
     if (id === 'redo') return '重做上一步操作'
-    if (id === 'clock') return '鎵撳紑鏃堕挓绐楀彛'
-    if (id === 'events') return '鎵撳紑浜嬩欢鍒楄〃绐楀彛'
-    return '鎵撳紑鍔熻兘闈㈡澘'
+    if (id === 'clock') return '打开时钟窗口'
+    if (id === 'events') return '打开事件列表窗口'
+    return '打开功能面板'
   }
 
   const moveItem = <T,>(list: readonly T[], fromIndex: number, toIndex: number): T[] => {
@@ -767,7 +767,7 @@ function ToolbarSettings() {
       <p className="settingsContentDescription">配置浮动工具栏的外观和行为</p>
 
         <div className="settingsToolbarPreview">
-          <div className="settingsToolbarPreviewTitle">鎸夐挳椤哄簭棰勮</div>
+          <div className="settingsToolbarPreviewTitle">按钮顺序预览</div>
           <div className="settingsToolbarPreviewHint">点击按钮查看信息，并用下方按钮调整前后顺序</div>
 
         <div className="settingsToolbarPreviewToolbarShell">
@@ -801,8 +801,8 @@ function ToolbarSettings() {
                   size="sm"
                   variant="light"
                   className="settingsToolbarPreviewToggleButton"
-                  title="鎶樺彔/灞曞紑锛堥瑙堬級"
-                  ariaLabel="鎶樺彔/灞曞紑锛堥瑙堬級"
+                  title="折叠/展开（预览）"
+                  ariaLabel="折叠/展开（预览）"
                   appRegion="no-drag"
                 >
                   <ChevronLeftIcon />
@@ -828,9 +828,9 @@ function ToolbarSettings() {
 
         <div className="settingsToolbarSelectionPanel">
           <div className="settingsToolbarSelectionHeader">
-            <div className="settingsToolbarSelectionTitle">鎸夐挳淇℃伅</div>
+            <div className="settingsToolbarSelectionTitle">按钮信息</div>
             <div className="settingsToolbarSelectionMeta">
-              绗?{selectedIndex + 1} / {selectedCount} 涓?
+              第 {selectedIndex + 1} / {selectedCount} 项
             </div>
           </div>
 
@@ -843,8 +843,8 @@ function ToolbarSettings() {
             <Button
               size="sm"
               variant="light"
-              title="鍚戝墠璋冩暣"
-              ariaLabel="鍚戝墠璋冩暣"
+              title="向前调整"
+              ariaLabel="向前调整"
               appRegion="no-drag"
               disabled={!canMovePrev}
               onClick={() => moveSelected(-1)}
@@ -854,8 +854,8 @@ function ToolbarSettings() {
             <Button
               size="sm"
               variant="light"
-              title="鍚戝悗璋冩暣"
-              ariaLabel="鍚戝悗璋冩暣"
+              title="向后调整"
+              ariaLabel="向后调整"
               appRegion="no-drag"
               disabled={!canMoveNext}
               onClick={() => moveSelected(1)}
@@ -865,8 +865,8 @@ function ToolbarSettings() {
             <Button
               size="sm"
               variant="danger"
-              title="鍒犻櫎"
-              ariaLabel="鍒犻櫎"
+              title="删除"
+              ariaLabel="删除"
               appRegion="no-drag"
               disabled={!canDeleteSelected}
               onClick={deleteSelected}
@@ -878,7 +878,7 @@ function ToolbarSettings() {
 
         <div className="settingsToolbarAddPanel">
           <div className="settingsToolbarAddHeader">
-            <div className="settingsToolbarAddTitle">娣诲姞鎸夐挳</div>
+            <div className="settingsToolbarAddTitle">添加按钮</div>
             <div className="settingsToolbarAddMeta">点击右侧加号，选择添加到折叠或非折叠区域</div>
           </div>
 
@@ -928,8 +928,8 @@ function ToolbarSettings() {
                           size="sm"
                           variant="light"
                           className="settingsToolbarAddSubmenuItem"
-                          title="娣诲姞鍒伴潪鎶樺彔鍖哄煙"
-                          ariaLabel="娣诲姞鍒伴潪鎶樺彔鍖哄煙"
+                          title="添加到非折叠区域"
+                          ariaLabel="添加到非折叠区域"
                           appRegion="no-drag"
                           onClick={() => {
                             const placement =
@@ -940,7 +940,7 @@ function ToolbarSettings() {
                             setPendingAdd(null)
                           }}
                         >
-                          闈炴姌鍙犲尯鍩?
+                          非折叠区域
                         </Button>
                         <Button
                           size="sm"
@@ -955,7 +955,7 @@ function ToolbarSettings() {
                             setPendingAdd(null)
                           }}
                         >
-                          鎶樺彔鍖哄煙
+                          折叠区域
                         </Button>
                       </div>
                     ) : null}
@@ -1146,12 +1146,12 @@ function FeaturePanelSettings() {
 
   return (
     <div className="settingsContentSection">
-      <h2 className="settingsContentTitle">鍔熻兘闈㈡澘</h2>
-      <p className="settingsContentDescription">鍦ㄨ繖閲岄瑙堝姛鑳介潰鏉垮竷灞€锛堢偣鍑绘棤鏁堬紝鍙嫋鍔ㄨ皟鏁存寜閽綅缃級</p>
+      <h2 className="settingsContentTitle">功能面板</h2>
+      <p className="settingsContentDescription">在这里预览功能面板布局（点击无效，可拖动调整按钮位置）</p>
 
       <div className="settingsFeaturePanelPreview">
         <div className="settingsFeaturePanelTitle">
-          <span>鍔熻兘闈㈡澘</span>
+          <span>功能面板</span>
           <span className="settingsFeaturePanelMeta">{items.length}</span>
         </div>
 
@@ -1386,12 +1386,12 @@ function AnnotationSettings() {
 
   return (
     <div className="settingsContentSection">
-      <h2 className="settingsContentTitle">鎵规敞绯荤粺</h2>
+      <h2 className="settingsContentTitle">批注系统</h2>
       <p className="settingsContentDescription">配置批注工具和笔刷设置</p>
 
       <div className="settingsFormCard">
-        <div className="settingsFormTitle">涔﹀啓绯荤粺</div>
-        <div className="settingsFormDescription">鍒囨崲涓嶅悓涔﹀啓绯荤粺鐨勫惎鐢ㄤ笌璁剧疆锛堝崰浣嶏級</div>
+        <div className="settingsFormTitle">书写系统</div>
+        <div className="settingsFormDescription">切换不同书写系统的启用与设置（占位）</div>
         <Select
           value={writingSystem}
           data={[
@@ -1409,17 +1409,17 @@ function AnnotationSettings() {
       {writingSystem === 'leafer' ? (
         <div className="settingsFormCard">
           <div className="settingsFormTitle">Leafer.js</div>
-          <div className="settingsFormDescription">閰嶇疆 Leafer.js 涔﹀啓浣撻獙</div>
+          <div className="settingsFormDescription">配置 Leafer.js 书写体验</div>
           <div className="settingsFormGroup">
-            <div className="settingsFormTitle">绗旇抗娓叉煋寮曟搸</div>
+            <div className="settingsFormTitle">笔迹渲染引擎</div>
             <div className="settingsFormDescription">Canvas2D 默认低延迟；WebGPU 为实验特性</div>
             <Select
               value={leaferSettings.rendererEngine ?? 'canvas2d'}
               data={[
-                { value: 'canvas2d', label: 'Canvas2D锛堜綆寤惰繜锛岄粯璁わ級' },
-                { value: 'svg', label: 'SVG锛堢煝閲忥級' },
+                { value: 'canvas2d', label: 'Canvas2D（低延迟，默认）' },
+                { value: 'svg', label: 'SVG（矢量）' },
                 { value: 'webgl', label: 'WebGL' },
-                { value: 'webgpu', label: 'WebGPU锛堝疄楠屾€э級' }
+                { value: 'webgpu', label: 'WebGPU（实验性）' }
               ]}
               allowDeselect={false}
               onChange={(value) => {
@@ -1429,12 +1429,12 @@ function AnnotationSettings() {
             />
           </div>
           <div className="settingsFormGroup">
-            <div className="settingsFormTitle">绗旈攱</div>
-            <div className="settingsFormDescription">鍩轰簬鍒嗘鐑樺共妯℃嫙绗旈攱锛堥潤鎬佹ā寮忔殏鏈姞鍏ワ級</div>
+            <div className="settingsFormTitle">笔锋</div>
+            <div className="settingsFormDescription">基于分段烘干模拟笔锋（静态模式暂未加入）</div>
             <Select
               value={leaferSettings.nibMode ?? 'off'}
               data={[
-                { value: 'off', label: '鍏抽棴' },
+                { value: 'off', label: '关闭' },
                 { value: 'dynamic', label: '动态笔锋' },
                 { value: 'static', label: '静态笔锋（暂未加入）' }
               ]}
@@ -1445,7 +1445,7 @@ function AnnotationSettings() {
               }}
             />
             <div className="settingsNibPreview">
-              <div className="settingsNibPreviewTitle">鏁堟灉棰勮</div>
+              <div className="settingsNibPreviewTitle">效果预览</div>
               <canvas ref={nibPreviewRef} className="settingsNibPreviewCanvas" />
             </div>
           </div>
@@ -1453,13 +1453,13 @@ function AnnotationSettings() {
             <Switch
               checked={leaferSettings.multiTouch}
               onChange={(e) => persistLeaferSettings({ ...leaferSettings, multiTouch: e.currentTarget.checked })}
-              label="澶氭寚涔﹀啓"
+              label="多指书写"
               size="md"
             />
             <Switch
               checked={leaferSettings.inkSmoothing}
               onChange={(e) => persistLeaferSettings({ ...leaferSettings, inkSmoothing: e.currentTarget.checked })}
-              label="澧ㄨ抗骞虫粦"
+              label="墨迹平滑"
               size="md"
             />
             <Switch
@@ -1483,7 +1483,7 @@ function AnnotationSettings() {
                 const checked = e.currentTarget.checked
                 persistLeaferSettings({ ...leaferSettings, postBakeOptimizeOnce: checked, postBakeOptimize: checked ? false : leaferSettings.postBakeOptimize })
               }}
-              label="绗旇抗鍗曟鐑樺共"
+              label="笔迹单次烘干"
               size="md"
             />
             <Switch
@@ -1491,13 +1491,13 @@ function AnnotationSettings() {
               onChange={(e) =>
                 persistLeaferSettings({ ...leaferSettings, showInkWhenPassthrough: e.currentTarget.checked })
               }
-              label="鎿嶄綔绌块€忔椂鏄剧ず绗旇抗"
+              label="操作穿透时显示笔迹"
               size="md"
             />
             <Switch
               checked={leaferSettings.freezeScreen}
               onChange={(e) => persistLeaferSettings({ ...leaferSettings, freezeScreen: e.currentTarget.checked })}
-              label="灞忓箷鍐呭鍐荤粨鎵规敞"
+              label="屏幕内容冻结批注"
               size="md"
             />
           </div>
@@ -1510,7 +1510,7 @@ function AnnotationSettings() {
               <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z" />
             </svg>
           </div>
-          <p className="settingsContentPlaceholderText">{writingSystemLabel} 鐨勫惎鐢ㄤ笌璁剧疆鍗冲皢鎺ㄥ嚭</p>
+          <p className="settingsContentPlaceholderText">{writingSystemLabel} 的启用与设置即将推出</p>
         </div>
       )}
     </div>
@@ -1521,7 +1521,7 @@ function LanStartBarSettings() {
   return (
     <div className="settingsContentSection">
       <h2 className="settingsContentTitle">LanStartBar</h2>
-      <p className="settingsContentDescription">閰嶇疆 LanStartBar 鐨勬樉绀哄拰琛屼负</p>
+      <p className="settingsContentDescription">配置 LanStartBar 的显示和行为</p>
       
       <div className="settingsContentPlaceholder">
         <div className="settingsContentPlaceholderIcon">
@@ -1533,7 +1533,7 @@ function LanStartBarSettings() {
             <line x1="18" y1="10" x2="18" y2="14" />
           </svg>
         </div>
-        <p className="settingsContentPlaceholderText">LanStartBar 璁剧疆鍗冲皢鎺ㄥ嚭</p>
+        <p className="settingsContentPlaceholderText">LanStartBar 设置即将推出</p>
       </div>
     </div>
   )
@@ -1541,12 +1541,12 @@ function LanStartBarSettings() {
 
 function WhiteboardSettings() {
   const presets = [
-    { label: '閰哥豢', value: '#95C459' },
-    { label: '娴呯伆', value: '#333333' },
-    { label: '娣辩伆', value: '#2E2F33' },
-    { label: '甯岀豢', value: '#0F261E' },
+    { label: '浅绿', value: '#95C459' },
+    { label: '浅灰', value: '#333333' },
+    { label: '深灰', value: '#2E2F33' },
+    { label: '墨绿', value: '#0F261E' },
     { label: '深绿', value: '#172A25' },
-    { label: '楦跨櫧', value: '#FFFFFF' },
+    { label: '纯白', value: '#FFFFFF' },
   ] as const
 
   const bus = useUiStateBus(UI_STATE_APP_WINDOW_ID)
@@ -1573,14 +1573,14 @@ function WhiteboardSettings() {
       bus.setKey(WHITEBOARD_BG_IMAGE_URL_UI_STATE_KEY, dataUrl).catch(() => undefined)
       postCommand('settings.setWhiteboardBackground', { bgImageUrl: dataUrl }).catch(() => undefined)
     } catch (e) {
-      window.alert(`瀵煎叆鑳屾櫙鍥惧け璐ワ細${e instanceof Error ? e.message : String(e)}`)
+      window.alert(`导入背景图片失败：${e instanceof Error ? e.message : String(e)}`)
     }
   }
 
   return (
     <div className="settingsContentSection">
-      <h2 className="settingsContentTitle">鐧芥澘</h2>
-      <p className="settingsContentDescription">閫夋嫨鐧芥澘鑳屾櫙棰滆壊</p>
+      <h2 className="settingsContentTitle">白板</h2>
+      <p className="settingsContentDescription">选择白板背景颜色</p>
 
       <div className="settingsWhiteboardColorGrid">
         {presets.map((preset) => (
@@ -1607,8 +1607,8 @@ function WhiteboardSettings() {
       <div className="settingsSubSection">
         <h3 className="settingsSubTitle">背景图片</h3>
         <p className="settingsSubDescription">选择一张图片作为白板背景</p>
-        <Button kind="text" size="md" appRegion="no-drag" ariaLabel="娣诲姞鍥剧墖鑳屾櫙" onClick={onPickBgImage}>
-          娣诲姞鍥剧墖鑳屾櫙
+        <Button kind="text" size="md" appRegion="no-drag" ariaLabel="添加图片背景" onClick={onPickBgImage}>
+          添加图片背景
         </Button>
         {bgImageUrl ? (
           <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -1660,13 +1660,13 @@ function WhiteboardSettings() {
                 kind="text"
                 size="md"
                 appRegion="no-drag"
-                ariaLabel="鍒犻櫎鑳屾櫙鍥剧墖"
+                ariaLabel="删除背景图片"
                 onClick={() => {
                   bus.setKey(WHITEBOARD_BG_IMAGE_URL_UI_STATE_KEY, '').catch(() => undefined)
                   postCommand('settings.setWhiteboardBackground', { bgImageUrl: '' }).catch(() => undefined)
                 }}
               >
-                鍒犻櫎鑳屾櫙鍥剧墖
+                删除背景图片
               </Button>
             </div>
           </div>
@@ -1679,7 +1679,7 @@ function WhiteboardSettings() {
 function AboutSettings() {
   return (
     <div className="settingsContentSection">
-      <h2 className="settingsContentTitle">鍏充簬</h2>
+      <h2 className="settingsContentTitle">关于</h2>
       <p className="settingsContentDescription">应用信息和版本详情</p>
       
       <div className="settingsAboutCard">
@@ -1688,23 +1688,23 @@ function AboutSettings() {
         </div>
         <h3 className="settingsAboutAppName">LanStartWrite</h3>
         <p className="settingsAboutVersion">
-          鐗堟湰 {__APP_VERSION__} 路 浠ｅ彿 {__APP_CODENAME__}
+          版本 {__APP_VERSION__} · 代号 {__APP_CODENAME__}
         </p>
         <p className="settingsAboutDescription">
-          涓€娆剧幇浠ｅ寲鐨勫睆骞曟壒娉ㄥ拰婕旂ず宸ュ叿锛?
+          一款现代化的屏幕批注和演示工具，
           <br />
-          甯姪鎮ㄦ洿楂樻晥鍦拌繘琛屽睆骞曟爣娉ㄥ拰婕旂ず銆?
+          帮助您更高效地进行屏幕标注和演示。
         </p>
         
         <div className="settingsAboutLinks">
-          <a href="#" className="settingsAboutLink">瀹樻柟缃戠珯</a>
+          <a href="#" className="settingsAboutLink">官方网站</a>
           <a href="#" className="settingsAboutLink">GitHub</a>
-          <a href="#" className="settingsAboutLink">鍙嶉闂</a>
+          <a href="#" className="settingsAboutLink">反馈问题</a>
         </div>
       </div>
       
       <div className="settingsAboutCredits">
-        <h4 className="settingsAboutCreditsTitle">鎶€鏈爤</h4>
+        <h4 className="settingsAboutCreditsTitle">技术栈</h4>
         <div className="settingsAboutCreditsList">
           <span className="settingsAboutCredit">Electron</span>
           <span className="settingsAboutCredit">React</span>
@@ -1744,16 +1744,16 @@ function VideoShowSettings() {
 
   return (
     <div className="settingsContentSection">
-      <h2 className="settingsContentTitle">瑙嗛灞曞彴</h2>
+      <h2 className="settingsContentTitle">视频展台</h2>
       <p className="settingsContentDescription">配置视频展台模式下的画面与批注设置</p>
 
       <div className="settingsFormCard">
-        <div className="settingsFormTitle">鍥惧儚涓庢壒娉ㄥ眰</div>
+        <div className="settingsFormTitle">图像与批注层</div>
         <div className="settingsFormDescription">仅在进入视频展台模式后生效</div>
         <Switch
           checked={mergeLayers}
           onChange={(e) => persistMergeLayers(e.currentTarget.checked)}
-          label="鍚堝苟鍥惧儚涓庢壒娉ㄥ眰"
+          label="合并图像与批注层"
           size="md"
           disabled={disabled}
         />

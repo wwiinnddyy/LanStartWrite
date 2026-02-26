@@ -269,9 +269,7 @@ export function NotificationSubwindow(props: { kind: 'notice' }) {
         ? 'annotation-notes-whiteboard'
         : appModeRaw === 'video-show'
           ? 'annotation-notes-video-show'
-          : appModeRaw === 'pdf'
-            ? 'annotation-notes-pdf'
-            : 'annotation-notes-toolbar'
+          : 'annotation-notes-toolbar'
     const notesHistoryKvKey = `${notesKvKey}-prev`
     try {
       const prev = await getKv<unknown>(notesHistoryKvKey)

@@ -214,9 +214,6 @@ export function MultiPageControlHandleWindow() {
         icon: <CaptureIcon />
       }
     }
-    if (appMode === 'pdf') {
-      return { visible: false as const }
-    }
     return {
       visible: true as const,
       ariaLabel: '新建页面',

@@ -1,11 +1,9 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+﻿import React, { useEffect, useMemo, useRef, useState } from 'react'
 import * as QRCode from 'qrcode'
 import {
   APP_MODE_UI_STATE_KEY,
   NOTES_PAGE_INDEX_UI_STATE_KEY,
   NOTES_PAGE_TOTAL_UI_STATE_KEY,
-  PDF_FILE_URL_KV_KEY,
-  PDF_FILE_URL_UI_STATE_KEY,
   UI_STATE_APP_WINDOW_ID,
   WHITEBOARD_BG_COLOR_KV_KEY,
   WHITEBOARD_BG_IMAGE_URL_KV_KEY,
@@ -27,7 +25,6 @@ import {
   useUiStateBus
 } from '../status'
 import { Button } from '../button'
-import { loadPdfjs } from '../PDF/pdfjs'
 import { useZoomOnWheel } from '../toolbar/hooks/useZoomOnWheel'
 import { useEventsPoll } from '../toolbar/hooks/useEventsPoll'
 import '../toolbar-subwindows/styles/subwindow.css'
@@ -42,14 +39,6 @@ type PersistedAnnotationNodeV1 = {
 
 type PersistedAnnotationDocV1 = { version: 1; nodes: PersistedAnnotationNodeV1[] }
 
-function normalizePdfFileRef(v: unknown): string {
-  if (typeof v !== 'string') return ''
-  if (!v) return ''
-  if (v.startsWith('file:')) return v
-  if (/^[a-zA-Z]:[\\/]/.test(v) || v.startsWith('\\\\')) return v
-  return ''
-}
-
 type PersistedAnnotationBookV2 = { version: 2; currentPage: number; pages: PersistedAnnotationDocV1[] }
 
 type WhiteboardCanvasPageV1 = { bgColor?: string; bgImageUrl?: string; bgImageOpacity?: number }
@@ -57,13 +46,6 @@ type WhiteboardCanvasBookV1 = { version: 1; pages: WhiteboardCanvasPageV1[] }
 
 type VideoShowPageV1 = { name?: string; imageUrl?: string; createdAt?: number }
 type VideoShowPageBookV1 = { version: 1; pages: VideoShowPageV1[] }
-
-function base64ToU8(base64: string): Uint8Array {
-  const raw = globalThis.atob(base64)
-  const out = new Uint8Array(raw.length)
-  for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i) & 0xff
-  return out
-}
 
 function isPersistedAnnotationDocV1(v: unknown): v is PersistedAnnotationDocV1 {
   if (!v || typeof v !== 'object') return false
@@ -237,104 +219,6 @@ function drawDocStrokesToCanvas(args: {
   ctx.globalAlpha = 1
 }
 
-function PdfThumbnailItem(props: {
-  index: number
-  selected: boolean
-  doc: PersistedAnnotationDocV1 | null
-  pdfDoc: any | null
-  onPick: () => void
-}) {
-  const { index, selected, doc, pdfDoc, onPick } = props
-  const canvasRef = useRef<HTMLCanvasElement | null>(null)
-
-  useEffect(() => {
-    const canvas = canvasRef.current
-    if (!canvas) return
-    let cancelled = false
-    let renderTask: any = null
-
-    void (async () => {
-      const prepared = prepareCanvas({ canvas, cssWidth: 160, cssHeight: 100 })
-      const ctx = prepared.ctx
-      if (!ctx) return
-
-      ctx.setTransform(1, 0, 0, 1, 0, 0)
-      ctx.globalAlpha = 1
-      ctx.clearRect(0, 0, prepared.w, prepared.h)
-      ctx.fillStyle = '#ffffff'
-      ctx.fillRect(0, 0, prepared.w, prepared.h)
-
-      if (pdfDoc) {
-        try {
-          const page = await pdfDoc.getPage(index + 1)
-          if (cancelled) return
-          const baseViewport = page.getViewport({ scale: 1 })
-          const fitScale = Math.min(prepared.w / baseViewport.width, prepared.h / baseViewport.height)
-          const viewport = page.getViewport({ scale: fitScale })
-          const dx = (prepared.w - viewport.width) * 0.5
-          const dy = (prepared.h - viewport.height) * 0.5
-          renderTask = page.render({
-            canvasContext: ctx,
-            viewport,
-            transform: [1, 0, 0, 1, dx, dy]
-          })
-          await renderTask.promise
-          if (cancelled) return
-        } catch {}
-      }
-
-      if (doc) drawDocStrokesToCanvas({ doc, ctx, w: prepared.w, h: prepared.h, dpr: prepared.dpr })
-    })()
-
-    return () => {
-      cancelled = true
-      if (renderTask) {
-        try {
-          renderTask.cancel?.()
-        } catch {}
-      }
-    }
-  }, [doc, index, pdfDoc])
-
-  return (
-    <Button
-      size="sm"
-      kind="custom"
-      ariaLabel={`第${index + 1}页`}
-      title={`第${index + 1}页`}
-      onClick={onPick}
-      style={{
-        width: '100%',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'stretch',
-        gap: 8,
-        padding: 10,
-        borderRadius: 12,
-        border: selected ? '1px solid var(--ls-surface-border)' : undefined,
-        background: selected ? 'rgba(255,255,255,0.12)' : undefined
-      }}
-    >
-      <div
-        style={{
-          width: '100%',
-          aspectRatio: '16 / 10',
-          borderRadius: 10,
-          overflow: 'hidden',
-          border: '1px solid rgba(0,0,0,0.12)',
-          background: 'rgba(255,255,255,0.04)'
-        }}
-      >
-        <canvas ref={canvasRef} style={{ width: '100%', height: '100%', display: 'block' }} />
-      </div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10 }}>
-        <div style={{ fontSize: 12, fontWeight: 650 }}>第 {index + 1} 页</div>
-        {selected ? <div style={{ fontSize: 11, opacity: 0.8 }}>当前</div> : null}
-      </div>
-    </Button>
-  )
-}
-
 function PageThumbnailItem(props: {
   index: number
   selected: boolean
@@ -393,8 +277,8 @@ function PageThumbnailItem(props: {
         <canvas ref={canvasRef} style={{ width: '100%', height: '100%', display: 'block' }} />
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10 }}>
-        <div style={{ fontSize: 12, fontWeight: 650 }}>第 {index + 1} 页</div>
-        {selected ? <div style={{ fontSize: 11, opacity: 0.8 }}>当前</div> : null}
+        <div style={{ fontSize: 12, fontWeight: 650 }}>{`第${index + 1}页`}</div>
+        {selected ? <div style={{ fontSize: 11, opacity: 0.8 }}>褰撳墠</div> : null}
       </div>
     </Button>
   )
@@ -409,12 +293,13 @@ function VideoShowThumbnailItem(props: {
 }) {
   const { pageIndex, selected, name, imageUrl, onPick } = props
   const pageLabel = name ? name : pageIndex <= 0 ? 'Live' : `第${pageIndex}页`
+  const pageA11yLabel = name ? (pageIndex > 0 ? `${name} (第${pageIndex}页)` : name) : pageIndex > 0 ? `第${pageIndex}页` : 'Live'
   return (
     <Button
       size="sm"
       kind="custom"
-      ariaLabel={name ? (pageIndex > 0 ? `${name}（第${pageIndex}页）` : name) : pageIndex > 0 ? `第${pageIndex}页` : 'Live'}
-      title={name ? (pageIndex > 0 ? `${name}（第${pageIndex}页）` : name) : pageIndex > 0 ? `第${pageIndex}页` : 'Live'}
+      ariaLabel={pageA11yLabel}
+      title={pageA11yLabel}
       onClick={onPick}
       style={{
         width: '100%',
@@ -449,7 +334,7 @@ function VideoShowThumbnailItem(props: {
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10 }}>
         <div style={{ fontSize: 12, fontWeight: 650 }}>{pageLabel}</div>
-        {selected ? <div style={{ fontSize: 11, opacity: 0.8 }}>当前</div> : null}
+        {selected ? <div style={{ fontSize: 11, opacity: 0.8 }}>褰撳墠</div> : null}
       </div>
     </Button>
   )
@@ -596,7 +481,7 @@ export function PageThumbnailsMenuWindow() {
           .filter((d) => d.kind === 'videoinput')
           .map((d, i) => ({
             deviceId: d.deviceId,
-            label: d.label || `摄像头 ${i + 1}`
+            label: d.label || `鎽勫儚澶?${i + 1}`
           }))
         setVideoDevices(cams)
       } catch {
@@ -630,23 +515,12 @@ export function PageThumbnailsMenuWindow() {
       ? 'annotation-notes-whiteboard'
       : appMode === 'video-show'
         ? 'annotation-notes-video-show'
-        : appMode === 'pdf'
-          ? 'annotation-notes-pdf'
-          : 'annotation-notes-toolbar'
+        : 'annotation-notes-toolbar'
 
   const [pages, setPages] = useState<PersistedAnnotationDocV1[]>([])
   const [canvasPages, setCanvasPages] = useState<WhiteboardCanvasPageV1[]>([])
   const [videoPages, setVideoPages] = useState<VideoShowPageV1[]>([])
   const [defaultBg, setDefaultBg] = useState<{ color: string; imageUrl: string; imageOpacity: number }>({ color: '#ffffff', imageUrl: '', imageOpacity: 0.5 })
-  const [persistedPdfFileUrl, setPersistedPdfFileUrl] = useState<string>('')
-  const pdfUiFileUrlRaw = bus.state[PDF_FILE_URL_UI_STATE_KEY]
-  const pdfUiFileUrl = normalizePdfFileRef(pdfUiFileUrlRaw)
-  const pdfFileUrl = pdfUiFileUrl || persistedPdfFileUrl
-  const [pdfDoc, setPdfDoc] = useState<any | null>(null)
-  const [pdfError, setPdfError] = useState('')
-  const pdfDocRef = useRef<any | null>(null)
-  const pdfLoadTaskRef = useRef<any | null>(null)
-  const pdfTokenRef = useRef<string | null>(null)
   const lastReloadAtRef = useRef(0)
 
   const reload = async () => {
@@ -696,19 +570,11 @@ export function PageThumbnailsMenuWindow() {
       setDefaultBg({ color: '#ffffff', imageUrl: '', imageOpacity: 0.5 })
     }
 
-    if (appMode === 'pdf' && !pdfUiFileUrl) {
-      try {
-        const loaded = await getKv<unknown>(PDF_FILE_URL_KV_KEY)
-        setPersistedPdfFileUrl(normalizePdfFileRef(loaded))
-      } catch {
-        setPersistedPdfFileUrl('')
-      }
-    }
   }
 
   useEffect(() => {
     void reload()
-  }, [notesKvKey, total, appMode, pdfUiFileUrl])
+  }, [notesKvKey, total])
 
   useEffect(() => {
     const latest = events[events.length - 1]
@@ -720,7 +586,6 @@ export function PageThumbnailsMenuWindow() {
       (key !== notesKvKey &&
         key !== WHITEBOARD_CANVAS_PAGES_KV_KEY &&
         key !== VIDEO_SHOW_PAGES_KV_KEY &&
-        key !== PDF_FILE_URL_KV_KEY &&
         key !== WHITEBOARD_BG_COLOR_KV_KEY &&
         key !== WHITEBOARD_BG_IMAGE_URL_KV_KEY &&
         key !== WHITEBOARD_BG_IMAGE_OPACITY_KV_KEY)
@@ -728,101 +593,6 @@ export function PageThumbnailsMenuWindow() {
       return
     void reload()
   }, [events, notesKvKey])
-
-  useEffect(() => {
-    let cancelled = false
-    const last = pdfDocRef.current
-    pdfDocRef.current = null
-    setPdfDoc(null)
-    if (pdfLoadTaskRef.current) {
-      try {
-        pdfLoadTaskRef.current.destroy?.()
-      } catch {}
-      pdfLoadTaskRef.current = null
-    }
-    if (last) {
-      try {
-        last.destroy?.()
-      } catch {}
-    }
-    const lastToken = pdfTokenRef.current
-    pdfTokenRef.current = null
-    if (lastToken) {
-      window.lanstart?.apiRequest({ method: 'POST', path: '/pdf/close', body: { token: lastToken } }).catch(() => undefined)
-    }
-    if (appMode !== 'pdf') return
-    if (!pdfFileUrl) return
-
-    void (async () => {
-      let token: string | null = null
-      try {
-        setPdfError('')
-        const pdfjs = await loadPdfjs()
-        const openRes = await window.lanstart?.apiRequest({ method: 'POST', path: '/pdf/open', body: { fileUrl: pdfFileUrl } })
-        const openBody = (openRes as any)?.body as any
-        if ((openRes as any)?.status !== 200 || openBody?.ok !== true) throw new Error(String(openBody?.error ?? 'PDF_OPEN_FAILED'))
-        token = typeof openBody?.token === 'string' ? openBody.token : ''
-        const size = Number(openBody?.size ?? 0)
-        if (!token || !Number.isFinite(size) || size <= 0) throw new Error('PDF_OPEN_FAILED')
-        pdfTokenRef.current = token
-
-        const data = new Uint8Array(size)
-        const chunkLen = 512 * 1024
-        let offset = 0
-        while (offset < size) {
-          if (cancelled) return
-          const url = `/pdf/chunk/${encodeURIComponent(token)}?offset=${offset}&length=${chunkLen}`
-          const res = await window.lanstart?.apiRequest({ method: 'GET', path: url })
-          const body = (res as any)?.body as any
-          if ((res as any)?.status !== 200 || body?.ok !== true) throw new Error(String(body?.error ?? 'PDF_CHUNK_FAILED'))
-          const base64 = typeof body?.base64 === 'string' ? body.base64 : ''
-          const bytesRead = Number(body?.length ?? 0)
-          if (!base64 || !Number.isFinite(bytesRead) || bytesRead <= 0) throw new Error('PDF_CHUNK_FAILED')
-          const chunk = base64ToU8(base64)
-          data.set(chunk, offset)
-          offset += bytesRead
-        }
-
-        const task = (pdfjs as any).getDocument({ data, length: size })
-        pdfLoadTaskRef.current = task
-        const doc = await task.promise
-        if (cancelled) {
-          try {
-            doc.destroy?.()
-          } catch {}
-          return
-        }
-        pdfDocRef.current = doc
-        setPdfDoc(doc)
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e)
-        setPdfError(msg || 'PDF_OPEN_FAILED')
-      } finally {
-        if (token) {
-          window.lanstart?.apiRequest({ method: 'POST', path: '/pdf/close', body: { token } }).catch(() => undefined)
-          if (pdfTokenRef.current === token) pdfTokenRef.current = null
-        }
-        pdfLoadTaskRef.current = null
-      }
-    })()
-
-    return () => {
-      cancelled = true
-      const d = pdfDocRef.current
-      pdfDocRef.current = null
-      if (d) {
-        try {
-          d.destroy?.()
-        } catch {}
-      }
-      if (pdfLoadTaskRef.current) {
-        try {
-          pdfLoadTaskRef.current.destroy?.()
-        } catch {}
-        pdfLoadTaskRef.current = null
-      }
-    }
-  }, [appMode, pdfFileUrl])
 
   const effectivePages = useMemo(() => {
     const src = pages.length ? pages : new Array(total).fill(null).map(() => ({ version: 1 as const, nodes: [] }))
@@ -880,7 +650,7 @@ export function PageThumbnailsMenuWindow() {
                 }}
               >
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0, flex: 1 }}>
-                  <div style={{ fontSize: 11, opacity: 0.9 }}>视频源</div>
+                  <div style={{ fontSize: 11, opacity: 0.9 }}>Video Source</div>
                   <select
                     value={videoSource === 'phone-webrtc' ? '__phone_webrtc__' : typeof videoDeviceIdRaw === 'string' ? videoDeviceIdRaw : ''}
                     onChange={(e) => {
@@ -905,7 +675,7 @@ export function PageThumbnailsMenuWindow() {
                       maxWidth: '100%'
                     }}
                   >
-                    <option value="__phone_webrtc__">手机摄像头（扫码添加）</option>
+                    <option value="__phone_webrtc__">Phone Camera (QR Connect)</option>
                     {videoDevices.length
                       ? videoDevices.map((d) => (
                           <option key={d.deviceId} value={d.deviceId}>
@@ -917,7 +687,7 @@ export function PageThumbnailsMenuWindow() {
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0, flex: '0 0 160px' }}>
-                  <div style={{ fontSize: 11, opacity: 0.9 }}>清晰度</div>
+                  <div style={{ fontSize: 11, opacity: 0.9 }}>Quality</div>
                   <select
                     value={String(videoQualityIdx)}
                     onChange={(e) => {
@@ -935,9 +705,9 @@ export function PageThumbnailsMenuWindow() {
                       maxWidth: '100%'
                     }}
                   >
-                    <option value="0">最高（{videoQualityPresets.heights[0]}p）</option>
-                    <option value="1">中等（{videoQualityPresets.heights[1]}p）</option>
-                    <option value="2">流畅（{videoQualityPresets.heights[2]}p）</option>
+                    <option value="0">{`High (${videoQualityPresets.heights[0]}p)`}</option>
+                    <option value="1">{`Medium (${videoQualityPresets.heights[1]}p)`}</option>
+                    <option value="2">{`Low (${videoQualityPresets.heights[2]}p)`}</option>
                   </select>
                 </div>
               </div>
@@ -947,16 +717,11 @@ export function PageThumbnailsMenuWindow() {
           <div className="subwindowRoot" style={{ width: '100%', flex: 1, minHeight: 0, boxShadow: 'none' }}>
           <div style={{ position: 'relative', zIndex: 1, width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: 12 }}>
-              <div style={{ fontSize: 13, fontWeight: 650 }}>页面缩略图查看菜单</div>
-              <Button size="sm" kind="text" ariaLabel="关闭" title="关闭" onClick={() => postCommand('app.togglePageThumbnailsMenu').catch(() => undefined)}>
-                关闭
+              <div style={{ fontSize: 13, fontWeight: 650 }}>Page Thumbnails</div>
+              <Button size="sm" kind="text" ariaLabel="鍏抽棴" title="鍏抽棴" onClick={() => postCommand('app.togglePageThumbnailsMenu').catch(() => undefined)}>
+                鍏抽棴
               </Button>
             </div>
-            {appMode === 'pdf' && pdfError ? (
-              <div style={{ padding: '0 12px 10px 12px', color: 'rgba(255,255,255,0.86)', fontSize: 12, lineHeight: 1.4 }}>
-                PDF 打开失败：{pdfError}
-              </div>
-            ) : null}
 
             <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: 12, paddingTop: 0 }}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 10 }}>
@@ -994,24 +759,7 @@ export function PageThumbnailsMenuWindow() {
                         )
                       })
                     ]
-                  : appMode === 'pdf'
-                    ? windowedPages.map((doc, j) => {
-                        const i = pageWindow.start + j
-                        return (
-                          <PdfThumbnailItem
-                            key={i}
-                            index={i}
-                            selected={i === index}
-                            doc={doc ?? null}
-                            pdfDoc={pdfDoc}
-                            onPick={() => {
-                              postCommand('app.setPageIndex', { index: i }).catch(() => undefined)
-                              postCommand('app.togglePageThumbnailsMenu').catch(() => undefined)
-                            }}
-                          />
-                        )
-                      })
-                    : windowedPages.map((doc, j) => {
+                  : windowedPages.map((doc, j) => {
                         const i = pageWindow.start + j
                         return (
                           <PageThumbnailItem
@@ -1058,20 +806,20 @@ export function PageThumbnailsMenuWindow() {
                     height: 34
                   }}
                 >
-                  <div style={{ fontSize: 16, fontWeight: 700, opacity: 0.95 }}>扫码连接手机摄像头</div>
+                  <div style={{ fontSize: 16, fontWeight: 700, opacity: 0.95 }}>Connect Phone Camera</div>
                 </div>
 
                 {phoneConnectCollapsed ? (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 4 }}>
                     <div style={{ fontSize: 11, opacity: 0.76, wordBreak: 'break-all' }}>
-                      会话：{webrtcSessionId || '-'} {webrtcStatus ? `（${webrtcStatus}）` : ''}
+                      {`会话: ${webrtcSessionId || '-'}${webrtcStatus ? ` (${webrtcStatus})` : ''}`}
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'center' }}>
                       <Button
                         size="sm"
                         kind="text"
-                        ariaLabel="复制链接"
-                        title="复制链接"
+                        ariaLabel="澶嶅埗閾炬帴"
+                        title="澶嶅埗閾炬帴"
                         appRegion="no-drag"
                         onClick={() => {
                           if (!phoneCastUrl) return
@@ -1079,15 +827,15 @@ export function PageThumbnailsMenuWindow() {
                           navigator.clipboard?.writeText?.(phoneCastUrl).catch(() => undefined)
                         }}
                       >
-                        复制链接
+                        澶嶅埗閾炬帴
                       </Button>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'center' }}>
                       <Button
                         size="sm"
                         kind="custom"
-                        ariaLabel="展开连接信息"
-                        title="展开"
+                        ariaLabel="灞曞紑杩炴帴淇℃伅"
+                        title="灞曞紑"
                         appRegion="no-drag"
                         onClick={() => setPhoneConnectCollapsed(false)}
                         style={{
@@ -1103,7 +851,7 @@ export function PageThumbnailsMenuWindow() {
                           justifyContent: 'center'
                         }}
                       >
-                        <span style={{ fontSize: 14, lineHeight: 1, fontWeight: 900 }}>▾</span>
+                        <span style={{ fontSize: 14, lineHeight: 1, fontWeight: 900 }}>▼</span>
                       </Button>
                     </div>
                   </div>
@@ -1138,7 +886,7 @@ export function PageThumbnailsMenuWindow() {
                               opacity: 0.8
                             }}
                           >
-                            正在生成二维码…
+                            姝ｅ湪鐢熸垚浜岀淮鐮佲€?
                           </div>
                         )}
                       </div>
@@ -1147,8 +895,8 @@ export function PageThumbnailsMenuWindow() {
                         <Button
                           size="sm"
                           kind="custom"
-                          ariaLabel="折叠连接信息"
-                          title="折叠"
+                          ariaLabel="鎶樺彔杩炴帴淇℃伅"
+                          title="鎶樺彔"
                           appRegion="no-drag"
                           onClick={() => setPhoneConnectCollapsed(true)}
                           style={{
@@ -1164,25 +912,25 @@ export function PageThumbnailsMenuWindow() {
                             justifyContent: 'center'
                           }}
                         >
-                          <span style={{ fontSize: 14, lineHeight: 1, fontWeight: 900 }}>▴</span>
+                          <span style={{ fontSize: 14, lineHeight: 1, fontWeight: 900 }}>▲</span>
                         </Button>
                       </div>
                     </div>
 
                     <div style={{ fontSize: 11, opacity: 0.76, textAlign: 'center', wordBreak: 'break-all' }}>
-                      会话：{webrtcSessionId || '-'} {webrtcStatus ? `（${webrtcStatus}）` : ''}
+                      {`会话: ${webrtcSessionId || '-'}${webrtcStatus ? ` (${webrtcStatus})` : ''}`}
                     </div>
 
                     <div style={{ fontSize: 11, opacity: 0.86, wordBreak: 'break-all', textAlign: 'center' }}>
-                      {phoneCastUrl || '正在生成投屏链接…'}
+                      {phoneCastUrl || '正在生成投屏链接...'}
                     </div>
 
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 4 }}>
                       <Button
                         size="sm"
                         kind="custom"
-                        ariaLabel="复制链接"
-                        title="复制链接"
+                        ariaLabel="澶嶅埗閾炬帴"
+                        title="澶嶅埗閾炬帴"
                         appRegion="no-drag"
                         onClick={() => {
                           if (!phoneCastUrl) return
@@ -1205,14 +953,14 @@ export function PageThumbnailsMenuWindow() {
                           fontWeight: 600
                         }}
                       >
-                        复制链接
+                        澶嶅埗閾炬帴
                       </Button>
 
                       <Button
                         size="sm"
                         kind="custom"
-                        ariaLabel="重新生成"
-                        title="重新生成"
+                        ariaLabel="閲嶆柊鐢熸垚"
+                        title="閲嶆柊鐢熸垚"
                         appRegion="no-drag"
                         onClick={() => {
                           bus.deleteKey(VIDEO_SHOW_WEBRTC_SESSION_ID_UI_STATE_KEY).catch(() => undefined)
@@ -1235,7 +983,7 @@ export function PageThumbnailsMenuWindow() {
                           fontWeight: 500
                         }}
                       >
-                        重新生成
+                        閲嶆柊鐢熸垚
                       </Button>
                     </div>
                   </>
@@ -1247,3 +995,4 @@ export function PageThumbnailsMenuWindow() {
     </div>
   )
 }
+

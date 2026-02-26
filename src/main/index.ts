@@ -1,4 +1,4 @@
-﻿import { BrowserWindow, Menu, Tray, app, dialog, ipcMain, nativeImage, nativeTheme, screen, session, type OpenDialogOptions } from 'electron'
+import { BrowserWindow, app, dialog, ipcMain, nativeImage, nativeTheme, screen, session, type OpenDialogOptions } from 'electron'
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
@@ -63,7 +63,7 @@ function resolveAppIconPath(): string | undefined {
 }
 
 const APP_ICON_PATH = resolveAppIconPath()
-let tray: Tray | undefined
+
 
 const pendingFullscreenWindows = new WeakSet<BrowserWindow>()
 const lastFullscreenRequestAtMs = new WeakMap<BrowserWindow, number>()
@@ -297,41 +297,6 @@ function openSettingsWindow(): void {
   } catch {}
   try {
     win.focus()
-  } catch {}
-}
-
-function ensureTray(): void {
-  if (tray) return
-  if (!APP_ICON_PATH) return
-  const base = nativeImage.createFromPath(APP_ICON_PATH)
-  const img = process.platform === 'win32' ? base.resize({ width: 16, height: 16, quality: 'best' }) : base
-  if (img.isEmpty()) return
-  tray = new Tray(img)
-  try {
-    tray.setToolTip('LanStartWrite')
-  } catch {}
-
-  const menu = Menu.buildFromTemplate([
-    { label: 'Open Settings', click: () => openSettingsWindow() },
-    { type: 'separator' },
-    {
-      label: 'Restart',
-      click: () => {
-        requestAppRestart()
-      }
-    },
-    {
-      label: 'Quit',
-      click: () => {
-        requestAppQuit()
-      }
-    },
-  ])
-  try {
-    tray.setContextMenu(menu)
-  } catch {}
-  try {
-    tray.on('click', () => focusFloatingToolbarOrAnyWindow())
   } catch {}
 }
 
@@ -1823,7 +1788,7 @@ function repositionToolbarSubwindows(animate: boolean) {
   }
 }
 
-function createPaintBoardWindow(kind?: 'video-show' | 'pdf'): BrowserWindow {
+function createPaintBoardWindow(kind?: 'video-show'): BrowserWindow {
   const owner = floatingToolbarWindow
   const ownerBounds = owner && !owner.isDestroyed() ? owner.getBounds() : screen.getPrimaryDisplay().bounds
   const display = screen.getDisplayMatching(ownerBounds)
@@ -1841,7 +1806,7 @@ function createPaintBoardWindow(kind?: 'video-show' | 'pdf'): BrowserWindow {
     maximizable: false,
     fullscreenable: false,
     skipTaskbar: true,
-    title: kind === 'video-show' ? 'Video Show' : kind === 'pdf' ? 'PDF' : 'Whiteboard',
+    title: kind === 'video-show' ? 'Video Show' : 'Whiteboard',
     backgroundColor: kind === 'video-show' ? '#000000ff' : '#ffffffff',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
@@ -2165,12 +2130,11 @@ async function maybeShowRestoreNotesNotice(): Promise<void> {
   const owner = floatingToolbarWindow
   if (!owner || owner.isDestroyed()) return
 
-  let mode: 'toolbar' | 'whiteboard' | 'video-show' | 'pdf' = 'toolbar'
+  let mode: 'toolbar' | 'whiteboard' | 'video-show' = 'toolbar'
   try {
     const raw = await backendGetKv('app-mode')
     if (raw === 'whiteboard') mode = 'whiteboard'
     if (raw === 'video-show') mode = 'video-show'
-    if (raw === 'pdf') mode = 'pdf'
   } catch {}
 
   const notesHistoryKvKey =
@@ -2178,9 +2142,7 @@ async function maybeShowRestoreNotesNotice(): Promise<void> {
       ? 'annotation-notes-whiteboard-prev'
       : mode === 'video-show'
         ? 'annotation-notes-video-show-prev'
-        : mode === 'pdf'
-          ? 'annotation-notes-pdf-prev'
-          : 'annotation-notes-toolbar-prev'
+        : 'annotation-notes-toolbar-prev'
   try {
     await backendGetKv(notesHistoryKvKey)
   } catch (e) {
@@ -2307,25 +2269,6 @@ function handleBackendControlMessage(message: any): void {
           return
         }
 
-        if (method === 'selectPdfFile') {
-          const parent =
-            BrowserWindow.getFocusedWindow() ??
-            whiteboardBackgroundWindow ??
-            annotationOverlayWindow ??
-            undefined
-          const options: OpenDialogOptions = {
-            properties: ['openFile'],
-            filters: [
-              { name: 'PDF', extensions: ['pdf'] },
-              { name: 'All Files', extensions: ['*'] }
-            ]
-          }
-          const res = parent ? await dialog.showOpenDialog(parent, options) : await dialog.showOpenDialog(options)
-          const fileUrl = res.canceled || !res.filePaths?.[0] ? undefined : pathToFileURL(res.filePaths[0]).toString()
-          sendToBackend({ type: 'MAIN_RPC_RESPONSE', id, ok: true, result: { fileUrl } })
-          return
-        }
-
         if (method === 'selectDirectory') {
           const parent =
             BrowserWindow.getFocusedWindow() ??
@@ -2431,15 +2374,13 @@ function handleBackendControlMessage(message: any): void {
 
   if (message.type === 'SET_APP_MODE') {
     const modeRaw = String((message as any).mode ?? '')
-    const mode =
-      modeRaw === 'whiteboard' ? 'whiteboard' : modeRaw === 'video-show' ? 'video-show' : modeRaw === 'pdf' ? 'pdf' : 'toolbar'
-    if (mode === 'whiteboard' || mode === 'video-show' || mode === 'pdf') {
+    const mode = modeRaw === 'whiteboard' ? 'whiteboard' : modeRaw === 'video-show' ? 'video-show' : 'toolbar'
+    if (mode === 'whiteboard' || mode === 'video-show') {
       mutPageDesiredFromAppMode = true
       hideAllToolbarSubwindows()
       appWindowsManager.hideAll()
       if (!whiteboardBackgroundWindow || whiteboardBackgroundWindow.isDestroyed()) {
-        whiteboardBackgroundWindow =
-          createPaintBoardWindow(mode === 'video-show' ? 'video-show' : mode === 'pdf' ? 'pdf' : undefined)
+        whiteboardBackgroundWindow = createPaintBoardWindow(mode === 'video-show' ? 'video-show' : undefined)
       } else {
         try {
           const devUrl = getDevServerUrl()
@@ -2448,9 +2389,7 @@ function handleBackendControlMessage(message: any): void {
               `${devUrl}?window=${encodeURIComponent('paint-board')}${
                 mode === 'video-show'
                   ? `&kind=${encodeURIComponent('video-show')}`
-                  : mode === 'pdf'
-                    ? `&kind=${encodeURIComponent('pdf')}`
-                    : ''
+                  : ''
               }`
             )
           } else {
@@ -2458,14 +2397,12 @@ function handleBackendControlMessage(message: any): void {
               query:
                 mode === 'video-show'
                   ? { window: 'paint-board', kind: 'video-show' }
-                  : mode === 'pdf'
-                    ? { window: 'paint-board', kind: 'pdf' }
-                    : { window: 'paint-board' }
+                  : { window: 'paint-board' }
             })
           }
         } catch {}
         try {
-          whiteboardBackgroundWindow.setTitle(mode === 'video-show' ? 'Video Show' : mode === 'pdf' ? 'PDF' : 'Whiteboard')
+          whiteboardBackgroundWindow.setTitle(mode === 'video-show' ? 'Video Show' : 'Whiteboard')
         } catch {}
         whiteboardBackgroundWindow.show()
       }
@@ -2841,7 +2778,6 @@ if (hasSingleInstanceLock) {
       floatingToolbarWindow = win
       const handle = createFloatingToolbarHandleWindow(win)
       floatingToolbarHandleWindow = handle
-      ensureTray()
       if (!stopToolbarTopmostPolling) {
         const poller = startWindowTopmostPolling({
           intervalMs: 1000,

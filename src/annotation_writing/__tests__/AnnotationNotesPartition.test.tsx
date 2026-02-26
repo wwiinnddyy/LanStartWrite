@@ -139,27 +139,6 @@ describe('Annotation notes partition', () => {
     window.lanstart = {
       ...window.lanstart,
       getUiState: async () => ({
-        mode: 'pdf',
-        tool: 'pen',
-        penType: 'writing',
-        penColor: '#333333',
-        penThickness: 6,
-        eraserType: 'pixel',
-        eraserThickness: 18
-      })
-    }
-
-    const d = render(<AnnotationOverlayApp />)
-    await waitFor(() => {
-      expect(putCalls.some((c) => c.key === 'annotation-notes-pdf')).toBe(true)
-    })
-    d.unmount()
-
-    putCalls.length = 0
-
-    window.lanstart = {
-      ...window.lanstart,
-      getUiState: async () => ({
         mode: 'whiteboard',
         tool: 'pen',
         penType: 'writing',

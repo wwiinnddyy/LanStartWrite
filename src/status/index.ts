@@ -23,8 +23,6 @@ import {
   CLOCK_COUNTDOWN_END_MS_UI_STATE_KEY,
   CLOCK_COUNTDOWN_PRESET_MS_UI_STATE_KEY,
   CLOCK_COUNTDOWN_REMAINING_MS_UI_STATE_KEY,
-  PDF_FILE_URL_KV_KEY,
-  PDF_FILE_URL_UI_STATE_KEY,
   PEN_COLOR_UI_STATE_KEY,
   PEN_SETTINGS_KV_KEY,
   PEN_THICKNESS_UI_STATE_KEY,
@@ -105,8 +103,6 @@ export {
   CLOCK_COUNTDOWN_END_MS_UI_STATE_KEY,
   CLOCK_COUNTDOWN_PRESET_MS_UI_STATE_KEY,
   CLOCK_COUNTDOWN_REMAINING_MS_UI_STATE_KEY,
-  PDF_FILE_URL_KV_KEY,
-  PDF_FILE_URL_UI_STATE_KEY,
   PEN_COLOR_UI_STATE_KEY,
   PEN_SETTINGS_KV_KEY,
   PEN_THICKNESS_UI_STATE_KEY,
@@ -250,13 +246,6 @@ export async function readImageFileUrlAsDataUrl(fileUrl: string): Promise<{ data
   if (res?.status !== 200 || body?.ok !== true) throw new Error(String(body?.error ?? 'IMAGE_READ_FAILED'))
   const dataUrl = typeof body?.dataUrl === 'string' ? body.dataUrl : undefined
   return { dataUrl }
-}
-
-export async function selectPdfFile(): Promise<{ fileUrl?: string }> {
-  const res = (await requireLanstart().apiRequest({ method: 'POST', path: '/dialog/select-pdf-file' })) as any
-  const body = res?.body as any
-  const fileUrl = typeof body?.fileUrl === 'string' ? body.fileUrl : undefined
-  return { fileUrl }
 }
 
 export async function selectDirectory(): Promise<{ dir?: string; dirUrl?: string }> {

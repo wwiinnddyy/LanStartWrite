@@ -171,7 +171,7 @@ const DEFAULT_LEAFER_SETTINGS: LeaferSettings = {
 }
 
 type AnnotationOverlayAppProps = {
-  forcedAppMode?: 'toolbar' | 'whiteboard' | 'video-show' | 'pdf'
+  forcedAppMode?: 'toolbar' | 'whiteboard' | 'video-show'
 }
 
 export function AnnotationOverlayApp(props: AnnotationOverlayAppProps) {
@@ -296,9 +296,8 @@ export function AnnotationOverlayApp(props: AnnotationOverlayAppProps) {
   }, [eraserThickness])
 
   const appModeRaw = props.forcedAppMode ?? bus.state[APP_MODE_UI_STATE_KEY]
-  const appMode =
-    appModeRaw === 'whiteboard' ? 'whiteboard' : appModeRaw === 'video-show' ? 'video-show' : appModeRaw === 'pdf' ? 'pdf' : 'toolbar'
-  const isWhiteboardLike = appMode === 'whiteboard' || appMode === 'video-show' || appMode === 'pdf'
+  const appMode = appModeRaw === 'whiteboard' ? 'whiteboard' : appModeRaw === 'video-show' ? 'video-show' : 'toolbar'
+  const isWhiteboardLike = appMode === 'whiteboard' || appMode === 'video-show'
   const shouldFreezeScreen = appMode === 'toolbar' && tool !== 'mouse' && leaferSettings.freezeScreen
   const rendererEngine = leaferSettings.rendererEngine ?? 'canvas2d'
 
@@ -1280,9 +1279,7 @@ struct VSOut {
         ? 'annotation-notes-whiteboard'
         : appMode === 'video-show'
           ? 'annotation-notes-video-show'
-          : appMode === 'pdf'
-            ? 'annotation-notes-pdf'
-            : 'annotation-notes-toolbar'
+          : 'annotation-notes-toolbar'
     let serializePersistedDoc: null | (() => PersistedAnnotationDocV1) = null
     let persistTimer: number | null = null
     let notesBook: PersistedAnnotationBookV2 = { version: 2, currentPage: 0, pages: [createEmptyDocV1()] }

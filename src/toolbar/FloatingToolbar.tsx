@@ -3,8 +3,6 @@ import { Button, ButtonGroup } from '../button'
 import { motion, useReducedMotion } from '../Framer_Motion'
 import {
   ERASER_SETTINGS_KV_KEY,
-  PDF_FILE_URL_KV_KEY,
-  PDF_FILE_URL_UI_STATE_KEY,
   PEN_SETTINGS_KV_KEY,
   TOOLBAR_STATE_KEY,
   TOOLBAR_STATE_UI_STATE_KEY,
@@ -14,7 +12,6 @@ import {
   isEraserSettings,
   isPenSettings,
   putUiStateKey,
-  selectPdfFile,
   useAppMode,
   useUiStateBus
 } from '../status'
@@ -43,7 +40,7 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   })
 }
 
-function ToolbarToolIcon(props: { kind: 'mouse' | 'pen' | 'eraser' | 'whiteboard' | 'video-show' | 'pdf' }) {
+function ToolbarToolIcon(props: { kind: 'mouse' | 'pen' | 'eraser' | 'whiteboard' | 'video-show' }) {
   const d =
     props.kind === 'mouse'
       ? 'M5 3.059a1 1 0 0 1 1.636-.772l11.006 9.062c.724.596.302 1.772-.636 1.772h-5.592a1.5 1.5 0 0 0-1.134.518l-3.524 4.073c-.606.7-1.756.271-1.756-.655zm12.006 9.062L6 3.059v13.998l3.524-4.072a2.5 2.5 0 0 1 1.89-.864z'
@@ -132,14 +129,14 @@ type ToolbarState = {
   secondaryButtonsOrder?: SecondaryButtonId[]
 }
 
-type PrimaryButtonId = 'mouse' | 'pen' | 'eraser' | 'whiteboard' | 'video-show' | 'pdf'
+type PrimaryButtonId = 'mouse' | 'pen' | 'eraser' | 'whiteboard' | 'video-show'
 type SecondaryButtonId = 'undo' | 'redo' | 'clock' | 'feature-panel' | 'events'
 
 const ALL_SECONDARY_BUTTONS: SecondaryButtonId[] = ['undo', 'redo', 'clock', 'feature-panel', 'events']
-const DEFAULT_ALLOWED_PRIMARY_BUTTONS: PrimaryButtonId[] = ['mouse', 'pen', 'eraser', 'whiteboard', 'video-show', 'pdf']
+const DEFAULT_ALLOWED_PRIMARY_BUTTONS: PrimaryButtonId[] = ['mouse', 'pen', 'eraser', 'whiteboard', 'video-show']
 const DEFAULT_ALLOWED_SECONDARY_BUTTONS: SecondaryButtonId[] = ['undo', 'redo', 'feature-panel']
 
-const DEFAULT_PRIMARY_BUTTONS_ORDER: PrimaryButtonId[] = ['mouse', 'pen', 'eraser', 'whiteboard', 'video-show', 'pdf']
+const DEFAULT_PRIMARY_BUTTONS_ORDER: PrimaryButtonId[] = ['mouse', 'pen', 'eraser', 'whiteboard', 'video-show']
 const DEFAULT_SECONDARY_BUTTONS_ORDER: SecondaryButtonId[] = ['undo', 'redo', 'feature-panel']
 
 function normalizeAllowedPrimaryButtons(input: unknown): PrimaryButtonId[] {
@@ -147,7 +144,7 @@ function normalizeAllowedPrimaryButtons(input: unknown): PrimaryButtonId[] {
   const allowed = new Set(DEFAULT_ALLOWED_PRIMARY_BUTTONS)
   const unique: PrimaryButtonId[] = []
   for (const item of input) {
-    if (item !== 'mouse' && item !== 'pen' && item !== 'eraser' && item !== 'whiteboard' && item !== 'video-show' && item !== 'pdf') continue
+    if (item !== 'mouse' && item !== 'pen' && item !== 'eraser' && item !== 'whiteboard' && item !== 'video-show') continue
     if (!allowed.has(item)) continue
     if (unique.includes(item)) continue
     unique.push(item)
@@ -187,7 +184,7 @@ function normalizePrimaryButtonsOrder(input: unknown, allowedButtons: readonly P
   const unique: PrimaryButtonId[] = []
   if (Array.isArray(input)) {
     for (const item of input) {
-      if (item !== 'mouse' && item !== 'pen' && item !== 'eraser' && item !== 'whiteboard' && item !== 'video-show' && item !== 'pdf') continue
+      if (item !== 'mouse' && item !== 'pen' && item !== 'eraser' && item !== 'whiteboard' && item !== 'video-show') continue
       if (!allowed.has(item)) continue
       if (unique.includes(item)) continue
       unique.push(item)
@@ -361,7 +358,6 @@ function FloatingToolbarInner() {
   const { appMode, setAppMode } = useAppMode()
   const whiteboardActive = appMode === 'whiteboard'
   const videoShowActive = appMode === 'video-show'
-  const pdfActive = appMode === 'pdf'
   const isExpanded = state.expanded !== false
   const backendEvents = useEventsPoll(800)
   const lastProcessedEventIdRef = useRef(0)
@@ -593,48 +589,6 @@ function FloatingToolbarInner() {
           }}
         >
           {withButtonHint(<ToolbarToolIcon kind="video-show" />, ariaLabel)}
-        </Button>
-      )
-    }
-
-    if (id === 'pdf') {
-      const visibility = getAppButtonVisibility('pdf')
-      const ariaLabel = 'PDF'
-      return (
-        <Button
-          key="pdf"
-          size={uiButtonSize}
-          variant={pdfActive ? 'light' : 'default'}
-          ariaLabel={ariaLabel}
-          title={ariaLabel}
-          showInToolbar={visibility.showInToolbar}
-          showInFeaturePanel={visibility.showInFeaturePanel}
-          onClick={() => {
-            if (pdfActive) {
-              setAppMode('toolbar')
-              return
-            }
-            void (async () => {
-              try {
-                setAppMode('pdf')
-                await new Promise((r) => setTimeout(r, 150))
-
-                const selected = await selectPdfFile()
-                const fileUrl = selected.fileUrl
-                if (!fileUrl) {
-                  setAppMode('toolbar')
-                  return
-                }
-                await putKv(PDF_FILE_URL_KV_KEY, fileUrl)
-                await putUiStateKey(UI_STATE_APP_WINDOW_ID, PDF_FILE_URL_UI_STATE_KEY, fileUrl)
-              } catch (e) {
-                setAppMode('toolbar')
-                window.alert(`鎵撳紑 PDF 澶辫触锛?{e instanceof Error ? e.message : String(e)}`)
-              }
-            })()
-          }}
-        >
-          {withButtonHint(<ToolbarToolIcon kind="pdf" />, ariaLabel)}
         </Button>
       )
     }
