@@ -123,6 +123,7 @@ function WebToolbarDock(props: { onRectChange?: (rect: RectState) => void }) {
   const [prefs, setPrefs] = useState<DockPrefs>(() => readToolbarDockPrefs(defaults))
   const dragControls = useDragControls()
   const dockRef = useRef<HTMLElement | null>(null)
+  const isDraggingRef = useRef(false)
 
   const reportRect = useCallback(() => {
     const node = dockRef.current
@@ -158,6 +159,16 @@ function WebToolbarDock(props: { onRectChange?: (rect: RectState) => void }) {
     }
   }, [reportRect])
 
+  useEffect(() => {
+    const handleTouchMove = (e: TouchEvent) => {
+      if (isDraggingRef.current) {
+        e.preventDefault()
+      }
+    }
+    document.addEventListener('touchmove', handleTouchMove, { passive: false })
+    return () => document.removeEventListener('touchmove', handleTouchMove)
+  }, [])
+
   return (
     <motion.section
       ref={dockRef}
@@ -166,9 +177,14 @@ function WebToolbarDock(props: { onRectChange?: (rect: RectState) => void }) {
       dragListener={false}
       dragControls={dragControls}
       dragMomentum={false}
-      style={{ x: prefs.x, y: prefs.y }}
+      dragElastic={0}
+      style={{ x: prefs.x, y: prefs.y, touchAction: 'none' }}
+      onDragStart={() => {
+        isDraggingRef.current = true
+      }}
       onDrag={reportRect}
       onDragEnd={(_e, info) => {
+        isDraggingRef.current = false
         setPrefs((prev) => ({ x: prev.x + info.offset.x, y: prev.y + info.offset.y }))
         window.requestAnimationFrame(reportRect)
       }}
@@ -176,9 +192,11 @@ function WebToolbarDock(props: { onRectChange?: (rect: RectState) => void }) {
       <div className="webToolbarDockMain">
         <FloatingToolbarApp />
       </div>
-      <div className="webToolbarDockHandle">
+      <div className="webToolbarDockHandle" style={{ touchAction: 'none' }}>
         <FloatingToolbarHandleApp
           onDragHandlePointerDown={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
             dragControls.start(e)
           }}
         />
