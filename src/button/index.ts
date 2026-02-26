@@ -1,4 +1,4 @@
-﻿export { Button, MotionButton, type ButtonProps, type ButtonKind, type MotionButtonProps, type ButtonSize, type ButtonVariant } from './Button'
+export { Button, MotionButton, type ButtonProps, type ButtonKind, type MotionButtonProps, type ButtonSize, type ButtonVariant } from './Button'
 export { ButtonGroup, type ButtonGroupProps } from './components/ButtonGroup'
 
 export type AppButtonId =
@@ -51,8 +51,8 @@ export const APP_BUTTON_DEFINITIONS: readonly AppButtonDefinition[] = [
   { id: 'whiteboard', label: '白板', tags: [ButtonDisplayTag.ALLOW_FLOATING_TOOLBAR, ButtonDisplayTag.TOOLBAR_PRIMARY] },
   { id: 'video-show', label: '视频展台', tags: [ButtonDisplayTag.ALLOW_FLOATING_TOOLBAR, ButtonDisplayTag.TOOLBAR_PRIMARY] },
   { id: 'notes', label: '笔记管理', tags: [ButtonDisplayTag.ALLOW_FEATURE_PANEL] },
-  { id: 'cunox-export', label: '瀵煎嚭 CUNOX', tags: [] },
-  { id: 'cunox-import', label: '瀵煎叆 CUNOX', tags: [] },
+  { id: 'cunox-export', label: '导出 CUNOX', tags: [] },
+  { id: 'cunox-import', label: '导入 CUNOX', tags: [] },
   { id: 'toggle-expanded', label: '折叠/展开', tags: [ButtonDisplayTag.ALLOW_FLOATING_TOOLBAR] },
   {
     id: 'undo',

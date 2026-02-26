@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import * as QRCode from 'qrcode'
 import {
   APP_MODE_UI_STATE_KEY,
@@ -278,7 +278,7 @@ function PageThumbnailItem(props: {
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10 }}>
         <div style={{ fontSize: 12, fontWeight: 650 }}>{`第${index + 1}页`}</div>
-        {selected ? <div style={{ fontSize: 11, opacity: 0.8 }}>褰撳墠</div> : null}
+        {selected ? <div style={{ fontSize: 11, opacity: 0.8 }}>当前</div> : null}
       </div>
     </Button>
   )
@@ -334,7 +334,7 @@ function VideoShowThumbnailItem(props: {
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10 }}>
         <div style={{ fontSize: 12, fontWeight: 650 }}>{pageLabel}</div>
-        {selected ? <div style={{ fontSize: 11, opacity: 0.8 }}>褰撳墠</div> : null}
+        {selected ? <div style={{ fontSize: 11, opacity: 0.8 }}>当前</div> : null}
       </div>
     </Button>
   )
@@ -718,8 +718,8 @@ export function PageThumbnailsMenuWindow() {
           <div style={{ position: 'relative', zIndex: 1, width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: 12 }}>
               <div style={{ fontSize: 13, fontWeight: 650 }}>Page Thumbnails</div>
-              <Button size="sm" kind="text" ariaLabel="鍏抽棴" title="鍏抽棴" onClick={() => postCommand('app.togglePageThumbnailsMenu').catch(() => undefined)}>
-                鍏抽棴
+              <Button size="sm" kind="text" ariaLabel="关闭" title="关闭" onClick={() => postCommand('app.togglePageThumbnailsMenu').catch(() => undefined)}>
+                关闭
               </Button>
             </div>
 
@@ -818,8 +818,8 @@ export function PageThumbnailsMenuWindow() {
                       <Button
                         size="sm"
                         kind="text"
-                        ariaLabel="澶嶅埗閾炬帴"
-                        title="澶嶅埗閾炬帴"
+                        ariaLabel="复制链接"
+                        title="复制链接"
                         appRegion="no-drag"
                         onClick={() => {
                           if (!phoneCastUrl) return
@@ -827,7 +827,7 @@ export function PageThumbnailsMenuWindow() {
                           navigator.clipboard?.writeText?.(phoneCastUrl).catch(() => undefined)
                         }}
                       >
-                        澶嶅埗閾炬帴
+                        复制链接
                       </Button>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'center' }}>
@@ -835,7 +835,7 @@ export function PageThumbnailsMenuWindow() {
                         size="sm"
                         kind="custom"
                         ariaLabel="灞曞紑杩炴帴淇℃伅"
-                        title="灞曞紑"
+                        title="展开"
                         appRegion="no-drag"
                         onClick={() => setPhoneConnectCollapsed(false)}
                         style={{
@@ -896,7 +896,7 @@ export function PageThumbnailsMenuWindow() {
                           size="sm"
                           kind="custom"
                           ariaLabel="鎶樺彔杩炴帴淇℃伅"
-                          title="鎶樺彔"
+                          title="折叠"
                           appRegion="no-drag"
                           onClick={() => setPhoneConnectCollapsed(true)}
                           style={{
@@ -929,8 +929,8 @@ export function PageThumbnailsMenuWindow() {
                       <Button
                         size="sm"
                         kind="custom"
-                        ariaLabel="澶嶅埗閾炬帴"
-                        title="澶嶅埗閾炬帴"
+                        ariaLabel="复制链接"
+                        title="复制链接"
                         appRegion="no-drag"
                         onClick={() => {
                           if (!phoneCastUrl) return
@@ -953,14 +953,14 @@ export function PageThumbnailsMenuWindow() {
                           fontWeight: 600
                         }}
                       >
-                        澶嶅埗閾炬帴
+                        复制链接
                       </Button>
 
                       <Button
                         size="sm"
                         kind="custom"
-                        ariaLabel="閲嶆柊鐢熸垚"
-                        title="閲嶆柊鐢熸垚"
+                        ariaLabel="重新生成"
+                        title="重新生成"
                         appRegion="no-drag"
                         onClick={() => {
                           bus.deleteKey(VIDEO_SHOW_WEBRTC_SESSION_ID_UI_STATE_KEY).catch(() => undefined)
@@ -983,7 +983,7 @@ export function PageThumbnailsMenuWindow() {
                           fontWeight: 500
                         }}
                       >
-                        閲嶆柊鐢熸垚
+                        重新生成
                       </Button>
                     </div>
                   </>

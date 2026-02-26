@@ -1,4 +1,4 @@
-﻿import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { Button, ButtonGroup } from '../button'
 import { motion, useReducedMotion } from '../Framer_Motion'
 import {
@@ -455,7 +455,7 @@ function FloatingToolbarInner() {
   // 澶勭悊绗旀寜閽偣鍑?
   const handlePenClick = () => {
     if (tool === 'pen') {
-      // 濡傛灉绗斿凡缁忔槸褰撳墠宸ュ叿锛屾墦寮€浜岀骇鑿滃崟锛堢嫭绔嬬獥鍙ｏ級
+      // 濡傛灉绗斿凡缁忔槸褰撳墠宸ュ叿锛屾墦寮€二级菜单（独立窗口）
       void postCommand('toggle-subwindow', { kind: 'pen', placement: 'bottom' })
     } else {
       // 鍚﹀垯鍒囨崲鍒扮瑪宸ュ叿
@@ -464,7 +464,7 @@ function FloatingToolbarInner() {
     }
   }
 
-  // 澶勭悊姗＄毊鎸夐挳鐐瑰嚮
+  // 处理橡皮按钮点击
   const handleEraserClick = () => {
     if (tool === 'eraser') {
       // 濡傛灉姗＄毊宸茬粡鏄綋鍓嶅伐鍏凤紝鎵撳紑浜岀骇鑿滃崟锛堢嫭绔嬬獥鍙ｏ級
@@ -493,7 +493,7 @@ function FloatingToolbarInner() {
   const renderPrimaryButton = (id: PrimaryButtonId) => {
     if (id === 'mouse') {
       const visibility = getAppButtonVisibility('mouse')
-      const ariaLabel = '榧犳爣'
+      const ariaLabel = '鼠标'
       return (
         <Button
           key="mouse"
@@ -534,7 +534,7 @@ function FloatingToolbarInner() {
 
     if (id === 'eraser') {
       const visibility = getAppButtonVisibility('eraser')
-      const ariaLabel = '姗＄毊'
+      const ariaLabel = '橡皮'
       return (
         <Button
           key="eraser"
@@ -553,7 +553,7 @@ function FloatingToolbarInner() {
 
     if (id === 'whiteboard') {
       const visibility = getAppButtonVisibility('whiteboard')
-      const ariaLabel = '鐧芥澘'
+      const ariaLabel = '白板'
       return (
         <Button
           key="whiteboard"
@@ -574,7 +574,7 @@ function FloatingToolbarInner() {
 
     if (id === 'video-show') {
       const visibility = getAppButtonVisibility('video-show')
-      const ariaLabel = '瑙嗛灞曞彴'
+      const ariaLabel = '瑙嗛展台'
       return (
         <Button
           key="video-show"
@@ -619,7 +619,7 @@ function FloatingToolbarInner() {
 
     if (id === 'redo') {
       const visibility = getAppButtonVisibility('redo')
-      const ariaLabel = '閲嶅仛'
+      const ariaLabel = '重做'
       return (
         <Button
           key="redo"
@@ -639,7 +639,7 @@ function FloatingToolbarInner() {
 
     if (id === 'clock') {
       const visibility = getAppButtonVisibility('clock')
-      const ariaLabel = '鏃堕挓'
+      const ariaLabel = '时钟'
       return (
         <Button
           key="clock"
@@ -659,7 +659,7 @@ function FloatingToolbarInner() {
 
     if (id === 'events') {
       const visibility = getAppButtonVisibility('events')
-      const ariaLabel = '浜嬩欢'
+      const ariaLabel = '事件'
       return (
         <Button
           key="events"
@@ -722,7 +722,7 @@ function FloatingToolbarInner() {
             </ButtonGroup>
           </div>
 
-          {/* 鎶樺彔/灞曞紑鍒囨崲鎸夐挳 */}
+          {/* 折叠/展开切换按钮 */}
           <div className="toolbarBarRow">
             {(() => {
               const visibility = getAppButtonVisibility('toggle-expanded')
@@ -736,7 +736,7 @@ function FloatingToolbarInner() {
               showInFeaturePanel={visibility.showInFeaturePanel}
               onClick={toggleExpanded}
             >
-              {withButtonHint(isExpanded ? <ChevronLeftIcon /> : <ChevronRightIcon />, isExpanded ? '鎶樺彔' : '灞曞紑')}
+              {withButtonHint(isExpanded ? <ChevronLeftIcon /> : <ChevronRightIcon />, isExpanded ? '折叠' : '展开')}
             </Button>
               )
             })()}
@@ -779,7 +779,7 @@ export function FloatingToolbarHandleApp(props?: {
   const reduceMotion = useReducedMotion()
   const [dragging, setDragging] = useState(false)
 
-  // 搴旂敤澶栬璁剧疆锛堝己璋冭壊绛夛級
+  // 搴旂敤澶栬设置（强调色等）
   useAppearanceSettings()
 
   useEffect(() => {

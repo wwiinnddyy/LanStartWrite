@@ -1,30 +1,30 @@
-﻿import type { App } from 'electron'
+import type { App } from 'electron'
 import { resolve } from 'node:path'
 
 /**
  * LanStartWrite URL 鍛戒护锛堜緵鍏朵粬搴旂敤閫氳繃鑷畾涔夊崗璁皟鐢ㄦ湰搴旂敤鍔熻兘锛?
  *
- * **涓ょ鍐欐硶锛堢瓑浠凤級**
- * - 鏂瑰紡 A锛歚lanstartwrite://app/setTool?tool=pen`
- * - 鏂瑰紡 B锛歚lanstartwrite://?command=app.setTool&tool=pen`
+ * **涓ょ写法（等价）**
+ * - 方式 A：`lanstartwrite://app/setTool?tool=pen`
+ * - 方式 B：`lanstartwrite://?command=app.setTool&tool=pen`
  *
- * **payload 浼犲弬**
- * - 榛樿锛氶櫎 `command` 澶栵紝鎵€鏈?query 鍙傛暟閮戒細鍚堝苟鎴?payload锛堜細鑷姩鎶?`true/false/鏁板瓧` 杞垚瀵瑰簲绫诲瀷锛?
- * - 涔熷彲鏄惧紡浼狅細`payload=`锛圲RI 缂栫爜鍚庣殑 JSON 瀛楃涓诧級锛屼緥濡傦細`payload=%7B%22tool%22%3A%22pen%22%7D`
+ * **payload 传参**
+ * - 榛樿：除 `command` 澶栵紝鎵€鏈?query 鍙傛暟閮戒細鍚堝苟鎴?payload锛堜細鑷姩鎶?`true/false/数字` 杞垚瀵瑰簲绫诲瀷锛?
+ * - 也可显式传：`payload=`（URI 编码后的 JSON 瀛楃串），例如：`payload=%7B%22tool%22%3A%22pen%22%7D`
  *
- * **涓昏鍛戒护娓呭崟**
- * -锛堝吋瀹规棫鍛藉悕锛塦create-window` / `toggle-subwindow` / `set-subwindow-height` / `set-subwindow-bounds` / `set-toolbar-bounds` / `set-mut-page-bounds` / `set-app-window-bounds` / `set-appearance` / `quit`
+ * **涓昏命令清单**
+ * -（兼容旧命名）`create-window` / `toggle-subwindow` / `set-subwindow-height` / `set-subwindow-bounds` / `set-toolbar-bounds` / `set-mut-page-bounds` / `set-app-window-bounds` / `set-appearance` / `quit`
  *
- * - `win.createWindow`锛氬垱寤轰富绐楀彛
- * - `win.setAppMode`锛氬垏鎹㈡ā寮忥紙payload: `{ mode: "toolbar"|"whiteboard"|"video-show" }`锛?
- * - `win.setAnnotationInput`锛氬惎鐢?绂佺敤鎵规敞杈撳叆锛坧ayload: `{ enabled: boolean }`锛?
+ * - `win.createWindow`：创建主窗口
+ * - `win.setAppMode`锛氬垏鎹㈡ā式（payload: `{ mode: "toolbar"|"whiteboard"|"video-show" }`锛?
+ * - `win.setAnnotationInput`锛氬惎鐢?禁用批注输入（payload: `{ enabled: boolean }`锛?
  * - `win.toggleSubwindow`锛氬垏鎹㈠瓙绐楁樉绀猴紙payload: `{ kind: string, placement: "top"|"bottom" }`锛?
  * - `win.setSubwindowHeight`锛氳缃瓙绐楅珮搴︼紙payload: `{ kind: string, height: number }`锛?
  * - `win.setSubwindowBounds`锛氳缃瓙绐楀楂橈紙payload: `{ kind: string, width: number, height: number }`锛?
  * - `win.setToolbarBounds`锛氳缃伐鍏锋潯绐楀彛瀹介珮锛坧ayload: `{ width: number, height: number }`锛?
- * - `win.setAppWindowBounds`锛氳缃寚瀹氱獥鍙ｇ殑瀹介珮/浣嶇疆锛坧ayload: `{ windowId: string, width?: number, height?: number, x?: number, y?: number }`锛?
+ * - `win.setAppWindowBounds`锛氳缃寚瀹氱獥鍙ｇ殑瀹介珮/位置（payload: `{ windowId: string, width?: number, height?: number, x?: number, y?: number }`锛?
  * - `win.setUiZoom`锛氳缃晫闈㈢缉鏀撅紙payload: `{ zoom: number }`锛?
- * - `win.setNoticeVisible`锛氭樉绀?闅愯棌閫氱煡绐楋紙payload: `{ visible: boolean }`锛?
+ * - `win.setNoticeVisible`锛氭樉绀?隐藏通知窗（payload: `{ visible: boolean }`锛?
  * - `win.quit`锛氶€€鍑哄簲鐢?
  *
  * - `app.setTool`锛氬垏鎹㈠伐鍏凤紙payload: `{ tool: "pen"|"eraser"|"mouse" }`锛?
@@ -33,19 +33,19 @@ import { resolve } from 'node:path'
  * - `app.clearPage`锛氭竻绌哄綋鍓嶉〉
  * - `app.undo`锛氭挙閿€
  * - `app.redo`锛氶噸鍋?
- * - `app.prevPage`锛氫笂涓€椤? * - `app.nextPage`锛氫笅涓€椤? * - `app.newPage`锛氭柊寤轰竴椤碉紙鐧芥澘/瀹炵墿灞曞彴锛? * - `app.setPageIndex`锛氳烦杞埌鎸囧畾椤碉紙payload: `{ index: number }`锛?
+ * - `app.prevPage`锛氫笂涓€椤? * - `app.nextPage`锛氫笅涓€椤? * - `app.newPage`：新建一页（白板/瀹炵墿灞曞彴锛? * - `app.setPageIndex`锛氳烦杞埌鎸囧畾椤碉紙payload: `{ index: number }`锛?
  * - `app.togglePageThumbnailsMenu`锛氬垏鎹㈢缉鐣ュ浘鑿滃崟
  * - `app.setWritingFramework`锛氬垏鎹功鍐欏悗绔紙payload: `{ framework: "konva"|"qt"|"leafer" }`锛?
- * - `app.openSettingsWindow`锛氭墦寮€璁剧疆绐楀彛
- * - `app.minimizeSettingsWindow`锛氭渶灏忓寲璁剧疆绐楀彛
+ * - `app.openSettingsWindow`锛氭墦寮€设置窗口
+ * - `app.minimizeSettingsWindow`：最小化设置窗口
  * - `app.closeSettingsWindow`锛氬叧闂缃獥鍙?
- * - `app.windowControl`锛氱獥鍙ｆ帶鍒讹紙payload: `{ windowId: string, action: "minimize"|"close"|"toggleMaximize" }`锛?
+ * - `app.windowControl`：窗口控制（payload: `{ windowId: string, action: "minimize"|"close"|"toggleMaximize" }`锛?
  *
- * - `qt.*`锛氳浆鍙戝埌涓昏繘绋嬬殑 Qt 涔﹀啓鍚庣锛坅ction 涓?`*` 鐨勯儴鍒嗭級
+ * - `qt.*`：转发到主进程的 Qt 涔﹀啓鍚庣（action 涓?`*` 的部分）
  *
- * - `settings.setAppearance`锛氬垏鎹寒/鏆楄壊锛坧ayload: `{ appearance: "light"|"dark" }`锛?
- * - `settings.setAppMode`锛氬垏鎹㈡ā寮忓苟鎸佷箙鍖栵紙payload: `{ mode: "toolbar"|"whiteboard"|"video-show" }`锛?
- * - `settings.setVideoShowMergeLayers`锛氬疄鐗╁睍鍙?鍚堝苟鍥惧眰锛坧ayload: `{ enabled: boolean }`锛?
+ * - `settings.setAppearance`锛氬垏鎹寒/暗色（payload: `{ appearance: "light"|"dark" }`锛?
+ * - `settings.setAppMode`锛氬垏鎹㈡ā式并持久化（payload: `{ mode: "toolbar"|"whiteboard"|"video-show" }`锛?
+ * - `settings.setVideoShowMergeLayers`锛氬疄鐗╁睍鍙?合并图层（payload: `{ enabled: boolean }`锛?
  * - `settings.setWhiteboardBackground`锛氱櫧鏉胯儗鏅紙payload: `{ bgColor?: "#RRGGBB", bgImageUrl?: "file:..."/"data:..."/"", bgImageOpacity?: number }`锛?
  */
 

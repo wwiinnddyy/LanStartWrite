@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useDragControls, motion } from '../../Framer_Motion'
 import { FloatingToolbarApp, FloatingToolbarHandleApp } from '../../toolbar'
 import { ClockMenu, EraserSubmenu, EventsMenu, FeaturePanelMenu, PenSubmenu, SettingsMenu } from '../../toolbar-subwindows'
@@ -23,36 +23,14 @@ import './web-workspace.css'
 type SubwindowKind = 'events' | 'clock' | 'feature-panel' | 'notes' | 'settings' | 'pen' | 'eraser'
 type SubwindowPlacement = 'top' | 'bottom'
 
-type PanelPrefs = { x: number; y: number; collapsed: boolean }
 type DockPrefs = { x: number; y: number }
+type RectState = { x: number; y: number; width: number; height: number }
+type SizeState = { width: number; height: number }
 
-const panelPrefsKey = (id: string) => `web-panel:${id}`
 const TOOLBAR_DOCK_KEY = 'web-toolbar-dock'
-const TOOLBAR_PANEL_LEGACY_KEY = panelPrefsKey('toolbar')
-
-function readPanelPrefs(id: string, defaults: PanelPrefs): PanelPrefs {
-  try {
-    const raw = window.localStorage.getItem(panelPrefsKey(id))
-    if (!raw) return defaults
-    const parsed = JSON.parse(raw) as Partial<PanelPrefs>
-    const x = Number(parsed?.x)
-    const y = Number(parsed?.y)
-    const collapsed = Boolean(parsed?.collapsed)
-    return {
-      x: Number.isFinite(x) ? x : defaults.x,
-      y: Number.isFinite(y) ? y : defaults.y,
-      collapsed
-    }
-  } catch {
-    return defaults
-  }
-}
-
-function writePanelPrefs(id: string, prefs: PanelPrefs): void {
-  try {
-    window.localStorage.setItem(panelPrefsKey(id), JSON.stringify(prefs))
-  } catch {}
-}
+const TOOLBAR_PANEL_LEGACY_KEY = 'web-panel:toolbar'
+const SUBWINDOW_GAP = 10
+const SUBWINDOW_SCREEN_MARGIN = 8
 
 function parseDockPrefs(raw: string | null, defaults: DockPrefs): DockPrefs {
   if (!raw) return defaults
@@ -111,25 +89,77 @@ function renderSubwindow(kind: SubwindowKind): React.ReactNode {
   return <EraserSubmenu kind="eraser" />
 }
 
-function WebToolbarDock() {
+function clamp(v: number, min: number, max: number): number {
+  if (!Number.isFinite(v)) return min
+  if (max < min) return min
+  return Math.min(max, Math.max(min, v))
+}
+
+function useViewportSize(): { width: number; height: number } {
+  const [size, setSize] = useState(() => ({ width: window.innerWidth, height: window.innerHeight }))
+
+  useEffect(() => {
+    const onResize = () => setSize({ width: window.innerWidth, height: window.innerHeight })
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+
+  return size
+}
+
+function WebToolbarDock(props: { onRectChange?: (rect: RectState) => void }) {
   const defaults = useMemo<DockPrefs>(() => ({ x: 16, y: 16 }), [])
   const [prefs, setPrefs] = useState<DockPrefs>(() => readToolbarDockPrefs(defaults))
   const dragControls = useDragControls()
+  const dockRef = useRef<HTMLElement | null>(null)
+
+  const reportRect = useCallback(() => {
+    const node = dockRef.current
+    if (!node) return
+    const rect = node.getBoundingClientRect()
+    props.onRectChange?.({
+      x: rect.left,
+      y: rect.top,
+      width: rect.width,
+      height: rect.height
+    })
+  }, [props.onRectChange])
 
   useEffect(() => {
     writeToolbarDockPrefs(prefs)
   }, [prefs])
 
+  useLayoutEffect(() => {
+    reportRect()
+  }, [prefs.x, prefs.y, reportRect])
+
+  useEffect(() => {
+    const node = dockRef.current
+    if (!node) return
+    const onResize = () => reportRect()
+    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(onResize) : null
+    observer?.observe(node)
+    window.addEventListener('resize', onResize)
+    onResize()
+    return () => {
+      observer?.disconnect()
+      window.removeEventListener('resize', onResize)
+    }
+  }, [reportRect])
+
   return (
     <motion.section
+      ref={dockRef}
       className="webToolbarDock"
       drag
       dragListener={false}
       dragControls={dragControls}
       dragMomentum={false}
       style={{ x: prefs.x, y: prefs.y }}
+      onDrag={reportRect}
       onDragEnd={(_e, info) => {
         setPrefs((prev) => ({ x: prev.x + info.offset.x, y: prev.y + info.offset.y }))
+        window.requestAnimationFrame(reportRect)
       }}
     >
       <div className="webToolbarDockMain">
@@ -146,73 +176,13 @@ function WebToolbarDock() {
   )
 }
 
-function FloatingPanel(props: {
-  id: string
-  title: string
-  className?: string
-  defaultCollapsed?: boolean
-  defaultOffset?: { x: number; y: number }
-  onClose?: () => void
-  children: React.ReactNode
-}) {
-  const defaults = useMemo<PanelPrefs>(
-    () => ({ x: props.defaultOffset?.x ?? 0, y: props.defaultOffset?.y ?? 0, collapsed: Boolean(props.defaultCollapsed) }),
-    [props.defaultCollapsed, props.defaultOffset?.x, props.defaultOffset?.y]
-  )
-  const [prefs, setPrefs] = useState<PanelPrefs>(() => readPanelPrefs(props.id, defaults))
-  const dragControls = useDragControls()
-
-  useEffect(() => {
-    writePanelPrefs(props.id, prefs)
-  }, [prefs, props.id])
-
-  useEffect(() => {
-    setPrefs((prev) => (prev === defaults ? prev : { ...prev, collapsed: prev.collapsed ?? defaults.collapsed }))
-  }, [defaults])
-
-  return (
-    <motion.section
-      className={props.className ? `webPanel ${props.className}` : 'webPanel'}
-      drag
-      dragListener={false}
-      dragControls={dragControls}
-      dragMomentum={false}
-      style={{ x: prefs.x, y: prefs.y }}
-      onDragEnd={(_e, info) => {
-        setPrefs((prev) => ({ ...prev, x: prev.x + info.offset.x, y: prev.y + info.offset.y }))
-      }}
-    >
-      <div
-        className="webPanelHeader"
-        onPointerDown={(e) => {
-          dragControls.start(e)
-        }}
-      >
-        <span className="webPanelTitle">{props.title}</span>
-        <div className="webPanelActions" onPointerDown={(e) => e.stopPropagation()}>
-          <button
-            type="button"
-            className="webPanelButton"
-            title={prefs.collapsed ? 'Expand' : 'Collapse'}
-            onClick={() => setPrefs((prev) => ({ ...prev, collapsed: !prev.collapsed }))}
-          >
-            {prefs.collapsed ? '+' : '-'}
-          </button>
-          {props.onClose ? (
-            <button type="button" className="webPanelButton webPanelButton--danger" title="Close" onClick={props.onClose}>
-              x
-            </button>
-          ) : null}
-        </div>
-      </div>
-      {!prefs.collapsed ? <div className="webPanelBody">{props.children}</div> : null}
-    </motion.section>
-  )
-}
-
 function WebWorkspace() {
   const { appMode } = useAppMode()
   const bus = useUiStateBus(UI_STATE_APP_WINDOW_ID)
+  const viewport = useViewportSize()
+  const [toolbarRect, setToolbarRect] = useState<RectState>({ x: 16, y: 16, width: 420, height: 64 })
+  const subwindowRef = useRef<HTMLElement | null>(null)
+  const [subwindowSize, setSubwindowSize] = useState<SizeState>({ width: 420, height: 320 })
 
   const effectiveMode = appMode === 'video-show' ? 'video-show' : 'whiteboard'
 
@@ -222,6 +192,65 @@ function WebWorkspace() {
   const settingsVisible = coerceBool(bus.state[WEB_SETTINGS_VISIBLE_UI_STATE_KEY])
   const videoMergeLayersRaw = bus.state[VIDEO_SHOW_MERGE_LAYERS_UI_STATE_KEY]
   const videoMergeLayers = typeof videoMergeLayersRaw === 'boolean' ? videoMergeLayersRaw : true
+
+  useLayoutEffect(() => {
+    if (!activeSubwindow) return
+    const node = subwindowRef.current
+    if (!node) return
+    const update = () => {
+      const rect = node.getBoundingClientRect()
+      setSubwindowSize({
+        width: Math.max(1, Math.ceil(rect.width)),
+        height: Math.max(1, Math.ceil(rect.height))
+      })
+    }
+    update()
+    if (typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(update)
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [activeSubwindow])
+
+  const effectiveSubwindowPlacement = useMemo<SubwindowPlacement>(() => {
+    if (!activeSubwindow) return subwindowPlacement
+    const topSpace = toolbarRect.y - SUBWINDOW_GAP - SUBWINDOW_SCREEN_MARGIN
+    const bottomSpace = viewport.height - (toolbarRect.y + toolbarRect.height + SUBWINDOW_GAP) - SUBWINDOW_SCREEN_MARGIN
+    const needHeight = subwindowSize.height
+    if (subwindowPlacement === 'top') {
+      if (topSpace >= needHeight) return 'top'
+      if (bottomSpace >= needHeight) return 'bottom'
+      return topSpace >= bottomSpace ? 'top' : 'bottom'
+    }
+    if (bottomSpace >= needHeight) return 'bottom'
+    if (topSpace >= needHeight) return 'top'
+    return bottomSpace >= topSpace ? 'bottom' : 'top'
+  }, [activeSubwindow, subwindowPlacement, subwindowSize.height, toolbarRect.height, toolbarRect.y, viewport.height])
+
+  const subwindowStyle = useMemo<React.CSSProperties | undefined>(() => {
+    if (!activeSubwindow) return undefined
+    const maxLeft = Math.max(SUBWINDOW_SCREEN_MARGIN, viewport.width - subwindowSize.width - SUBWINDOW_SCREEN_MARGIN)
+    const left = clamp(toolbarRect.x, SUBWINDOW_SCREEN_MARGIN, maxLeft)
+    const desiredTop =
+      effectiveSubwindowPlacement === 'top'
+        ? toolbarRect.y - subwindowSize.height - SUBWINDOW_GAP
+        : toolbarRect.y + toolbarRect.height + SUBWINDOW_GAP
+    const maxTop = Math.max(SUBWINDOW_SCREEN_MARGIN, viewport.height - subwindowSize.height - SUBWINDOW_SCREEN_MARGIN)
+    const top = clamp(desiredTop, SUBWINDOW_SCREEN_MARGIN, maxTop)
+    return {
+      left: `${Math.round(left)}px`,
+      top: `${Math.round(top)}px`
+    }
+  }, [
+    activeSubwindow,
+    effectiveSubwindowPlacement,
+    subwindowSize.height,
+    subwindowSize.width,
+    toolbarRect.height,
+    toolbarRect.x,
+    toolbarRect.y,
+    viewport.height,
+    viewport.width
+  ])
 
   return (
     <div className="webWorkspaceRoot">
@@ -246,7 +275,7 @@ function WebWorkspace() {
       </div>
 
       <div className="webWorkspaceOverlay">
-        <WebToolbarDock />
+        <WebToolbarDock onRectChange={setToolbarRect} />
 
         <section className="webPageDock">
           <MultiPageControlWindow />
@@ -254,7 +283,11 @@ function WebWorkspace() {
         </section>
 
         {activeSubwindow ? (
-          <section className={subwindowPlacement === 'top' ? 'webSubwindowDock webSubwindowDock--top' : 'webSubwindowDock webSubwindowDock--bottom'}>
+          <section
+            ref={subwindowRef}
+            className={effectiveSubwindowPlacement === 'top' ? 'webSubwindowDock webSubwindowDock--top' : 'webSubwindowDock webSubwindowDock--bottom'}
+            style={subwindowStyle}
+          >
             <button
               type="button"
               className="webSubwindowClose"
@@ -270,33 +303,35 @@ function WebWorkspace() {
         ) : null}
 
         {pageThumbnailsVisible ? (
-          <FloatingPanel
-            id="page-thumbnails"
-            title="Thumbnails"
-            className="webPanel--thumbnails"
-            onClose={() => {
-              postCommand('app.togglePageThumbnailsMenu').catch(() => undefined)
-            }}
-          >
-            <div className="webThumbBody">
-              <PageThumbnailsMenuWindow />
-            </div>
-          </FloatingPanel>
+          <section className="webFloatAnchor webFloatAnchor--thumbnails">
+            <button
+              type="button"
+              className="webAnchorClose"
+              title="Close"
+              onClick={() => {
+                postCommand('app.togglePageThumbnailsMenu').catch(() => undefined)
+              }}
+            >
+              x
+            </button>
+            <PageThumbnailsMenuWindow />
+          </section>
         ) : null}
 
         {settingsVisible ? (
-          <FloatingPanel
-            id="settings"
-            title="Settings"
-            className="webPanel--settings"
-            onClose={() => {
-              postCommand('app.closeSettingsWindow').catch(() => undefined)
-            }}
-          >
-            <div className="webSettingsBody">
-              <SettingsWindow />
-            </div>
-          </FloatingPanel>
+          <section className="webFloatAnchor webFloatAnchor--settings">
+            <button
+              type="button"
+              className="webAnchorClose"
+              title="Close"
+              onClick={() => {
+                postCommand('app.closeSettingsWindow').catch(() => undefined)
+              }}
+            >
+              x
+            </button>
+            <SettingsWindow />
+          </section>
         ) : null}
       </div>
     </div>

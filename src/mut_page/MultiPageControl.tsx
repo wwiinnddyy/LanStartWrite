@@ -32,6 +32,22 @@ function CaptureIcon() {
   )
 }
 
+function PrevPageIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20" fill="none">
+      <path d="M12.5 4.75L7 10l5.5 5.25" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function NextPageIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20" fill="none">
+      <path d="M7.5 4.75L13 10l-5.5 5.25" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
 export function MultiPageControlWindow() {
   useZoomOnWheel()
   const bus = useUiStateBus(UI_STATE_APP_WINDOW_ID)
@@ -150,7 +166,7 @@ export function MultiPageControlWindow() {
                 title="上一页"
                 onClick={() => postCommand('app.prevPage', {}).catch(() => undefined)}
               >
-                {withButtonHint(<span style={{ fontSize: 18, lineHeight: 1 }}>◀</span>, '上一页')}
+                {withButtonHint(<PrevPageIcon />, '上一页')}
               </Button>
 
               <Button
@@ -177,7 +193,7 @@ export function MultiPageControlWindow() {
                 title="下一页"
                 onClick={() => postCommand('app.nextPage', {}).catch(() => undefined)}
               >
-                {withButtonHint(<span style={{ fontSize: 18, lineHeight: 1 }}>▶</span>, '下一页')}
+                {withButtonHint(<NextPageIcon />, '下一页')}
               </Button>
             </div>
           </div>

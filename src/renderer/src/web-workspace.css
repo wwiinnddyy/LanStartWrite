@@ -23,103 +23,6 @@
   pointer-events: none;
 }
 
-.webPanel {
-  position: absolute;
-  pointer-events: auto;
-  min-width: 180px;
-  max-width: min(92vw, 1000px);
-  border: 1px solid var(--ls-surface-border);
-  border-radius: 14px;
-  background: color-mix(in srgb, var(--ls-surface-bg) 88%, transparent);
-  box-shadow: var(--ls-surface-shadow);
-  backdrop-filter: blur(10px);
-  overflow: hidden;
-}
-
-.webPanelHeader {
-  height: 34px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 0 10px;
-  border-bottom: 1px solid color-mix(in srgb, var(--ls-surface-border) 70%, transparent);
-  cursor: grab;
-  user-select: none;
-}
-
-.webPanelHeader:active {
-  cursor: grabbing;
-}
-
-.webPanelTitle {
-  font-size: 12px;
-  font-weight: 650;
-  color: var(--ls-surface-fg);
-}
-
-.webPanelActions {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.webPanelButton {
-  width: 22px;
-  height: 22px;
-  border-radius: 7px;
-  border: 1px solid var(--ls-btn-border);
-  background: var(--ls-btn-bg);
-  color: var(--ls-btn-fg);
-  font-size: 12px;
-  font-weight: 700;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.webPanelButton:hover {
-  background: var(--ls-btn-bg-hover);
-}
-
-.webPanelButton--danger {
-  border-color: var(--ls-btn-danger-border);
-  color: var(--ls-btn-danger-fg);
-  background: var(--ls-btn-danger-bg);
-}
-
-.webPanelButton--danger:hover {
-  background: var(--ls-btn-danger-bg-hover);
-}
-
-.webPanelBody {
-  position: relative;
-  max-width: 100%;
-  max-height: min(80vh, 920px);
-  overflow: auto;
-}
-
-.webPanel--subwindowTop {
-  top: 16px;
-  right: 16px;
-}
-
-.webPanel--subwindowBottom {
-  right: 16px;
-  bottom: 16px;
-}
-
-.webPanel--thumbnails {
-  right: 16px;
-  bottom: 16px;
-  width: min(900px, 86vw);
-}
-
-.webPanel--settings {
-  top: 56px;
-  right: 24px;
-  width: min(1000px, 90vw);
-}
-
 .webToolbarDock {
   position: absolute;
   left: 16px;
@@ -166,17 +69,16 @@
 
 .webSubwindowDock {
   position: absolute;
-  right: 16px;
   z-index: 28;
   pointer-events: auto;
 }
 
 .webSubwindowDock--top {
-  top: 16px;
+  transform-origin: bottom left;
 }
 
 .webSubwindowDock--bottom {
-  bottom: 16px;
+  transform-origin: top left;
 }
 
 .webSubwindowClose {
@@ -200,21 +102,44 @@
   background: var(--ls-btn-danger-bg-hover);
 }
 
-.webThumbBody {
-  width: min(860px, 86vw);
-  height: min(72vh, 680px);
+.webFloatAnchor {
+  position: absolute;
+  pointer-events: auto;
+  z-index: 27;
 }
 
-.webSettingsBody {
-  width: min(920px, 88vw);
-  height: min(82vh, 760px);
+.webFloatAnchor--thumbnails {
+  right: 12px;
+  bottom: 12px;
+}
+
+.webFloatAnchor--settings {
+  top: 56px;
+  right: 16px;
+}
+
+.webAnchorClose {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 40;
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
+  border: 1px solid var(--ls-btn-danger-border);
+  background: var(--ls-btn-danger-bg);
+  color: var(--ls-btn-danger-fg);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.webAnchorClose:hover {
+  background: var(--ls-btn-danger-bg-hover);
 }
 
 @media (max-width: 860px) {
-  .webPanel {
-    max-width: 96vw;
-  }
-
   .webToolbarDock {
     left: 8px;
     top: 8px;
@@ -226,26 +151,27 @@
   }
 
   .webSubwindowDock {
-    right: 8px;
+    max-width: calc(100vw - 16px);
   }
 
-  .webPanel--settings {
+  .webFloatAnchor--settings {
     width: 96vw;
     right: 2vw;
     top: 12px;
   }
 
-  .webSettingsBody {
+  .webFloatAnchor--settings .settingsWindowRoot {
     width: 96vw;
+    max-width: 96vw;
     height: 78vh;
   }
 
-  .webPanel--thumbnails {
+  .webFloatAnchor--thumbnails {
     width: 96vw;
     right: 2vw;
   }
 
-  .webThumbBody {
+  .webFloatAnchor--thumbnails .subwindowRoot {
     width: 96vw;
     height: 66vh;
   }

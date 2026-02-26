@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { motion, useReducedMotion } from '../Framer_Motion'
 import { Button } from '../button'
 import {
@@ -158,7 +158,7 @@ export function NotificationSubwindow(props: { kind: 'notice' }) {
       rafId = 0
       const contentWidth = measure?.scrollWidth ?? 0
       const contentHeight = measure?.scrollHeight ?? 0
-      // 澧炲姞 2px 浠ヨˉ鍋胯竟妗嗗崰鐢ㄧ殑绌洪棿锛岀‘淇濆唴杈硅窛瑙嗚涓婂洓杈圭瓑瀹?
+      // 增加 2px 浠ヨˉ鍋胯竟妗嗗崰鐢ㄧ殑绌洪棿锛岀‘淇濆唴杈硅窛瑙嗚涓婂洓杈圭瓑瀹?
       const width = Math.max(
         isClockFloatNotice ? 0 : 260,
         Math.min(420, Math.ceil(contentWidth) + outerPadding * 2 + 2)
@@ -237,7 +237,7 @@ export function NotificationSubwindow(props: { kind: 'notice' }) {
       if (Number.isFinite(timerStartMs)) return `璁℃椂 ${formatDuration(base + Math.max(0, clockNowMs - timerStartMs))}`
       return `璁℃椂 ${formatDuration(base)}`
     }
-    return '鏃堕挓'
+    return '时钟'
   }, [clockNowMs, countdownActive, countdownEndMs, isClockFloatNotice, timerActive, timerElapsedMs, timerStartMs])
 
   useEffect(() => {
@@ -496,7 +496,7 @@ export function NotificationSubwindow(props: { kind: 'notice' }) {
                 onClick={(e) => e.stopPropagation()}
                 style={{ display: 'flex', alignItems: 'center', gap: 8, flex: '0 0 auto' }}
               >
-                <Button variant="default" size="sm" ariaLabel="鍏抽棴閫氱煡" title="鍏抽棴" onClick={close}>
+                <Button variant="default" size="sm" ariaLabel="关闭通知" title="关闭" onClick={close}>
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
                     width="18"
@@ -516,8 +516,8 @@ export function NotificationSubwindow(props: { kind: 'notice' }) {
                   <Button
                     variant="default"
                     size="sm"
-                    ariaLabel="閲嶈瘯鍚姩鍚庣鏈嶅姟"
-                    title="閲嶈瘯"
+                    ariaLabel="閲嶈瘯鍚姩鍚庣服务"
+                    title="重试"
                     disabled={restartPending}
                     onClick={restartBackend}
                   >

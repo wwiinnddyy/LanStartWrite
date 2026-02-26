@@ -1,4 +1,4 @@
-﻿import { BrowserWindow, app, clipboard, screen, type IpcMain } from 'electron'
+import { BrowserWindow, app, clipboard, screen, type IpcMain } from 'electron'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
  
@@ -404,7 +404,7 @@ export class AppWindowsManager {
     const winHeight = Math.max(420, Math.min(760, Math.min(preferredHeight, workArea.height)))
     return this.createAppWindow({
       kind: 'settings',
-      title: '璁剧疆',
+      title: '设置',
       windowId: WINDOW_ID_BY_KIND.settings,
       width: winWidth,
       height: winHeight,

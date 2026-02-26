@@ -1,4 +1,4 @@
-﻿﻿﻿import { Elysia, t } from 'elysia'
+﻿import { Elysia, t } from 'elysia'
 import { createInterface } from 'node:readline'
 import { randomUUID } from 'node:crypto'
 import { readFile, stat } from 'node:fs/promises'
@@ -1799,7 +1799,7 @@ const senderHtml = `<!doctype html>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <title>LanStartWrite 鎵嬫満鎶曞睆</title>
+    <title>LanStartWrite 手机投屏</title>
     <style>
       :root { color-scheme: dark; }
       body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; background: #0b0b0f; color: rgba(255,255,255,.92); }
@@ -1820,13 +1820,13 @@ const senderHtml = `<!doctype html>
         <div class="row">
           <div>
             <div style="font-size: 13px; font-weight: 700;">鎵嬫満鎽勫儚澶存姇灞?/div>
-            <div class="muted">璇蜂繚鎸佹墜鏈轰笌鐢佃剳鍦ㄥ悓涓€灞€鍩熺綉</div>
+            <div class="muted">璇蜂繚鎸佹墜鏈轰笌鐢佃剳鍦ㄥ悓涓€灞€域网</div>
           </div>
           <button id="btnStart">寮€濮嬫姇灞?/button>
         </div>
         <div style="height: 10px;"></div>
         <div class="row">
-          <div class="muted">浼氳瘽</div>
+          <div class="muted">会话</div>
           <div id="session" class="mono muted">-</div>
         </div>
         <div class="row">

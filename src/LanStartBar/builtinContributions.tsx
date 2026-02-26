@@ -1,4 +1,4 @@
-﻿import React from 'react'
+import React from 'react'
 import { FeaturePanelIcon, QuitIcon, SettingsIcon } from '../toolbar/components/ToolbarIcons'
 import { LanStartBarRegistry } from './registry'
 
@@ -10,9 +10,9 @@ export function ensureBuiltinLanStartBarContributions(registry: LanStartBarRegis
 
   registry.register({
     id: 'feature-panel',
-    label: '鍔熻兘闈㈡澘',
-    ariaLabel: '鍔熻兘闈㈡澘',
-    title: '鍔熻兘闈㈡澘',
+    label: '功能面板',
+    ariaLabel: '功能面板',
+    title: '功能面板',
     icon: <FeaturePanelIcon />,
     variant: 'default',
     size: 'sm',
@@ -23,9 +23,9 @@ export function ensureBuiltinLanStartBarContributions(registry: LanStartBarRegis
 
   registry.register({
     id: 'settings',
-    label: '璁剧疆',
-    ariaLabel: '璁剧疆',
-    title: '璁剧疆',
+    label: '设置',
+    ariaLabel: '设置',
+    title: '设置',
     icon: <SettingsIcon />,
     variant: 'default',
     size: 'sm',
@@ -47,6 +47,3 @@ export function ensureBuiltinLanStartBarContributions(registry: LanStartBarRegis
     action: { type: 'postCommand', command: 'quit' }
   })
 }
-
-
-
