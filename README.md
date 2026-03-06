@@ -2,6 +2,8 @@
 
 基于 **electron-vite + Electron + React + TypeScript** 的桌面端应用项目，包含浮动工具栏、批注/画板、设置窗口、视频展台等模块。
 
+项目已实质上停止了更新，但目前有剥离屏幕书写与Electron的网页版本，具体可查看SecBoard项目
+
 项目大量采用了vibe coding
 
 ## 环境要求
